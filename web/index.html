@@ -200,9 +200,16 @@
       <div id="waterSettings"></div>
       <div class="card form">
         <label>Mode pembuangan
-          <select id="wDrain"><option value="sensor">Sensor (pantau sampai kosong)</option><option value="waktu">Waktu</option></select>
+          <select id="wDrain"><option value="sensor">Sensor: buktikan valve menarik (probe), lalu tarik sampai total waktu</option><option value="waktu">Waktu saja (tanpa probe)</option></select>
         </label>
         <button class="btn" id="btnDrainMode">Simpan</button>
+        <p class="muted">Sensor level hanya ada di paling atas (tahu <b>penuh</b> atau <b>tidak penuh</b>). Setelah valve ditarik, air harus turun dari posisi penuh dalam waktu probe. Bila tidak, valve dilepas lalu ditarik lagi (unjam). Setelah total waktu tarik habis, air tidak boleh masih penuh; bila masih penuh, sesi diulang.</p>
+      </div>
+      <div class="card form">
+        <label>Bila air masih penuh sebelum mengisi
+          <select id="wPrecheck"><option value="buang">Buang dulu, lalu isi</option><option value="jeda">Jeda dan tunggu keputusan saya</option><option value="pakai">Pakai air yang ada (lewati pengisian)</option></select>
+        </label>
+        <button class="btn" id="btnPrecheck">Simpan</button>
       </div>
       <div class="row">
         <button class="btn" data-cmd="cek_air">Cek air</button>

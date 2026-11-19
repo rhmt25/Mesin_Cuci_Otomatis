@@ -59,6 +59,9 @@ String loggerPreviousTrace() { return ""; }
 
 // ----------------------------------------------------------- model tangki ----
 static double g_level = 0;       // 0..100
+static int g_pullFail = 0;        // jumlah tarikan awal yang "gagal": valve ON tetapi air tidak keluar
+static bool g_drainPrev = false, g_pullEffective = true;
+static double g_drainOnMs = 0;     // total relay buang menyala
 static bool g_noWater = false;   // pasokan air habis
 static bool g_drainBroken = false;
 static const double FULL_MS = 10.0 * 60000 / TIME_SCALE;   // 10 menit nyata penuh
@@ -67,9 +70,15 @@ static double g_fillOnMs = 0;
 
 static void model(uint32_t dt) {
   if (relayIsOn(R_FILL) && !g_noWater) { g_level += 100.0 * dt / FULL_MS; g_fillOnMs += dt; }
-  if (relayIsOn(R_DRAIN) && !g_drainBroken) g_level -= 100.0 * dt / EMPTY_MS;
+  bool drainOn = relayIsOn(R_DRAIN);
+  if (drainOn && !g_drainPrev) {   // tarikan baru: mungkin gagal (modul tarik kadang tidak menarik)
+    if (g_pullFail > 0) { g_pullFail--; g_pullEffective = false; } else g_pullEffective = true;
+  }
+  g_drainPrev = drainOn;
+  if (drainOn) g_drainOnMs += dt;
+  if (drainOn && g_pullEffective && !g_drainBroken) g_level -= 100.0 * dt / EMPTY_MS;
   g_level = std::max(0.0, std::min(100.0, g_level));
-  g_raw = g_level >= 60.0;
+  g_raw = g_level >= 95.0;   // sensor hanya di paling atas: hanya tahu penuh / tidak penuh
 }
 
 static long g_violations = 0;   // pelanggaran invarian keselamatan di SEMUA skenario
@@ -104,6 +113,7 @@ static void resetWorld() {
   Preferences::db().clear();
   g_log.clear();
   g_level = 0; g_noWater = false; g_drainBroken = false; g_raw = false; g_fillOnMs = 0;
+  g_pullFail = 0; g_drainPrev = false; g_pullEffective = true; g_drainOnMs = 0;
   relayAllOff();
   machineHostReset();
   settingsLoad(); calibLoad(); statsLoad();
@@ -490,6 +500,124 @@ static void t16_custom() {
   CHECK(!customLoad(2, back), "hapus slot");
 }
 
+
+static void t17_drainNormal() {
+  printf("[T17] Pembuangan normal: tarik sampai total waktu, lalu cek air sudah turun\n");
+  resetWorld();
+  S.wash = 1; S.soak = 0;
+  post(MC_RUN, PRG_WASH);
+  CHECK(runUntil(idle, 900000), "selesai");
+  printf("  (relay buang menyala %.0f ms, target %u ms)\n", g_drainOnMs, (unsigned)minToMs(S.drainTime));
+  CHECK(g_drainOnMs > minToMs(S.drainTime) - 100 && g_drainOnMs < minToMs(S.drainTime) + 400, "relay buang menyala ~total waktu buang");
+  CHECK(count("Tarikan valve berhasil") == 1, "tarikan dibuktikan berhasil lewat sensor");
+  CHECK(count("Valve buang belum menarik", LOG_WARN) == 0 && count("Unjam") == 0, "tanpa unjam");
+}
+
+static void t18_firstPullFails() {
+  printf("[T18] Tarikan pertama gagal -> lepas, tarik lagi (unjam) -> berhasil\n");
+  resetWorld();
+  S.wash = 1; S.soak = 0;
+  g_pullFail = 1;
+  post(MC_RUN, PRG_WASH);
+  CHECK(runUntil(idle, 900000), "selesai tanpa jeda");
+  CHECK(count("Valve buang belum menarik", LOG_WARN) == 1, "kegagalan tarikan terdeteksi sekali");
+  CHECK(count("Unjam 1/2") == 1 && count("Unjam 2/2") == 0, "unjam sekali lalu berhasil");
+  CHECK(count("Mengulangi sesi") == 0 && count("Proses Wash selesai", LOG_DONE) == 1, "tidak perlu ulang sesi, proses selesai");
+  CHECK(!st().pauseReason[0], "tidak pernah dijeda");
+  printf("  (relay buang menyala total %.0f ms)\n", g_drainOnMs);
+  CHECK(g_drainOnMs > minToMs(S.drainTime) && g_drainOnMs < minToMs(S.drainTime) + secToMs(S.drainProbeSec) + 500, "total = probe gagal + waktu buang penuh");
+}
+
+static void t19_drainTimeMode() {
+  printf("[T19] Mode waktu: tanpa probe, tarik total waktu lalu cek akhir\n");
+  resetWorld();
+  S.wash = 1; S.soak = 0; S.drainMode = DRAIN_TIME;
+  post(MC_RUN, PRG_WASH);
+  CHECK(runUntil(idle, 900000), "selesai");
+  CHECK(count("Tarikan valve berhasil") == 0 && count("belum menarik") == 0, "tidak memakai probe");
+  CHECK(g_drainOnMs > minToMs(S.drainTime) - 100 && g_drainOnMs < minToMs(S.drainTime) + 400, "tarik selama waktu buang");
+  // mode waktu + valve rusak total -> cek akhir masih penuh -> ulang sesi -> jeda
+  resetWorld();
+  S.wash = 1; S.soak = 0; S.drainMode = DRAIN_TIME;
+  post(MC_RUN, PRG_WASH);
+  g_drainBroken = true;
+  CHECK(runUntil(paused, 1800000) && count("Mengulangi sesi") == 2, "valve rusak: 3 sesi lalu jeda");
+}
+
+static void t20_fillPrecheck() {
+  printf("[T20] Pra-cek isi saat air masih penuh: buang / jeda / pakai\n");
+  // buang (default)
+  resetWorld();
+  g_level = 100; g_raw = true;
+  for (int i = 0; i < 20; i++) tick();
+  CHECK(S.fillPrecheck == PRECHECK_DRAIN, "default = buang dulu");
+  post(MC_RUN, PRG_WATERIN);
+  CHECK(runUntil(idle, 900000), "selesai");
+  CHECK(count("membuang dulu") == 1 && count("Mengisi air...") == 1 && g_drainOnMs > 0, "membuang dulu lalu mengisi");
+  // jeda
+  resetWorld();
+  S.fillPrecheck = PRECHECK_PAUSE;
+  g_level = 100; g_raw = true;
+  for (int i = 0; i < 20; i++) tick();
+  post(MC_RUN, PRG_WATERIN);
+  CHECK(runUntil(paused, 60000), "dijeda");
+  CHECK(std::string(st().pauseReason).find("Air masih penuh sebelum mengisi") != std::string::npos, "alasan jeda jelas");
+  CHECK(!relayIsOn(R_FILL) && !relayIsOn(R_DRAIN) && g_drainOnMs == 0, "tidak ada relay yang digerakkan otomatis");
+  post(MC_SKIP);
+  tick();
+  CHECK(idle(), "Lewati -> proses selesai");
+  // pakai
+  resetWorld();
+  S.fillPrecheck = PRECHECK_USE;
+  g_level = 100; g_raw = true;
+  for (int i = 0; i < 20; i++) tick();
+  post(MC_RUN, PRG_WATERIN);
+  CHECK(runUntil(idle, 60000), "selesai cepat");
+  CHECK(count("pengisian dilewati") == 1 && g_fillOnMs == 0 && g_drainOnMs == 0, "pengisian dan pembuangan dilewati");
+}
+
+static void t21_manualDrainSoft() {
+  printf("[T21] Buang manual: gagal tidak menjeda proses\n");
+  resetWorld();
+  g_level = 100; g_raw = true;
+  for (int i = 0; i < 20; i++) tick();
+  g_drainBroken = true;
+  post(MC_RUN, PRG_WATEROUT);
+  CHECK(runUntil(idle, 900000), "selesai tanpa jeda");
+  CHECK(count("Air masih penuh setelah pembuangan manual", LOG_WARN) == 1, "peringatan dicatat");
+}
+
+static void t22_partialFill() {
+  printf("[T22] Isi sebagian (sensor tidak penuh sejak awal): buang tetap berjalan sesuai waktu\n");
+  resetWorld();
+  S.fillLevel = FILL_TIME; S.fillTime = 3; S.wash = 1; S.soak = 0;
+  post(MC_RUN, PRG_WASH);
+  CHECK(runUntil(idle, 900000), "selesai");
+  CHECK(count("Tarikan valve berhasil") == 0, "keberhasilan tarikan tidak bisa dibuktikan (sensor tidak penuh), dilewati");
+  CHECK(g_drainOnMs > minToMs(S.drainTime) - 100, "tetap menarik selama total waktu buang");
+}
+
+static void t23_settingsMigration() {
+  printf("[T23] Migrasi NVS: kunci pembuangan lama dihapus, pengaturan baru valid\n");
+  resetWorld();
+  Preferences pr;
+  pr.begin("settings", false);
+  pr.putInt("drainExtra", 60);
+  pr.putInt("drainMax", 5);
+  pr.putInt("drainProbe", 9999);   // di luar rentang -> dibersihkan
+  pr.end();
+  settingsLoad();
+  Preferences chk;
+  chk.begin("settings", true);
+  CHECK(!chk.isKey("drainExtra") && !chk.isKey("drainMax"), "kunci lama dihapus");
+  CHECK(S.drainProbeSec == 45, "probe di luar rentang kembali ke default 45");
+  S.drainProbeSec = 30; S.fillPrecheck = PRECHECK_PAUSE;
+  settingsSave(); settingsLoad();
+  CHECK(S.drainProbeSec == 30 && S.fillPrecheck == PRECHECK_PAUSE, "probe & pra-cek tersimpan");
+  S.drainProbeSec = 2; settingsSave(); settingsLoad();
+  CHECK(S.drainProbeSec == 45, "probe < 5 dtk ditolak (default)");
+}
+
 int main(int argc, char** argv) {
   g_verbose = argc > 1;
   t1_fullNormal();
@@ -508,6 +636,13 @@ int main(int argc, char** argv) {
   t14_devices();
   t15_relayCheck();
   t16_custom();
+  t17_drainNormal();
+  t18_firstPullFails();
+  t19_drainTimeMode();
+  t20_fillPrecheck();
+  t21_manualDrainSoft();
+  t22_partialFill();
+  t23_settingsMigration();
   checks++;
   if (g_violations != 0) { failures++; printf("  GAGAL: %ld tick melanggar invarian keselamatan\n", g_violations); }
   else printf("  ok: 0 pelanggaran invarian (kiri+kanan, isi+buang, buang+motor) di seluruh skenario\n");

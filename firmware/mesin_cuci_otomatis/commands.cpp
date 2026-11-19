@@ -149,10 +149,8 @@ static const IntSetting intSettings[] = {
      "Kirim lama tunggu antar coba ulang dalam menit (0-240)."},
     {"set_unjam", "reset_unjam", &S.unjamCount, 0, 10, "Unjam valve buang", "kali",
      "Kirim jumlah percobaan unjam valve (0-10)."},
-    {"set_tambahan_buang", "reset_tambahan_buang", &S.drainExtraSec, 0, 600, "Tambahan waktu buang", "detik",
-     "Kirim tambahan waktu buang setelah sensor kosong, detik (0-600)."},
-    {"set_maks_buang", "reset_maks_buang", &S.drainMaxMin, 1, 60, "Batas maksimum buang", "menit",
-     "Kirim batas maksimum satu sesi buang dalam menit (1-60)."},
+    {"set_probe_buang", "reset_probe_buang", &S.drainProbeSec, 5, 600, "Probe tarikan valve buang", "detik",
+     "Kirim lama probe tarikan valve buang dalam detik (5-600)."},
 };
 static const size_t nIntSettings = sizeof(intSettings) / sizeof(intSettings[0]);
 
@@ -214,12 +212,13 @@ String airText() {
   t += "Batas waktu isi: " + hms(S.flH, S.flM, S.flS) + "\n";
   t += "Coba ulang isi: " + String(S.fillRetryCount) + "x, tunggu " + S.fillRetryWait + " menit\n";
   if (S.drainMode == DRAIN_SENSOR)
-    t += "Mode buang: sensor (+" + String(S.drainExtraSec) + " dtk, maks " + S.drainMaxMin + " menit)\n";
+    t += "Mode buang: sensor (probe " + String(S.drainProbeSec) + " dtk, tarik total " + S.drainTime + " menit)\n";
   else
-    t += "Mode buang: waktu " + String(S.drainTime) + " menit\n";
+    t += "Mode buang: waktu " + String(S.drainTime) + " menit (tanpa probe)\n";
+  static const char* pre[] = {"buang dulu", "jeda", "pakai air yang ada"};
+  t += String("Bila air penuh sebelum mengisi: ") + pre[S.fillPrecheck < 3 ? S.fillPrecheck : 0] + "\n";
   t += "Batas sesi buang: " + String(S.drainSessionLimit) + " \xE2\x80\xA2 Unjam: " + S.unjamCount + "x\n";
   if (C.nFill > 0) t += "Rata-rata isi penuh: " + fmtDuration((uint32_t)(C.avgFillMs / 1000)) + " (" + C.nFill + " sampel)\n";
-  if (C.nDrain > 0) t += "Rata-rata buang: " + fmtDuration((uint32_t)(C.avgDrainMs / 1000)) + " (" + C.nDrain + " sampel)\n";
   t.trim();
   return t;
 }
@@ -310,8 +309,7 @@ String statsText() {
   String t = "\xF0\x9F\x93\x88 Statistik\n";
   t += "Total siklus selesai: " + String(ST.totalCycles) + "\n";
   t += "Total motor cuci menyala: " + String((ST.motorSec + relayMotorSeconds()) / 3600.0f, 1) + " jam\n";
-  t += "Rata-rata isi penuh: " + (C.nFill ? fmtDuration((uint32_t)(C.avgFillMs / 1000)) : String("-")) + "\n";
-  t += "Rata-rata buang: " + (C.nDrain ? fmtDuration((uint32_t)(C.avgDrainMs / 1000)) : String("-"));
+  t += "Rata-rata isi penuh: " + (C.nFill ? fmtDuration((uint32_t)(C.avgFillMs / 1000)) : String("-"));
   return t;
 }
 
@@ -327,6 +325,7 @@ String helpText() {
          "mulai_nanti <menit>, selesai_jam <HH:MM>, notif <lengkap|ringkas|senyap>\n"
          "kalibrasi_air, reset_semua, restart, info\n"
          "relay <kiri|kanan|isi|buang|spin|pewangi> <on|off>, relay semua off, kalibrasi_relay [detik]\n"
+         "set_probe_buang <detik>, pra_cek_isi <buang|jeda|pakai>\n"
          "custom [nomor] (proses buatan sendiri, disusun di dashboard web)\n"
          "Konsol: heap, tasks, relay_test <nama>, log";
 }
@@ -393,6 +392,20 @@ CmdResult executeCommand(const String& command, const String& argsIn, CmdSource 
   String args = argsIn;
   args.trim();
   if (args.length() == 0) args = fixed;
+
+  if (name == "set_tambahan_buang" || name == "reset_tambahan_buang" || name == "set_maks_buang" || name == "reset_maks_buang")
+    return fail("Pengaturan ini tidak dipakai lagi: sensor hanya di atas, jadi pembuangan memakai probe tarikan "
+                "(set_probe_buang) dan total waktu tarik (set_waktu_pembuangan_air).");
+  if (name == "pra_cek_isi") {
+    String a = token(args, 0);
+    a.toLowerCase();
+    if (a == "buang" || a == "0") S.fillPrecheck = PRECHECK_DRAIN;
+    else if (a == "jeda" || a == "1") S.fillPrecheck = PRECHECK_PAUSE;
+    else if (a == "pakai" || a == "2") S.fillPrecheck = PRECHECK_USE;
+    else return fail("Pilihan: buang (buang dulu), jeda (tunggu keputusan), pakai (lewati pengisian).");
+    settingsSave();
+    return ok(String("Bila air penuh sebelum mengisi: ") + (S.fillPrecheck == PRECHECK_DRAIN ? "buang dulu" : S.fillPrecheck == PRECHECK_PAUSE ? "jeda" : "pakai air yang ada") + ".");
+  }
 
   // ---- tabel pengaturan bilangan bulat ----
   for (size_t i = 0; i < nIntSettings; i++) {

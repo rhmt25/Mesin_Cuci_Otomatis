@@ -15,7 +15,7 @@ const S = {
   status: { type: 'status', state: 'idle', program: '', stage: '', detail: '', pause: '', step: 0, steps: 0, stepLeft: 0, totalLeft: 0, progress: 0,
     water: 'kosong', waterRaw: false, fault: false, resume: { pending: false, info: '' }, relays: { kiri: false, kanan: false, isi: false, buang: false, spin: false, pewangi: false },
     wifi: { online: true, ssid: 'x', rssi: -50, ip: '1.2.3.4', ap: 'MesinCuci-1', apClients: 0, time: '10:00' }, notif: 'Lengkap', uptime: 100, heap: 100000, fw: '2.0.0', reset: 'x' },
-  settings: { pola: 0, soak: 2, wash: 15, rinse: 10, parfume: 1, spin: 10, fillLevel: 0, fillPercent: 50, fillTime: 30, flH: 0, flM: 30, flS: 0, fillRetryCount: 3, fillRetryWait: 15, drainMode: 0, drainTime: 5, drainSessionLimit: 3, drainExtraSec: 60, drainMaxMin: 5, unjamCount: 2, dH: 0, dM: 0, dS: 0, finishAt: -1, notif: 0, calib: { fillSec: 600, drainSec: 300, nFill: 2, nDrain: 2 }, timeSynced: true },
+  settings: { pola: 0, soak: 2, wash: 15, rinse: 10, parfume: 1, spin: 10, fillLevel: 0, fillPercent: 50, fillTime: 30, flH: 0, flM: 30, flS: 0, fillRetryCount: 3, fillRetryWait: 15, drainMode: 0, drainTime: 5, drainSessionLimit: 3, drainProbeSec: 45, fillPrecheck: 0, unjamCount: 2, dH: 0, dM: 0, dS: 0, finishAt: -1, notif: 0, calib: { fillSec: 600, nFill: 2 }, timeSynced: true },
   slots: [null, null, null, null, null],
   devices: [{ id: 0, name: 'Chrome - Android', created: 1760000000, lastSeen: 1760000500, current: false }, { id: 1, name: 'Edge - Windows', created: 1760100000, lastSeen: 1760100500, current: true }],
   cmds: [], posts: [],
@@ -148,6 +148,19 @@ function route(url, opt) {
   ok($$('#devList .wifirow').length === 1, 'hapus perangkat lain');
   click($('#devList [data-dev="1"]')); await sleep(100);
   ok(!$('#login').hidden, 'menghapus perangkat sendiri -> kembali ke login');
+
+  console.log('[U8] Tab Air: probe tarikan & pra-cek isi');
+  d.querySelector('#login').hidden = true; d.querySelector('#app').hidden = false;
+  click($('[data-tab="water"]')); await sleep(120);
+  const probe = $('input[data-key="drainProbeSec"]');
+  ok(probe && probe.value === '45', 'field probe tarikan (default 45 dtk) tampil');
+  ok(!$('input[data-key="drainExtraSec"]') && !$('input[data-key="drainMaxMin"]'), 'field tambahan/maks buang lama sudah hilang');
+  ok($('#wPrecheck').value === 'buang', 'pra-cek isi default = buang');
+  $('#wPrecheck').value = 'jeda'; click($('#btnPrecheck')); await sleep(60);
+  ok(S.cmds.some(c => c.cmd === 'pra_cek_isi' && c.args === 'jeda'), 'pilihan pra-cek dikirim sebagai pra_cek_isi jeda');
+  type(probe, '30'); click($('[data-set="set_probe_buang"]')); await sleep(60);
+  ok(S.cmds.some(c => c.cmd === 'set_probe_buang' && c.args === '30'), 'probe diubah lewat set_probe_buang');
+  ok(/penuh|tidak penuh/.test($('#tab-water').textContent), 'teks bantuan sensor di atas tampil');
 
   console.log(`\n${pass + fail} pemeriksaan UI, ${fail} gagal`);
   process.exit(fail ? 1 : 0);

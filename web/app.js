@@ -124,11 +124,11 @@ const NUM = [
 const WNUM = [
   ['Coba ulang isi bila air habis (kali)', 'set_coba_ulang_isi', 'fillRetryCount', 0, 20],
   ['Tunggu antar coba ulang (menit)', 'set_tunggu_coba_ulang', 'fillRetryWait', 0, 240],
-  ['Waktu buang, mode waktu (menit)', 'set_waktu_pembuangan_air', 'drainTime', 1, 1440],
+  ['Total waktu tarik valve buang (menit)', 'set_waktu_pembuangan_air', 'drainTime', 1, 60],
+  ['Probe tarikan valve (detik) — air harus mulai turun dalam waktu ini', 'set_probe_buang', 'drainProbeSec', 5, 600],
   ['Batas sesi buang sebelum jeda', 'set_batas_sesi_pembuangan_air', 'drainSessionLimit', 1, 1440],
   ['Unjam valve buang (kali)', 'set_unjam', 'unjamCount', 0, 10],
-  ['Tambahan buang setelah kosong (detik)', 'set_tambahan_buang', 'drainExtraSec', 0, 600],
-  ['Maks. satu sesi buang (menit)', 'set_maks_buang', 'drainMaxMin', 1, 60]];
+];
 function numForms(host, defs) {
   host.innerHTML = defs.map(([label, c, key, lo, hi, step]) => `
     <div class="card numrow"><label>${esc(label)}<input type="number" data-key="${key}" min="${lo}" max="${hi}" step="${step || 1}"></label>
@@ -146,6 +146,7 @@ async function loadSettings() {
   $('#wLevel').value = s.fillLevel === 0 ? 'penuh' : s.fillLevel === 2 ? 'waktu' : String(s.fillPercent);
   $('#wTime').value = s.fillTime;
   $('#wDrain').value = s.drainMode === 0 ? 'sensor' : 'waktu';
+  $('#wPrecheck').value = ['buang', 'jeda', 'pakai'][s.fillPrecheck];
   $('#calibNote').textContent = s.calib.nFill ? `Rata-rata isi penuh ${fmt(s.calib.fillSec)} (${s.calib.nFill} sampel). Level persen memakai data ini.` : 'Belum ada data kalibrasi: level persen akan memakai sensor sampai ada 1 pengisian penuh.';
   $('#inFinish').disabled = !s.timeSynced;
   $('#schedNote').textContent = s.timeSynced ? (s.finishAt >= 0 ? `Terjadwal selesai jam ${String(Math.floor(s.finishAt / 60)).padStart(2, '0')}:${String(s.finishAt % 60).padStart(2, '0')}` : 'Berlaku untuk proses berikutnya.') : 'Jam belum sinkron (butuh internet): hanya "mulai nanti".';
@@ -157,6 +158,7 @@ $('#btnDelay3').onclick = () => cmd('set_delay', `${$('#dH').value || 0} ${$('#d
 $('#btnLimit').onclick = () => cmd('set_batas_waktu_pengisian_air', `${$('#fH').value || 0} ${$('#fM').value || 0} ${$('#fS').value || 0}`);
 $('#btnLevel').onclick = () => { const v = $('#wLevel').value; cmd('level_air', v === 'waktu' ? 'waktu ' + $('#wTime').value : v); };
 $('#btnDrainMode').onclick = () => cmd('mode_buang', $('#wDrain').value);
+$('#btnPrecheck').onclick = () => cmd('pra_cek_isi', $('#wPrecheck').value);
 $('#btnResetAll').onclick = () => confirm('Reset semua pengaturan ke default?') && cmd('reset_semua');
 $('#btnCalib').onclick = () => confirm('Reset data kalibrasi isi/buang?') && cmd('kalibrasi_air');
 $('#btnDelay').onclick = () => cmd('mulai_nanti', $('#inDelay').value || 0);
@@ -283,7 +285,7 @@ async function fetchLogsAll() { for (let i = 0; i < 6; i++) { if ((await pollLog
 async function loadHistory() {
   const r = await api('/api/history');
   const st = r.stats;
-  $('#statsBox').innerHTML = `<b>Total siklus selesai:</b> ${st.cycles}<br><b>Motor cuci menyala:</b> ${(st.motorSec / 3600).toFixed(1)} jam<br><b>Rata-rata isi penuh:</b> ${st.avgFillSec ? fmt(st.avgFillSec) : '-'}<br><b>Rata-rata buang:</b> ${st.avgDrainSec ? fmt(st.avgDrainSec) : '-'}`;
+  $('#statsBox').innerHTML = `<b>Total siklus selesai:</b> ${st.cycles}<br><b>Motor cuci menyala:</b> ${(st.motorSec / 3600).toFixed(1)} jam<br><b>Rata-rata isi penuh:</b> ${st.avgFillSec ? fmt(st.avgFillSec) : '-'}`;
   $('#histList').innerHTML = r.history.map(h => `<div class="hist"><div><b>${esc(h.program)}</b><br><span class="muted">${h.start ? new Date(h.start * 1000).toLocaleString('id-ID') : '-'}</span></div><div style="text-align:right">${fmt(h.dur)}<br><span class="muted">${h.result}</span></div></div>`).join('') || '<p class="muted">Belum ada riwayat.</p>';
 }
 async function loadFw() {
@@ -342,7 +344,7 @@ const newItem = (t, a, b, p) => { const m = CI[t]; return { uid: cpUid++, t, a: 
 const stepsOf = it => ({ wash: 3, rinse: 3, soakwash: 4, rinseperfume: 4 }[it.t] || 1);
 function estMin(it) {
   const c = settings && settings.calib ? settings.calib : {};
-  const fillM = c.fillSec ? c.fillSec / 60 : 10, drM = (c.drainSec ? c.drainSec / 60 : 5) + 1;
+  const fillM = c.fillSec ? c.fillSec / 60 : 10, drM = ((settings && settings.drainTime) || 5) + 0.2;
   switch (it.t) {
     case 'wash': case 'rinse': return fillM + it.a + drM;
     case 'soakwash': return fillM + it.a * 5 + it.b + drM;

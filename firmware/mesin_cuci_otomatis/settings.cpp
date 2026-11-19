@@ -26,8 +26,8 @@ void settingsDefaults(Settings& s) {
   s.drainMode = DRAIN_SENSOR;
   s.drainTime = 5;
   s.drainSessionLimit = 3;
-  s.drainExtraSec = 60;
-  s.drainMaxMin = 5;
+  s.drainProbeSec = 45;
+  s.fillPrecheck = PRECHECK_DRAIN;
   s.unjamCount = 2;
   s.dH = 0; s.dM = 0; s.dS = 0;
   s.finishAt = -1;
@@ -57,8 +57,8 @@ static void sanitize(Settings& s) {
   if (s.drainMode > DRAIN_TIME) s.drainMode = d.drainMode;
   s.drainTime = clampInt(s.drainTime, 1, 1440, d.drainTime);
   s.drainSessionLimit = clampInt(s.drainSessionLimit, 1, 1440, d.drainSessionLimit);
-  s.drainExtraSec = clampInt(s.drainExtraSec, 0, 600, d.drainExtraSec);
-  s.drainMaxMin = clampInt(s.drainMaxMin, 1, 60, d.drainMaxMin);
+  s.drainProbeSec = clampInt(s.drainProbeSec, 5, 600, d.drainProbeSec);
+  if (s.fillPrecheck > PRECHECK_USE) s.fillPrecheck = d.fillPrecheck;
   s.unjamCount = clampInt(s.unjamCount, 0, 10, d.unjamCount);
   s.dH = clampInt(s.dH, 0, 23, 0);
   s.dM = clampInt(s.dM, 0, 59, 0);
@@ -70,6 +70,13 @@ static void sanitize(Settings& s) {
 uint32_t fillLimitSeconds() { return (uint32_t)S.flH * 3600UL + (uint32_t)S.flM * 60UL + (uint32_t)S.flS; }
 
 void settingsLoad() {
+  {   // migrasi: kunci pembuangan lama sudah tidak dipakai (sensor hanya di atas)
+    Preferences m;
+    m.begin("settings", false);
+    if (m.isKey("drainExtra")) m.remove("drainExtra");
+    if (m.isKey("drainMax")) m.remove("drainMax");
+    m.end();
+  }
   Preferences p;
   p.begin("settings", true);
   settingsDefaults(S);
@@ -90,8 +97,8 @@ void settingsLoad() {
   S.drainMode = p.getUChar("drainMode", S.drainMode);
   S.drainTime = p.getInt("drainTime", S.drainTime);
   S.drainSessionLimit = p.getInt("drainLimit", S.drainSessionLimit);
-  S.drainExtraSec = p.getInt("drainExtra", S.drainExtraSec);
-  S.drainMaxMin = p.getInt("drainMax", S.drainMaxMin);
+  S.drainProbeSec = p.getInt("drainProbe", S.drainProbeSec);
+  S.fillPrecheck = p.getUChar("fillPre", S.fillPrecheck);
   S.unjamCount = p.getInt("unjam", S.unjamCount);
   S.dH = p.getInt("dH", S.dH);
   S.dM = p.getInt("dM", S.dM);
@@ -123,8 +130,8 @@ void settingsSave() {
   p.putUChar("drainMode", S.drainMode);
   p.putInt("drainTime", S.drainTime);
   p.putInt("drainLimit", S.drainSessionLimit);
-  p.putInt("drainExtra", S.drainExtraSec);
-  p.putInt("drainMax", S.drainMaxMin);
+  p.putInt("drainProbe", S.drainProbeSec);
+  p.putUChar("fillPre", S.fillPrecheck);
   p.putInt("unjam", S.unjamCount);
   p.putInt("dH", S.dH);
   p.putInt("dM", S.dM);
@@ -242,19 +249,20 @@ void calibLoad() {
   Preferences p;
   p.begin("calib", true);
   C.avgFillMs = p.getFloat("fill", 0);
-  C.avgDrainMs = p.getFloat("drain", 0);
   C.nFill = p.getUShort("nFill", 0);
-  C.nDrain = p.getUShort("nDrain", 0);
   p.end();
+  Preferences m;   // migrasi: hapus data kalibrasi buang lama
+  m.begin("calib", false);
+  if (m.isKey("drain")) m.remove("drain");
+  if (m.isKey("nDrain")) m.remove("nDrain");
+  m.end();
 }
 
 void calibSave() {
   Preferences p;
   p.begin("calib", false);
   p.putFloat("fill", C.avgFillMs);
-  p.putFloat("drain", C.avgDrainMs);
   p.putUShort("nFill", C.nFill);
-  p.putUShort("nDrain", C.nDrain);
   p.end();
 }
 

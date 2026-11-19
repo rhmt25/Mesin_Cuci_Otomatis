@@ -76,7 +76,13 @@ Nilai preset ada di `programs.cpp`. Urutan: isi air → soak/wash → buang → 
 
 **Level air:** Penuh (sensor, default) / Persen 25–75 (kalibrasi otomatis dari pengisian mode sensor) / Waktu manual.
 Pengisian yang tidak penuh dalam batas waktu → valve ditutup, tunggu, coba ulang (default 3×), lalu **dijeda**.
-Pembuangan gagal → "unjam" valve (lepas-tarik ulang), ulang sesi, lalu **dijeda**.
+
+**Sensor level ada di paling atas** (hanya tahu *penuh* / *tidak penuh*), jadi pembuangan tidak mengandalkan "air habis":
+valve ditarik; air harus mulai turun dari posisi penuh dalam `drainProbeSec` (default 45 dtk, bisa diubah). Bila tidak,
+valve dilepas 3 dtk lalu ditarik lagi (unjam). Setelah tarikan terbukti berhasil, valve ditarik sampai total waktu buang
+(default 5 mnt), lalu dicek lagi: bila air masih penuh, sesi diulang; semua sesi gagal → **dijeda**.
+Opsi **pra-cek isi** (`/pra_cek_isi buang|jeda|pakai`): bila air masih penuh sebelum mengisi, buang dulu (default), jeda dan
+tunggu keputusan, atau pakai air yang ada. Saat mesin diam, firmware tidak menggerakkan relay apa pun sendiri.
 Listrik padam → saat menyala ditanya **Lanjutkan / Batalkan** (tidak pernah lanjut otomatis).
 
 ## Perintah (Telegram `/` · Web · Serial)

@@ -150,16 +150,14 @@ static String settingsJson() {
   d["drainMode"] = S.drainMode;
   d["drainTime"] = S.drainTime;
   d["drainSessionLimit"] = S.drainSessionLimit;
-  d["drainExtraSec"] = S.drainExtraSec;
-  d["drainMaxMin"] = S.drainMaxMin;
+  d["drainProbeSec"] = S.drainProbeSec;
+  d["fillPrecheck"] = S.fillPrecheck;
   d["unjamCount"] = S.unjamCount;
   d["dH"] = S.dH; d["dM"] = S.dM; d["dS"] = S.dS;
   d["finishAt"] = S.finishAt;
   d["notif"] = S.notif;
   d["calib"]["fillSec"] = (uint32_t)(C.avgFillMs / 1000);
-  d["calib"]["drainSec"] = (uint32_t)(C.avgDrainMs / 1000);
   d["calib"]["nFill"] = C.nFill;
-  d["calib"]["nDrain"] = C.nDrain;
   d["timeSynced"] = netTimeSynced();
   String out;
   serializeJson(d, out);
@@ -223,7 +221,6 @@ static String historyJson() {
   d["stats"]["cycles"] = ST.totalCycles;
   d["stats"]["motorSec"] = ST.motorSec + relayMotorSeconds();
   d["stats"]["avgFillSec"] = (uint32_t)(C.avgFillMs / 1000);
-  d["stats"]["avgDrainSec"] = (uint32_t)(C.avgDrainMs / 1000);
   String out;
   serializeJson(d, out);
   return out;
@@ -276,7 +273,7 @@ static const KeyMap settingKeys[] = {
     {"fillTime", "set_waktu_pengisian_air"}, {"drainTime", "set_waktu_pembuangan_air"},
     {"drainSessionLimit", "set_batas_sesi_pembuangan_air"}, {"fillRetryCount", "set_coba_ulang_isi"},
     {"fillRetryWait", "set_tunggu_coba_ulang"}, {"unjamCount", "set_unjam"},
-    {"drainExtraSec", "set_tambahan_buang"}, {"drainMaxMin", "set_maks_buang"},
+    {"drainProbeSec", "set_probe_buang"}, {"fillPrecheck", "pra_cek_isi"},
     {"notif", "notif"}, {"level", "level_air"}, {"drainModeName", "mode_buang"},
 };
 

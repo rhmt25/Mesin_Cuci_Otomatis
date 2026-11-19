@@ -43,11 +43,13 @@ struct Run {
 };
 static Run R;
 
-enum { D_PULL, D_CHECK, D_UNJAM_WAIT, D_UNJAM_PULL, D_FAILED };
+enum { D_PULL, D_CHECK, D_UNJAM_WAIT, D_FAILED };
 struct DrainCtx {
   uint8_t phase, session, unjam;
-  bool ensure, soft, extraOn;
-  uint32_t elapsed, left, extraLeft, emptyAt;
+  bool soft;          // manual (water_out): gagal tidak menjeda
+  bool probeDone;     // tarikan terbukti berhasil (sensor sudah tidak penuh)
+  uint32_t pullElapsed;   // lama valve ditarik pada percobaan ini
+  uint32_t left;
 };
 static DrainCtx D;
 
@@ -107,10 +109,7 @@ static uint32_t estFillMs() {
   if (C.nFill > 0) return (uint32_t)(C.avgFillMs / TIME_SCALE);
   return minToMs(10);
 }
-static uint32_t estDrainMs() {
-  if (C.nDrain > 0) return (uint32_t)(C.avgDrainMs / TIME_SCALE) + secToMs(cfg.drainExtraSec);
-  return minToMs(cfg.drainMode == DRAIN_TIME ? cfg.drainTime : cfg.drainMaxMin);
-}
+static uint32_t estDrainMs() { return minToMs(cfg.drainTime) + stableMs(); }
 static uint32_t estimateStepMs(const Step& st) {
   switch (st.type) {
     case ST_WAIT: return secToMs(st.a);
@@ -118,7 +117,7 @@ static uint32_t estimateStepMs(const Step& st) {
     case ST_AGITATE: return minToMs(st.a);
     case ST_SOAK: return minToMs(st.a * 5);
     case ST_PERFUME: return perfumeCups(st) > 0 ? scaledMs((uint32_t)(perfumeCups(st) * 5000) + 3000) : 0;
-    case ST_DRAIN: return estDrainMs() + stableMs();
+    case ST_DRAIN: return estDrainMs();
     case ST_SPIN: return minToMs(st.a);
     case ST_CHECK: return stableMs();
     case ST_TEST: return scaledMs(MOTOR_REVERSE_GAP_MS) + secToMs(st.flag ? st.flag : 2);
@@ -203,36 +202,39 @@ static SR agitateTick(uint32_t dt) {
 // ============================================================================
 // Pembuangan air (valve ditarik motor). Dipakai langkah DRAIN dan pra-cek FILL.
 // ============================================================================
+// Sensor level hanya ada di paling atas: ia hanya tahu "penuh" atau "tidak penuh".
+// Tarikan valve dibuktikan berhasil bila air turun dari posisi penuh dalam drainProbeSec.
+// Bila tidak, valve dilepas lalu ditarik lagi (unjam). Setelah waktu buang habis, air tidak boleh
+// masih penuh; bila masih penuh, sesi diulang.
 static bool drainPullStart() {
-  D.session++;
   if (!relaySet(R_DRAIN, true)) {
     D.phase = D_FAILED;
     return false;
   }
   D.phase = D_PULL;
-  D.elapsed = 0;
-  D.extraOn = false;
-  D.emptyAt = 0;
+  D.pullElapsed = 0;
+  // Bila air sudah tidak penuh sejak awal (mis. isi sebagian), keberhasilan tarikan tidak bisa dibuktikan.
+  D.probeDone = cfg.drainMode == DRAIN_TIME || !sensorRaw();
   int limit = D.soft ? 1 : cfg.drainSessionLimit;
   logf(LOG_INFO, "Membuang air... sesi %d/%d", D.session, limit);
   setDetail("Membuang air (sesi %d/%d)", D.session, limit);
   return true;
 }
 
-static void drainBegin(bool ensure, bool soft) {
+static void drainBegin(bool soft) {
   memset(&D, 0, sizeof(D));
-  D.ensure = ensure;
   D.soft = soft;
+  D.session = 1;
   drainPullStart();
 }
 
 static SR drainFail() {
   relaySet(R_DRAIN, false);
   if (D.soft) {
-    logf(LOG_WARN, "Air masih tersisa setelah pembuangan manual");
+    logf(LOG_WARN, "Air masih penuh setelah pembuangan manual");
     return SR_DONE;
   }
-  strlcpy(pauseReason, "Pembuangan gagal, cek valve buang", sizeof(pauseReason));
+  strlcpy(pauseReason, "Pembuangan gagal, cek modul tarik valve buang", sizeof(pauseReason));
   return SR_PAUSE;
 }
 
@@ -240,80 +242,49 @@ static void drainRelease() {
   relaySet(R_DRAIN, false);
   D.phase = D_CHECK;
   D.left = stableMs() + secToMs(2);
-  setDetail("Memeriksa sisa air");
+  setDetail("Memeriksa air sudah turun");
+  logf(LOG_INFO, "Mengecek apakah air sudah turun dari posisi penuh...");
+}
+
+// Sesi gagal (air masih penuh): ulangi sesi sampai batas, lalu jeda.
+static SR drainSessionFailed() {
+  int limit = D.soft ? 1 : cfg.drainSessionLimit;
+  if (D.session < limit) {
+    D.session++;
+    D.unjam = 0;
+    logf(LOG_INFO, "Mengulangi sesi pembuangan air");
+    drainPullStart();
+    return SR_CONTINUE;
+  }
+  return drainFail();
 }
 
 static SR drainTick(uint32_t dt) {
-  const int sessionLimit = D.soft ? 1 : cfg.drainSessionLimit;
   switch (D.phase) {
     case D_FAILED:
       return failStep("Valve buang ditolak interlock");
 
-    case D_PULL: {
-      D.elapsed += dt;
-      bool release = false;
-      if (cfg.drainMode == DRAIN_SENSOR) {
-        if (!D.extraOn && sensorStable(false, stableMs())) {
-          D.extraOn = true;
-          D.extraLeft = secToMs(cfg.drainExtraSec);
-          D.emptyAt = D.elapsed;
-          logf(LOG_INFO, "Air habis, valve ditahan %d dtk lagi untuk sisa air", cfg.drainExtraSec);
-        }
-        if (D.extraOn) {
-          if (D.extraLeft <= dt) release = true;
-          else D.extraLeft -= dt;
-        }
-        if (!release && D.elapsed >= minToMs(cfg.drainMaxMin)) {
-          release = true;
-          logf(LOG_WARN, "Batas waktu buang %d menit tercapai", cfg.drainMaxMin);
-        }
-      } else if (D.elapsed >= minToMs(cfg.drainTime)) {
-        release = true;
-      }
-      if (release) {
-        if (cfg.drainMode == DRAIN_TIME && !D.ensure) {
+    case D_PULL:
+      D.pullElapsed += dt;
+      if (!D.probeDone) {
+        if (sensorStable(false, stableMs())) {
+          D.probeDone = true;
+          logf(LOG_INFO, "Tarikan valve berhasil: air mulai turun");
+        } else if (D.pullElapsed >= secToMs(cfg.drainProbeSec)) {
           relaySet(R_DRAIN, false);
-          logf(LOG_INFO, "Pembuangan air selesai berdasarkan waktu");
-          return SR_DONE;
-        }
-        drainRelease();
-        logf(LOG_INFO, "Mengecek apakah air sudah benar-benar habis...");
-      }
-      return SR_CONTINUE;
-    }
-
-    case D_CHECK:
-      if (sensorStable(false, stableMs())) {
-        logf(LOG_INFO, "Air sudah benar-benar habis");
-        if (cfg.drainMode == DRAIN_SENSOR && D.session == 1 && D.unjam == 0 && D.emptyAt > 0) {
-          float real = (float)D.emptyAt * TIME_SCALE;
-          if (C.nDrain >= 2 && real > C.avgDrainMs * ANOMALY_SLOW_FACTOR) {
-            logf(LOG_WARN, "Pembuangan lebih lama dari biasanya (valve/pipa tersumbat?)");
+          logf(LOG_WARN, "Valve buang belum menarik (air masih penuh setelah %d dtk)", cfg.drainProbeSec);
+          if (D.unjam < cfg.unjamCount) {
+            D.unjam++;
+            D.phase = D_UNJAM_WAIT;
+            D.left = scaledMs(UNJAM_RELEASE_MS);
+            logf(LOG_INFO, "Unjam %d/%d: valve dilepas lalu ditarik lagi", D.unjam, cfg.unjamCount);
+            setDetail("Unjam valve %d/%d", D.unjam, cfg.unjamCount);
+            return SR_CONTINUE;
           }
-          C.avgDrainMs = C.nDrain == 0 ? real : C.avgDrainMs * 0.7f + real * 0.3f;
-          if (C.nDrain < 65535) C.nDrain++;
-          calibSave();
+          return drainSessionFailed();
         }
-        return SR_DONE;
       }
-      if (D.left > dt) {
-        D.left -= dt;
-        return SR_CONTINUE;
-      }
-      logf(LOG_WARN, "Air masih tersisa setelah pembuangan");
-      if (D.unjam < cfg.unjamCount) {
-        D.unjam++;
-        D.phase = D_UNJAM_WAIT;
-        D.left = scaledMs(UNJAM_RELEASE_MS);
-        logf(LOG_INFO, "Unjam %d/%d: valve dilepas lalu ditarik lagi", D.unjam, cfg.unjamCount);
-        setDetail("Unjam valve %d/%d", D.unjam, cfg.unjamCount);
-      } else if (D.session < sessionLimit) {
-        logf(LOG_INFO, "Mengulangi sesi pembuangan air");
-        D.unjam = 0;
-        drainPullStart();
-      } else {
-        return drainFail();
-      }
+      if (D.probeDone && D.pullElapsed >= minToMs(cfg.drainTime)) drainRelease();
       return SR_CONTINUE;
 
     case D_UNJAM_WAIT:
@@ -322,17 +293,22 @@ static SR drainTick(uint32_t dt) {
         return SR_CONTINUE;
       }
       if (!relaySet(R_DRAIN, true)) return failStep("Valve buang ditolak interlock");
-      D.phase = D_UNJAM_PULL;
-      D.left = scaledMs(UNJAM_PULL_MS);
+      D.phase = D_PULL;
+      D.pullElapsed = 0;
+      D.probeDone = !sensorRaw();
       return SR_CONTINUE;
 
-    case D_UNJAM_PULL:
-      if (D.left > dt && !sensorStable(false, stableMs())) {
+    case D_CHECK:
+      if (sensorStable(false, stableMs())) {
+        logf(LOG_INFO, "Air sudah turun, pembuangan selesai");
+        return SR_DONE;
+      }
+      if (D.left > dt) {
         D.left -= dt;
         return SR_CONTINUE;
       }
-      drainRelease();
-      return SR_CONTINUE;
+      logf(LOG_WARN, "Air masih penuh setelah pembuangan");
+      return drainSessionFailed();
   }
   return SR_CONTINUE;
 }
@@ -394,19 +370,29 @@ static SR fillTick(uint32_t dt) {
       } else {
         R.phase = F_PRECHECK;
         R.left = stableMs() + secToMs(2);
-        setDetail("Memeriksa air kosong");
+        setDetail("Memeriksa air belum penuh");
       }
       return SR_CONTINUE;
 
     case F_PRECHECK:
       if (sensorStable(false, stableMs())) return fillStartValve();
-      if (R.left > dt) {
-        R.left -= dt;
-        return SR_CONTINUE;
+      // Sudah jelas penuh (atau tidak stabil terlalu lama): terapkan pilihan pengguna
+      if ((sensorRaw() && sensorSteadyMs() >= secToMs(2)) || R.left <= dt) {
+        switch (cfg.fillPrecheck) {
+          case PRECHECK_PAUSE:
+            strlcpy(pauseReason, "Air masih penuh sebelum mengisi. Pilih Lanjutkan, Lewati, atau Stop", sizeof(pauseReason));
+            return SR_PAUSE;
+          case PRECHECK_USE:
+            logf(LOG_INFO, "Air sudah penuh, pengisian dilewati");
+            return SR_DONE;
+          default:
+            logf(LOG_INFO, "Air masih penuh sebelum mengisi, membuang dulu");
+            drainBegin(false);
+            R.phase = F_DRAINING;
+            return SR_CONTINUE;
+        }
       }
-      logf(LOG_INFO, "Air masih terdeteksi sebelum mengisi, membuang dulu");
-      drainBegin(true, false);
-      R.phase = F_DRAINING;
+      R.left -= dt;
       return SR_CONTINUE;
 
     case F_DRAINING: {
@@ -494,7 +480,7 @@ static void stepInit() {
       }
       setDetail("Memasukkan pewangi");
       break;
-    case ST_DRAIN: drainBegin(true, st.flag == 1); break;
+    case ST_DRAIN: drainBegin(st.flag == 1); break;
     case ST_SPIN:
       R.left = minToMs(st.a);
       relaySet(R_SPIN, true);
@@ -539,7 +525,7 @@ static void stepEngage() {
       R.left = scaledMs(MOTOR_REVERSE_GAP_MS) + TICK_MS * 2;
       break;
     case ST_FILL: fillBegin(); break;
-    case ST_DRAIN: drainBegin(true, st.flag == 1); break;
+    case ST_DRAIN: drainBegin(st.flag == 1); break;
     default: break;
   }
 }
@@ -832,7 +818,7 @@ static uint32_t currentStepLeftMs() {
     }
     case ST_DRAIN: {
       uint32_t est = estimateStepMs(st);
-      return est > D.elapsed ? est - D.elapsed : 0;
+      return est > D.pullElapsed ? est - D.pullElapsed : 0;
     }
   }
   return 0;

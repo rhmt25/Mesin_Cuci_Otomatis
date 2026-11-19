@@ -7,6 +7,7 @@ enum Pola : uint8_t { POLA_NORMAL, POLA_GENTLE, POLA_HIJAB };
 enum FillLevel : uint8_t { FILL_SENSOR, FILL_PERCENT, FILL_TIME };
 enum DrainMode : uint8_t { DRAIN_SENSOR, DRAIN_TIME };
 enum NotifMode : uint8_t { NOTIF_LENGKAP, NOTIF_RINGKAS, NOTIF_SENYAP };
+enum FillPrecheck : uint8_t { PRECHECK_DRAIN, PRECHECK_PAUSE, PRECHECK_USE };  // bila sensor penuh sebelum mengisi
 
 struct Settings {
   uint8_t pola;
@@ -24,8 +25,8 @@ struct Settings {
   uint8_t drainMode;
   int drainTime;           // menit (mode waktu)
   int drainSessionLimit;
-  int drainExtraSec;
-  int drainMaxMin;
+  int drainProbeSec;       // lama menunggu air turun setelah valve ditarik (deteksi tarikan gagal)
+  uint8_t fillPrecheck;    // FillPrecheck
   int unjamCount;
   int dH, dM, dS;          // delay sebelum mulai
   int finishAt;            // menit-dalam-hari target selesai, -1 = tidak ada (sekali pakai)
@@ -55,9 +56,7 @@ void wifiStoreInit();   // migrasi + default dari secrets.h
 // --- Kalibrasi ---
 struct Calib {
   float avgFillMs;     // waktu nyata (tidak diskalakan)
-  float avgDrainMs;
   uint16_t nFill;
-  uint16_t nDrain;
 };
 extern Calib C;
 void calibLoad();
