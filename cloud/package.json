@@ -1,0 +1,17 @@
+{
+  "name": "mesin-cuci-relay",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Relay jarak jauh Mesin Cuci: Cloudflare Worker + Durable Object (paket Free)",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --local --persist-to .wrangler/state",
+    "deploy": "wrangler deploy",
+    "test": "node test/e2e.mjs",
+    "secrets": "node tools/gen-secrets.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0",
+    "ws": "^8.18.0"
+  }
+}

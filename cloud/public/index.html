@@ -1,0 +1,923 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mesin Cuci</title>
+<style>:root{--bg:#f4f6f9;--card:#fff;--ink:#14202e;--muted:#6a7787;--line:#dde3ea;--pri:#1f7ae0;--pri-ink:#fff;--ok:#1a9a5b;--warn:#c98a00;--err:#d23b3b;--ring:#e5ebf2}
+:root[data-theme=dark]{--bg:#0f1620;--card:#18222f;--ink:#e6edf5;--muted:#8a99ab;--line:#26323f;--pri:#4a9bff;--pri-ink:#07121f;--ok:#37c283;--warn:#e0aa2f;--err:#ff6b6b;--ring:#26323f}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0f1620;--card:#18222f;--ink:#e6edf5;--muted:#8a99ab;--line:#26323f;--pri:#4a9bff;--pri-ink:#07121f;--ok:#37c283;--warn:#e0aa2f;--err:#ff6b6b;--ring:#26323f}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,Segoe UI,Roboto,sans-serif;-webkit-text-size-adjust:100%}
+[hidden]{display:none!important}
+header{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 14px;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+.chips{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.chip{padding:2px 9px;border-radius:99px;background:var(--ring);font-size:12px;white-space:nowrap}
+.chip.run{background:var(--ok);color:#fff}.chip.pause{background:var(--warn);color:#fff}.chip.off{background:var(--err);color:#fff}
+.icon{border:0;background:transparent;color:var(--ink);font-size:18px;cursor:pointer;padding:4px 6px}
+nav{display:flex;overflow-x:auto;background:var(--card);border-bottom:1px solid var(--line);scrollbar-width:none}
+nav button{flex:0 0 auto;border:0;background:transparent;color:var(--muted);padding:10px 14px;font:inherit;cursor:pointer;border-bottom:3px solid transparent}
+nav button.on{color:var(--pri);border-color:var(--pri);font-weight:600}
+main{max-width:760px;margin:0 auto;padding:14px 16px 60px}
+.tab{display:none}.tab.on{display:block}
+h3{margin:18px 0 8px;font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin:0 0 12px}
+.hero{display:flex;gap:16px;align-items:center}
+.heroInfo{flex:1;min-width:0}
+.big{font-size:22px;font-weight:700}
+.muted{color:var(--muted);font-size:13px}
+.kv{display:flex;justify-content:space-between;border-top:1px solid var(--line);padding:5px 0;margin-top:5px}
+.ringBg{fill:none;stroke:var(--ring);stroke-width:10}
+.ringFg{fill:none;stroke:var(--pri);stroke-width:10;stroke-linecap:round;stroke-dasharray:327;stroke-dashoffset:327;transition:stroke-dashoffset .6s}
+#ringText{fill:var(--ink);font-size:20px;font-weight:700}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px;align-items:center}
+.ctl .btn{flex:1 1 90px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:12px}
+.btn{border:1px solid var(--line);background:var(--card);color:var(--ink);padding:10px 14px;border-radius:10px;font:inherit;cursor:pointer;min-height:44px}
+.btn:active{transform:scale(.98)}
+.btn.primary{background:var(--pri);color:var(--pri-ink);border-color:var(--pri)}
+.btn.danger{background:var(--err);color:#fff;border-color:var(--err)}
+.btn:disabled{opacity:.5}
+.prog{text-align:left;display:flex;flex-direction:column;gap:2px;cursor:pointer;margin:0}
+.prog small{color:var(--muted)}
+.form{display:flex;flex-direction:column;gap:10px}
+label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+input,select{font:inherit;padding:9px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);min-width:0}
+.tri{display:flex;gap:6px}.tri input{flex:1;width:0}
+.numrow{display:flex;gap:8px;align-items:flex-end}.numrow label{flex:1}
+.banner{border-radius:10px;padding:12px;margin-bottom:12px}
+.banner.warn{background:color-mix(in srgb,var(--warn) 18%,var(--card));border:1px solid var(--warn)}
+.banner.err{background:color-mix(in srgb,var(--err) 16%,var(--card));border:1px solid var(--err)}
+.banner .row{margin:8px 0 0}
+.logbox{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;height:55vh;overflow:auto;margin:0 0 10px;font:12px/1.5 ui-monospace,Consolas,monospace;white-space:pre-wrap;word-break:break-word}
+.l-2{color:var(--pri)}.l-3{color:var(--warn)}.l-4{color:var(--err)}.l-5{color:var(--ok)}.l-0{color:var(--muted)}
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;max-width:92vw;opacity:0;pointer-events:none;transition:opacity .2s;z-index:20;white-space:pre-wrap}
+#toast.show{opacity:1}
+.chk{flex-direction:row;align-items:center;gap:8px;justify-content:center}.chk input{width:auto}
+.relayCard{display:flex;align-items:center;gap:12px;justify-content:space-between}
+.led{width:14px;height:14px;border-radius:50%;background:var(--ring);border:1px solid var(--line);flex:0 0 auto}.led.on{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+.relayCard .info{display:flex;align-items:center;gap:10px;min-width:0}
+.login{max-width:320px;margin:20vh auto;display:flex;flex-direction:column;gap:12px;text-align:center}
+.bar{height:10px;background:var(--ring);border-radius:99px;overflow:hidden}.bar div{height:100%;width:0;background:var(--pri);transition:width .2s}
+.wifirow{display:flex;gap:6px;align-items:center;justify-content:space-between}
+.wifirow .btn{min-height:36px;padding:4px 10px}
+.hist{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid var(--line);padding:8px 0}
+@media(max-width:480px){.hero{flex-direction:column;text-align:center}.kv{text-align:left}}
+
+.palette{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.palette .btn{min-height:38px;padding:6px 10px;font-size:14px}
+.stack{display:flex;flex-direction:column;gap:8px}
+.crow{display:flex;gap:8px;align-items:center;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px}
+.crow.drag{opacity:.55;border-color:var(--pri);box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.handle{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;padding:8px 6px;font-size:20px;color:var(--muted)}
+.cbody{flex:1;min-width:0}
+.ctitle{margin-bottom:4px}
+.num{display:inline-block;min-width:22px;text-align:center;border-radius:99px;background:var(--pri);color:var(--pri-ink);font-size:12px;padding:1px 6px;margin-right:4px}
+.fields{display:flex;flex-wrap:wrap;gap:8px}
+.fields label{flex:1 1 110px}
+.cacts{display:flex;flex-direction:column;gap:2px}
+.cacts button{border:0;background:transparent;color:var(--ink);font-size:16px;cursor:pointer;padding:2px 6px}
+.cpSummary{font-size:13px;color:var(--muted)}
+.cpcard{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.cpcard .info{flex:1 1 200px;min-width:0}
+.cpcard .row{margin:0}
+body.offline main .btn,body.offline main .prog,body.offline main input,body.offline main select{opacity:.45;pointer-events:none}
+.lockhint{font-size:12px;color:var(--err)}
+.btn.sm{min-height:34px;padding:4px 10px}
+</style>
+</head>
+<body>
+<div id="toast"></div>
+
+<section id="login" hidden>
+  <form id="loginForm" class="card login">
+    <h1>🧺 Mesin Cuci</h1>
+    <input id="pw" type="password" placeholder="Password" autocomplete="current-password" required>
+    <label class="chk"><input id="remember" type="checkbox" checked> Ingat perangkat ini (tetap masuk, bisa dihapus di tab Sistem)</label>
+    <button class="btn primary" type="submit">Masuk</button>
+    <p id="loginMsg" class="muted"></p>
+  </form>
+</section>
+
+<div id="app" hidden>
+  <header>
+    <div class="brand">🧺 <b>Mesin Cuci</b></div>
+    <div class="chips">
+      <span id="chipState" class="chip">…</span>
+      <span id="chipWifi" class="chip">…</span>
+      <button id="btnTheme" class="icon" title="Tema">◐</button>
+      <button id="btnLogout" class="icon" title="Keluar">⎋</button>
+    </div>
+  </header>
+
+  <nav id="tabs">
+    <button data-tab="home" class="on">Beranda</button>
+    <button data-tab="manual">Manual</button>
+    <button data-tab="custom">Custom</button>
+    <button data-tab="relay">Relay</button>
+    <button data-tab="settings">Pengaturan</button>
+    <button data-tab="water">Air</button>
+    <button data-tab="wifi" data-local>WiFi</button>
+    <button data-tab="log">Log</button>
+    <button data-tab="console" data-local>Konsol</button>
+    <button data-tab="history">Riwayat</button>
+    <button data-tab="firmware" data-local>Firmware</button>
+    <button data-tab="system">Sistem</button>
+  </nav>
+
+  <main>
+    <div id="bannerOffline" class="banner err" hidden></div>
+    <!-- BERANDA -->
+    <section id="tab-home" class="tab on">
+      <div id="bannerResume" class="banner warn" hidden>
+        <div>⚡ Listrik sempat padam saat <b id="resumeInfo"></b>. Mesin tidak lanjut otomatis.</div>
+        <div class="row"><button class="btn primary" data-cmd="lanjutkan">Lanjutkan</button><button class="btn" data-cmd="batalkan">Batalkan</button></div>
+      </div>
+      <div id="bannerPause" class="banner err" hidden></div>
+      <div id="bannerFault" class="banner err" hidden>&#10060; <b>Relay terkunci</b>: pengaman mendeteksi pelanggaran interlock (mis. motor kiri &amp; kanan nyala bersamaan). Semua relay dimatikan. Restart mesin untuk membuka kunci.</div>
+
+      <div class="card hero">
+        <svg id="ring" viewBox="0 0 120 120" width="150" height="150">
+          <circle cx="60" cy="60" r="52" class="ringBg"/>
+          <circle id="ringFg" cx="60" cy="60" r="52" class="ringFg" transform="rotate(-90 60 60)"/>
+          <text id="ringText" x="60" y="66" text-anchor="middle">—</text>
+        </svg>
+        <div class="heroInfo">
+          <div id="stage" class="big">Siap</div>
+          <div id="detail" class="muted"></div>
+          <div class="kv"><span>Sisa tahap</span><b id="stepLeft">-</b></div>
+          <div class="kv"><span>Total sisa</span><b id="totalLeft">-</b></div>
+          <div class="kv"><span>Air</span><b id="water">-</b></div>
+        </div>
+      </div>
+
+      <div class="row ctl">
+        <button class="btn danger" id="btnStop">⏹ STOP</button>
+        <button class="btn" data-cmd="jeda">⏸ Jeda</button>
+        <button class="btn" data-cmd="lanjutkan">▶ Lanjutkan</button>
+        <button class="btn" data-cmd="lewati">⏭ Lewati</button>
+      </div>
+
+      <h3>Mulai program</h3>
+      <div class="grid">
+        <button class="card prog" data-cmd="program" data-args="normal"><b>▶ Normal</b><small>2 soak · wash 15 · bilas 10</small></button>
+        <button class="card prog" data-cmd="program" data-args="gentle"><b>🌸 Gentle</b><small>2 soak · wash 12 · bilas 8</small></button>
+        <button class="card prog" data-cmd="program" data-args="hijab"><b>🧕 Hijab</b><small>1 soak · wash 10 · bilas 8</small></button>
+        <button class="card prog" data-cmd="program" data-args="cepat"><b>⚡ Cepat</b><small>wash 8 · bilas 5</small></button>
+        <button class="card prog" data-cmd="program" data-args="kustom"><b>🛠 Kustom</b><small>sesuai Pengaturan</small></button>
+      </div>
+
+      <p class="muted" id="progLock" hidden></p>
+      <div id="homeCustom" hidden><h3>Proses custom</h3><div class="grid" id="homeCustomGrid"></div></div>
+
+      <h3>Jadwalkan</h3>
+      <div class="card form">
+        <label>Mulai nanti (menit)<input id="inDelay" type="number" min="0" max="1439" placeholder="0"></label>
+        <button class="btn" id="btnDelay">Atur</button>
+        <label>Selesai jam<input id="inFinish" type="time"></label>
+        <button class="btn" id="btnFinish">Atur</button>
+        <p class="muted" id="schedNote">Berlaku untuk proses berikutnya.</p>
+      </div>
+    </section>
+
+    <!-- MANUAL -->
+    <section id="tab-manual" class="tab">
+      <p class="muted">Soak &amp; Motor membutuhkan air terisi. Hanya bisa dijalankan saat mesin siap.</p>
+      <div class="grid">
+        <button class="btn" data-cmd="soak">Soak</button>
+        <button class="btn" data-cmd="wash">Wash</button>
+        <button class="btn" data-cmd="soak_and_wash">Soak + Wash</button>
+        <button class="btn" data-cmd="rinse">Rinse</button>
+        <button class="btn" data-cmd="rinse_parfume">Rinse + Pewangi</button>
+        <button class="btn" data-cmd="spin">Spin</button>
+        <button class="btn" data-cmd="water_in">Isi air</button>
+        <button class="btn" data-cmd="water_out">Buang air</button>
+        <button class="btn" data-cmd="add_parfume">Pewangi</button>
+        <button class="btn" data-cmd="motor_on">Motor 5 mnt</button>
+        <button class="btn" data-cmd="cek_air">Cek air</button>
+      </div>
+    </section>
+
+    <!-- CUSTOM PROSES -->
+    <section id="tab-custom" class="tab">
+      <p class="muted">Susun prosesmu sendiri: pilih langkah, atur nilainya, geser <b>&#9776;</b> untuk menukar urutan. Simpan (maks 5), lalu jalankan dari sini, Beranda, atau Telegram (<code>/custom</code>).</p>
+      <h3>Tersimpan</h3>
+      <div id="cpList"></div>
+      <h3 id="cpTitle">Proses baru</h3>
+      <div class="card form" id="cpEditor">
+        <label>Nama proses<input id="cpName" maxlength="27" placeholder="mis. Cuci handuk"></label>
+        <label>Mulai dari contoh
+          <select id="cpPreset"><option value="">&mdash; pilih contoh (opsional) &mdash;</option><option value="normal">Normal</option><option value="gentle">Gentle</option><option value="hijab">Hijab</option><option value="cepat">Cepat</option></select>
+        </label>
+        <div><div class="muted">Tambah langkah &mdash; blok siap pakai</div><div class="palette" id="cpPalBlok"></div></div>
+        <div><div class="muted">Langkah dasar</div><div class="palette" id="cpPalDasar"></div></div>
+        <div id="cpStack" class="stack"></div>
+        <p id="cpEmpty" class="muted">Belum ada langkah. Pilih dari tombol di atas.</p>
+        <div class="cpSummary" id="cpSummary"></div>
+        <div id="cpError" class="banner err" hidden></div>
+        <div class="row"><button class="btn primary" id="cpSave">&#128190; Simpan</button><button class="btn" id="cpSaveNew">Simpan sebagai baru</button><button class="btn" id="cpReset">Kosongkan</button></div>
+      </div>
+    </section>
+
+    <!-- RELAY -->
+    <section id="tab-relay" class="tab">
+      <div id="relayLock" class="banner err" hidden></div>
+      <div class="banner warn">&#9888; Lepas beban atau tutup kran air sebelum menguji. Motor kiri &amp; kanan <b>tidak pernah</b> bisa menyala bersamaan (dijaga berlapis). Kontrol manual hanya saat mesin siap dan otomatis mati setelah 60 detik.</div>
+      <div id="relayProgress" class="banner warn" hidden></div>
+      <div class="card form">
+        <b>Uji berurutan otomatis</b>
+        <p class="muted">Menyalakan lalu mematikan setiap relay satu per satu: kiri, kanan, isi, buang, spin, pewangi.</p>
+        <label>Lama menyala per relay (detik)<input id="seqSecs" type="number" min="1" max="30" value="3"></label>
+        <div class="row"><button class="btn primary" id="btnSeq">&#9654; Mulai uji berurutan</button><button class="btn danger" id="btnSeqStop">&#9209; Berhenti</button></div>
+      </div>
+      <h3>Kontrol per relay</h3>
+      <div id="relayCards"></div>
+      <button class="btn danger" id="btnAllOff">Matikan semua relay</button>
+    </section>
+
+    <!-- PENGATURAN -->
+    <section id="tab-settings" class="tab">
+      <div class="card form">
+        <label>Pola putaran
+          <select id="sPola"><option value="normal">Normal</option><option value="gentle">Gentle</option><option value="hijab">Hijab</option></select>
+        </label>
+        <button class="btn" id="btnPola">Simpan</button>
+      </div>
+      <div id="numSettings"></div>
+      <div class="card form">
+        <label>Delay mulai (jam / menit / detik)
+          <span class="tri"><input id="dH" type="number" min="0" max="23"><input id="dM" type="number" min="0" max="59"><input id="dS" type="number" min="0" max="59"></span>
+        </label>
+        <button class="btn" id="btnDelay3">Simpan</button>
+        <button class="btn" data-cmd="reset_delay">Reset</button>
+      </div>
+      <div class="card form">
+        <label>Notifikasi Telegram
+          <select id="sNotif"><option value="lengkap">Lengkap</option><option value="ringkas">Ringkas</option><option value="senyap">Senyap</option></select>
+        </label>
+        <button class="btn" id="btnNotif">Simpan</button>
+        <p class="muted">Log di web selalu lengkap.</p>
+      </div>
+      <button class="btn danger" id="btnResetAll">Reset semua pengaturan</button>
+    </section>
+
+    <!-- AIR -->
+    <section id="tab-water" class="tab">
+      <div class="card form">
+        <label>Level air
+          <select id="wLevel"><option value="penuh">Penuh (sensor)</option><option value="25">25%</option><option value="50">50%</option><option value="75">75%</option><option value="waktu">Waktu manual</option></select>
+        </label>
+        <label>Waktu isi (menit, untuk mode waktu)<input id="wTime" type="number" min="1" max="1440"></label>
+        <button class="btn" id="btnLevel">Simpan</button>
+        <p class="muted" id="calibNote"></p>
+      </div>
+      <div class="card form">
+        <label>Batas waktu isi (jam / menit / detik)
+          <span class="tri"><input id="fH" type="number" min="0" max="23"><input id="fM" type="number" min="0" max="59"><input id="fS" type="number" min="0" max="59"></span>
+        </label>
+        <button class="btn" id="btnLimit">Simpan</button>
+        <button class="btn" data-cmd="reset_batas_waktu_pengisian_air">Reset</button>
+      </div>
+      <div id="waterSettings"></div>
+      <div class="card form">
+        <label>Mode pembuangan
+          <select id="wDrain"><option value="sensor">Sensor: buktikan valve menarik (probe), lalu tarik sampai total waktu</option><option value="waktu">Waktu saja (tanpa probe)</option></select>
+        </label>
+        <button class="btn" id="btnDrainMode">Simpan</button>
+        <p class="muted">Sensor level hanya ada di paling atas (tahu <b>penuh</b> atau <b>tidak penuh</b>). Setelah valve ditarik, air harus turun dari posisi penuh dalam waktu probe. Bila tidak, valve dilepas lalu ditarik lagi (unjam). Setelah total waktu tarik habis, air tidak boleh masih penuh; bila masih penuh, sesi diulang.</p>
+      </div>
+      <div class="card form">
+        <label>Bila air masih penuh sebelum mengisi
+          <select id="wPrecheck"><option value="buang">Buang dulu, lalu isi</option><option value="jeda">Jeda dan tunggu keputusan saya</option><option value="pakai">Pakai air yang ada (lewati pengisian)</option></select>
+        </label>
+        <button class="btn" id="btnPrecheck">Simpan</button>
+      </div>
+      <div class="row">
+        <button class="btn" data-cmd="cek_air">Cek air</button>
+        <button class="btn danger" id="btnCalib">Reset kalibrasi</button>
+      </div>
+    </section>
+
+    <!-- WIFI -->
+    <section id="tab-wifi" class="tab">
+      <div class="card"><div id="wifiInfo"></div></div>
+      <div id="wifiList"></div>
+      <form id="wifiForm" class="card form">
+        <label>SSID<input id="wSsid" required maxlength="32"></label>
+        <label>Password<input id="wPass" type="password" maxlength="64" placeholder="kosong bila terbuka"></label>
+        <button class="btn primary" type="submit">Tambah WiFi</button>
+      </form>
+      <p class="muted">Maksimal 5 WiFi, dicoba berurutan. Password tidak pernah ditampilkan.</p>
+    </section>
+
+    <!-- LOG -->
+    <section id="tab-log" class="tab">
+      <div class="row"><select id="logLevel"><option value="1">INFO+</option><option value="0">Semua (DEBUG)</option><option value="2">STEP+</option><option value="3">WARN+</option><option value="4">ERROR+</option></select></div>
+      <pre id="logBox" class="logbox"></pre>
+    </section>
+
+    <!-- KONSOL -->
+    <section id="tab-console" class="tab">
+      <div class="row">
+        <button class="btn" id="conPause">⏸ Pause</button>
+        <button class="btn" id="conClear">Bersihkan</button>
+        <button class="btn" id="conDl">⬇ Unduh .txt</button>
+        <button class="btn" id="conTrace">Jejak boot lalu</button>
+      </div>
+      <pre id="conBox" class="logbox mono"></pre>
+      <form id="conForm" class="row">
+        <input id="conIn" placeholder="ketik perintah: status, stop, heap, relay_test kiri …" autocomplete="off" autocapitalize="none">
+        <button class="btn primary" type="submit">Kirim</button>
+      </form>
+    </section>
+
+    <!-- RIWAYAT -->
+    <section id="tab-history" class="tab">
+      <div class="card" id="statsBox"></div>
+      <div id="histList"></div>
+    </section>
+
+    <!-- FIRMWARE -->
+    <section id="tab-firmware" class="tab">
+      <div class="card" id="fwInfo"></div>
+      <div class="card form">
+        <label>Pilih file .bin<input id="fwFile" type="file" accept=".bin"></label>
+        <button class="btn primary" id="btnFlash">Flash firmware</button>
+        <div class="bar"><div id="fwBar"></div></div>
+        <p class="muted" id="fwMsg">Hanya bisa saat mesin siap (tidak mencuci / dijeda). Mesin restart otomatis setelah berhasil.</p>
+      </div>
+      <button class="btn" id="btnRollback">↩ Kembali ke versi sebelumnya</button>
+    </section>
+
+    <!-- SISTEM -->
+    <section id="tab-system" class="tab">
+      <div class="card" id="sysInfo"></div>
+      <div class="card" data-local>
+        <b>Perangkat yang diingat</b>
+        <p class="muted" id="devHint"></p>
+        <div id="devList"></div>
+        <div class="row" style="margin-top:10px"><button class="btn" id="btnDevOthers">Keluarkan semua perangkat lain</button></div>
+      </div>
+      <div class="card form" data-local>
+        <label>Ganti password web<input id="newPw" type="password" minlength="6" placeholder="password baru (min 6)"></label>
+        <button class="btn" id="btnPw">Ganti</button>
+      </div>
+      <button class="btn danger" id="btnRestart">Restart mesin</button>
+    </section>
+  </main>
+</div>
+<script>'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+let last = null, settings = null, lastState = 'idle';
+let conPaused = false, conLines = [], logLines = [], lastSeq = 0;
+
+// ---------------------------------------------------------------- util ----
+function toast(msg) {
+  const t = $('#toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 3200);
+}
+async function api(path, method = 'GET', body) {
+  const opt = { method, headers: {} };
+  if (body !== undefined) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
+  let r, lastErr;
+  // GET aman diulang bila koneksi tersendat sesaat; POST/DELETE tidak diulang (bisa terkirim dua kali)
+  for (let i = 0; i < (method === 'GET' ? 3 : 1); i++) {
+    try { r = await fetch(path, opt); break; } catch (e) { lastErr = e; await new Promise(res => setTimeout(res, 500)); }
+  }
+  if (!r) throw new Error('Koneksi ke mesin terputus. Coba lagi sebentar.');
+  if (r.status === 401 && path !== '/api/login') { showLogin(); throw new Error('login'); }
+  return r.json();
+}
+async function cmd(name, args = '') {
+  try {
+    const r = await api('/api/cmd', 'POST', { cmd: name, args: String(args) });
+    toast((r.ok ? '' : '⚠ ') + r.msg);
+    if (r.ok) setTimeout(loadSettings, 300);
+    return r;
+  } catch (e) { if (e.message !== 'login') toast('Gagal: ' + e.message); }
+}
+const fmt = s => s >= 3600 ? `${Math.floor(s / 3600)}j ${Math.floor(s % 3600 / 60)}m` : s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}d` : `${s}d`;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const clock = (ms, epoch) => {
+  if (epoch) { const d = new Date(epoch * 1000); return d.toTimeString().slice(0, 8); }
+  const s = Math.floor(ms / 1000); return `+${s}s`;
+};
+
+// -------------------------------------------------------------- tema/tab ----
+(function theme() {
+  const t = localStorage.getItem('theme'); if (t) document.documentElement.dataset.theme = t;
+  $('#btnTheme').onclick = () => {
+    const cur = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light');
+    const n = cur === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = n; localStorage.setItem('theme', n);
+  };
+})();
+$$('#tabs button').forEach(b => b.onclick = () => {
+  $$('#tabs button').forEach(x => x.classList.toggle('on', x === b));
+  $$('.tab').forEach(x => x.classList.toggle('on', x.id === 'tab-' + b.dataset.tab));
+  onTab(b.dataset.tab);
+});
+function onTab(t) {
+  if (t === 'settings' || t === 'water') loadSettings();
+  if (t === 'wifi') loadWifi();
+  if (t === 'relay') renderRelays();
+  if (t === 'custom') { loadSettings().then(loadCustom); }
+  if (t === 'history') loadHistory();
+  if (t === 'firmware') loadFw();
+  if (t === 'system') { renderSys(); loadDevices(); }
+  if (t === 'log') renderLog();
+  if (t === 'console') renderCon();
+}
+
+// --------------------------------------------------------------- login ----
+function showLogin() { $('#login').hidden = false; $('#app').hidden = true; clearTimeout(pollTimer); }
+$('#loginForm').onsubmit = async e => {
+  e.preventDefault();
+  const r = await api('/api/login', 'POST', { password: $('#pw').value, remember: $('#remember').checked }).catch(() => ({ ok: false, msg: 'Gagal terhubung' }));
+  if (r.ok) { $('#pw').value = ''; start(); } else $('#loginMsg').textContent = r.msg || 'Gagal';
+};
+$('#btnLogout').onclick = async () => { await api('/api/logout', 'POST'); showLogin(); };
+
+// ---------------------------------------------------------- data-cmd btn ----
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-cmd]'); if (!b) return;
+  cmd(b.dataset.cmd, b.dataset.args || '');
+});
+$('#btnStop').onclick = () => {
+  if (last && last.state !== 'idle' && !confirm('Hentikan proses dan matikan semua relay?')) return;
+  cmd('stop');
+};
+
+// ------------------------------------------------------------- status UI ----
+function renderStatus(s) {
+  last = s;
+  $('#app').hidden = false; $('#login').hidden = true;
+  const st = $('#chipState');
+  st.textContent = { idle: 'Siap', running: 'Berjalan', paused: 'Dijeda' }[s.state];
+  st.className = 'chip ' + (s.state === 'running' ? 'run' : s.state === 'paused' ? 'pause' : '');
+  const w = $('#chipWifi');
+  w.textContent = s.wifi.online ? `📶 ${s.wifi.ssid}` : '📴 offline';
+  w.className = 'chip' + (s.wifi.online ? '' : ' off');
+  $('#stage').textContent = s.state === 'idle' ? 'Siap' : s.stage;
+  $('#detail').textContent = s.state === 'idle' ? (s.program || 'Pilih program di bawah') : s.detail;
+  $('#stepLeft').textContent = s.state === 'idle' ? '-' : fmt(s.stepLeft);
+  $('#totalLeft').textContent = s.state === 'idle' ? '-' : '±' + fmt(s.totalLeft);
+  $('#water').textContent = s.water;
+  const p = s.state === 'idle' ? 0 : s.progress;
+  $('#ringFg').style.strokeDashoffset = 327 * (1 - p / 100);
+  $('#ringText').textContent = s.state === 'idle' ? '—' : p + '%';
+  $('#bannerResume').hidden = !s.resume.pending;
+  $('#resumeInfo').textContent = s.resume.info;
+  const bp = $('#bannerPause');
+  bp.hidden = s.state !== 'paused';
+  bp.textContent = '⏸ Dijeda: ' + (s.pause || 'oleh pengguna') + '. Tekan Lanjutkan untuk mencoba lagi.';
+  $('#bannerFault').hidden = !s.fault;
+  updateRelays(s);
+  const busy = s.state !== 'idle';
+  $$('.prog, .cpRun').forEach(b => { b.disabled = busy; });
+  const pl = $('#progLock'); pl.hidden = !busy;
+  pl.textContent = busy ? `Program baru hanya bisa dimulai saat mesin siap. Sekarang: ${s.program} (${s.stage}).` : '';
+  lastState = s.state;
+  if ($('#tab-system').classList.contains('on')) renderSys();
+  if (s.otaBusy) { $('#fwBar').style.width = s.otaProgress + '%'; }
+}
+
+// ----------------------------------------------------- pengaturan dinamis ----
+const NUM = [
+  ['Soak (sesi)', 'set_soak_session', 'soak', 0, 1440], ['Wash (menit)', 'set_wash_time', 'wash', 0, 1440],
+  ['Rinse (menit)', 'set_rinse_time', 'rinse', 0, 1440], ['Pewangi (cup, kelipatan 0,5)', 'set_jumlah_parfume', 'parfume', 0, 1440, 0.5],
+  ['Spin (menit)', 'set_spin_time', 'spin', 0, 1440]];
+const WNUM = [
+  ['Coba ulang isi bila air habis (kali)', 'set_coba_ulang_isi', 'fillRetryCount', 0, 20],
+  ['Tunggu antar coba ulang (menit)', 'set_tunggu_coba_ulang', 'fillRetryWait', 0, 240],
+  ['Total waktu tarik valve buang (menit)', 'set_waktu_pembuangan_air', 'drainTime', 1, 60],
+  ['Probe tarikan valve (detik) — air harus mulai turun dalam waktu ini', 'set_probe_buang', 'drainProbeSec', 5, 600],
+  ['Batas sesi buang sebelum jeda', 'set_batas_sesi_pembuangan_air', 'drainSessionLimit', 1, 1440],
+  ['Unjam valve buang (kali)', 'set_unjam', 'unjamCount', 0, 10],
+];
+function numForms(host, defs) {
+  host.innerHTML = defs.map(([label, c, key, lo, hi, step]) => `
+    <div class="card numrow"><label>${esc(label)}<input type="number" data-key="${key}" min="${lo}" max="${hi}" step="${step || 1}"></label>
+    <button class="btn" data-set="${c}" data-key="${key}">Simpan</button></div>`).join('');
+  $$('[data-set]', host).forEach(b => b.onclick = () => cmd(b.dataset.set, $(`input[data-key=${b.dataset.key}]`, host).value));
+}
+async function loadSettings() {
+  try { settings = await api('/api/settings'); } catch { return; }
+  const s = settings;
+  $$('input[data-key]').forEach(i => { if (document.activeElement !== i && s[i.dataset.key] !== undefined) i.value = s[i.dataset.key]; });
+  $('#sPola').value = ['normal', 'gentle', 'hijab'][s.pola];
+  $('#sNotif').value = ['lengkap', 'ringkas', 'senyap'][s.notif];
+  $('#dH').value = s.dH; $('#dM').value = s.dM; $('#dS').value = s.dS;
+  $('#fH').value = s.flH; $('#fM').value = s.flM; $('#fS').value = s.flS;
+  $('#wLevel').value = s.fillLevel === 0 ? 'penuh' : s.fillLevel === 2 ? 'waktu' : String(s.fillPercent);
+  $('#wTime').value = s.fillTime;
+  $('#wDrain').value = s.drainMode === 0 ? 'sensor' : 'waktu';
+  $('#wPrecheck').value = ['buang', 'jeda', 'pakai'][s.fillPrecheck];
+  $('#calibNote').textContent = s.calib.nFill ? `Rata-rata isi penuh ${fmt(s.calib.fillSec)} (${s.calib.nFill} sampel). Level persen memakai data ini.` : 'Belum ada data kalibrasi: level persen akan memakai sensor sampai ada 1 pengisian penuh.';
+  $('#inFinish').disabled = !s.timeSynced;
+  $('#schedNote').textContent = s.timeSynced ? (s.finishAt >= 0 ? `Terjadwal selesai jam ${String(Math.floor(s.finishAt / 60)).padStart(2, '0')}:${String(s.finishAt % 60).padStart(2, '0')}` : 'Berlaku untuk proses berikutnya.') : 'Jam belum sinkron (butuh internet): hanya "mulai nanti".';
+}
+numForms($('#numSettings'), NUM); numForms($('#waterSettings'), WNUM);
+$('#btnPola').onclick = () => cmd('pola', $('#sPola').value);
+$('#btnNotif').onclick = () => cmd('notif', $('#sNotif').value);
+$('#btnDelay3').onclick = () => cmd('set_delay', `${$('#dH').value || 0} ${$('#dM').value || 0} ${$('#dS').value || 0}`);
+$('#btnLimit').onclick = () => cmd('set_batas_waktu_pengisian_air', `${$('#fH').value || 0} ${$('#fM').value || 0} ${$('#fS').value || 0}`);
+$('#btnLevel').onclick = () => { const v = $('#wLevel').value; cmd('level_air', v === 'waktu' ? 'waktu ' + $('#wTime').value : v); };
+$('#btnDrainMode').onclick = () => cmd('mode_buang', $('#wDrain').value);
+$('#btnPrecheck').onclick = () => cmd('pra_cek_isi', $('#wPrecheck').value);
+$('#btnResetAll').onclick = () => confirm('Reset semua pengaturan ke default?') && cmd('reset_semua');
+$('#btnCalib').onclick = () => confirm('Reset data kalibrasi isi/buang?') && cmd('kalibrasi_air');
+$('#btnDelay').onclick = () => cmd('mulai_nanti', $('#inDelay').value || 0);
+$('#btnFinish').onclick = () => { const v = $('#inFinish').value; v ? cmd('selesai_jam', v) : cmd('selesai_jam', 'batal'); };
+
+// ------------------------------------------------------------------ Relay ----
+const RELAYS = [['kiri', 'Motor putar kiri', 'GPIO25'], ['kanan', 'Motor putar kanan', 'GPIO18'], ['isi', 'Valve isi air', 'GPIO17'],
+  ['buang', 'Motor valve buang', 'GPIO16'], ['spin', 'Motor spin', 'GPIO4'], ['pewangi', 'Pompa pewangi', 'GPIO13']];
+function renderRelays() {
+  const host = $('#relayCards');
+  if (host.dataset.ready) return;
+  host.dataset.ready = '1';
+  host.innerHTML = RELAYS.map(([k, label, pin]) => `<div class="card relayCard">
+    <div class="info"><span class="led" id="led-${k}"></span><div><b>${label}</b><br><span class="muted">${k} · ${pin}</span><br><span class="lockhint" id="hint-${k}"></span></div></div>
+    <div class="row" style="margin:0"><button class="btn primary" data-rl="${k}" data-on="1">ON</button><button class="btn" data-rl="${k}" data-on="0">OFF</button></div></div>`).join('');
+  $$('[data-rl]', host).forEach(b => b.onclick = () => cmd('relay', `${b.dataset.rl} ${b.dataset.on === '1' ? 'on' : 'off'}`));
+}
+function updateRelays(s) {
+  renderRelays();
+  const on = s.relays || {};
+  const busy = s.state !== 'idle';
+  const seq = busy && s.program === 'Kalibrasi relay';
+  const lock = $('#relayLock');
+  if (s.fault) { lock.hidden = false; lock.textContent = '❌ Relay terkunci karena pelanggaran interlock. Restart mesin untuk membuka kunci.'; }
+  else if (busy && !seq) {
+    lock.hidden = false;
+    lock.textContent = `🔒 Kontrol manual & uji dikunci: ada proses ${s.state === 'paused' ? 'yang dijeda' : 'berjalan'} (${s.program}, ${s.stage}). Hentikan dulu di Beranda.`;
+  } else lock.hidden = true;
+  const conflict = {
+    kiri: on.kanan ? 'Motor kanan sedang aktif, matikan dulu' : on.buang ? 'Valve buang sedang aktif, matikan dulu' : '',
+    kanan: on.kiri ? 'Motor kiri sedang aktif, matikan dulu' : on.buang ? 'Valve buang sedang aktif, matikan dulu' : '',
+    isi: on.buang ? 'Valve buang sedang aktif, matikan dulu' : '',
+    buang: on.isi ? 'Valve isi sedang aktif, matikan dulu' : (on.kiri || on.kanan) ? 'Motor cuci sedang aktif, matikan dulu' : '',
+  };
+  RELAYS.forEach(([k]) => {
+    const l = $('#led-' + k); if (l) l.classList.toggle('on', !!on[k]);
+    const onBtn = $(`[data-rl="${k}"][data-on="1"]`), offBtn = $(`[data-rl="${k}"][data-on="0"]`);
+    const c = conflict[k] || '';
+    const blocked = busy || s.fault;
+    if (onBtn) { onBtn.disabled = blocked || !!c || !!on[k]; onBtn.title = c; }
+    if (offBtn) offBtn.disabled = blocked || !on[k];
+    const h = $('#hint-' + k);
+    if (h) h.textContent = !blocked && c && !on[k] ? '🔒 ' + c : '';
+  });
+  $('#btnSeq').disabled = busy || s.fault;
+  const bp = $('#relayProgress');
+  bp.hidden = !seq;
+  if (seq) bp.textContent = `Uji berurutan: ${s.detail} (langkah ${s.step}/${s.steps})`;
+}
+$('#btnSeq').onclick = () => cmd('kalibrasi_relay', $('#seqSecs').value || 3);
+$('#btnSeqStop').onclick = () => cmd('stop');
+$('#btnAllOff').onclick = () => cmd('relay', 'semua off');
+
+// ----------------------------------------------------------------- WiFi ----
+async function loadWifi() {
+  const w = await api('/api/wifi');
+  $('#wifiInfo').innerHTML = `<b>Hotspot:</b> ${w.apOn ? esc(w.ap) + ' AKTIF (192.168.4.1)' : 'nonaktif (menyala otomatis bila semua WiFi gagal)'}<br><b>Jaringan:</b> ${w.online ? esc(w.ssid) + ' · ' + esc(w.ip) + ' · ' + w.rssi + ' dBm' : 'offline'}`;
+  $('#wifiList').innerHTML = w.networks.map(n => `<div class="card wifirow"><div><b>${n.i}. ${esc(n.ssid)}</b> ${n.active ? '✅' : ''}<br><span class="muted">${n.secured ? '••••' : 'terbuka'}</span></div>
+    <div class="row" style="margin:0"><button class="btn" data-up="${n.i}">↑</button><button class="btn" data-dn="${n.i}">↓</button><button class="btn danger" data-del="${n.i}">Hapus</button></div></div>`).join('') || '<p class="muted">Belum ada WiFi.</p>';
+  $$('[data-del]').forEach(b => b.onclick = async () => { await cmd('wifi_hapus', b.dataset.del); loadWifi(); });
+  $$('[data-up]').forEach(b => b.onclick = async () => { const i = +b.dataset.up; if (i > 1) { await cmd('wifi_urutan', `${i} ${i - 1}`); loadWifi(); } });
+  $$('[data-dn]').forEach(b => b.onclick = async () => { const i = +b.dataset.dn; if (i < w.networks.length) { await cmd('wifi_urutan', `${i} ${i + 1}`); loadWifi(); } });
+}
+$('#wifiForm').onsubmit = async e => {
+  e.preventDefault();
+  const r = await api('/api/wifi', 'POST', { ssid: $('#wSsid').value, pass: $('#wPass').value });
+  toast((r.ok ? '' : '⚠ ') + r.msg);
+  if (r.ok) { $('#wSsid').value = ''; $('#wPass').value = ''; setTimeout(loadWifi, 400); }
+};
+
+// ------------------------------------------------------------ Log & konsol ----
+const LV = ['DEBUG', 'INFO', 'STEP', 'WARN', 'ERROR', 'DONE'];
+function lineHtml(e) { return `<div class="l-${e.l}">${clock(e.t, e.e)} ${LV[e.l].padEnd(5)} ${esc(e.m)}</div>`; }
+function addEntries(list, live) {
+  let alertEntry = null;
+  for (const e of list) {
+    if (e.s <= lastSeq) continue;
+    lastSeq = e.s; logLines.push(e); conLines.push(e);
+    if (live && e.l >= 3 && e.l <= 4) alertEntry = e;   // WARN / ERROR dari mesin
+  }
+  if (alertEntry) toast((alertEntry.l >= 4 ? '❌ ' : '⚠ ') + alertEntry.m);
+  if (logLines.length > 400) logLines.splice(0, logLines.length - 400);
+  if (conLines.length > 600) conLines.splice(0, conLines.length - 600);
+  if ($('#tab-log').classList.contains('on')) renderLog();
+  if ($('#tab-console').classList.contains('on') && !conPaused) renderCon();
+}
+function renderLog() {
+  const min = +$('#logLevel').value, box = $('#logBox');
+  const stick = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
+  box.innerHTML = logLines.filter(e => e.l >= min).map(lineHtml).join('');
+  if (stick) box.scrollTop = box.scrollHeight;
+}
+function renderCon() {
+  const box = $('#conBox');
+  box.innerHTML = conLines.map(lineHtml).join('');
+  box.scrollTop = box.scrollHeight;
+}
+$('#logLevel').onchange = renderLog;
+$('#conPause').onclick = e => { conPaused = !conPaused; e.target.textContent = conPaused ? '▶ Lanjut' : '⏸ Pause'; if (!conPaused) renderCon(); };
+$('#conClear').onclick = () => { conLines = []; renderCon(); };
+$('#conDl').onclick = () => {
+  const txt = conLines.map(e => `${clock(e.t, e.e)} ${LV[e.l]} ${e.m}`).join('\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt], { type: 'text/plain' }));
+  a.download = 'konsol-mesin-cuci.txt'; a.click();
+};
+$('#conTrace').onclick = async () => {
+  const r = await api('/api/console');
+  $('#conBox').textContent = `Alasan reset terakhir: ${r.reset}\n--- ±40 baris terakhir sebelum restart ---\n${r.trace || '(tidak ada)'}`;
+};
+$('#conForm').onsubmit = async e => {
+  e.preventDefault();
+  const v = $('#conIn').value.trim(); if (!v) return;
+  $('#conIn').value = '';
+  await api('/api/console', 'POST', { line: v }).catch(() => { });
+  pollOnce();
+};
+async function pollLogs() {
+  try { const r = await api('/api/poll?since=' + lastSeq); addEntries(r.log.entries); return r.log.entries.length; } catch { return 0; }
+}
+// Server membatasi 30 entri per balasan (hemat memori); ambil lanjutannya sampai habis.
+async function fetchLogsAll() { for (let i = 0; i < 6; i++) { if ((await pollLogs()) < 30) break; } }
+
+// -------------------------------------------------------- riwayat/fw/sistem ----
+async function loadHistory() {
+  const r = await api('/api/history');
+  const st = r.stats;
+  $('#statsBox').innerHTML = `<b>Total siklus selesai:</b> ${st.cycles}<br><b>Motor cuci menyala:</b> ${(st.motorSec / 3600).toFixed(1)} jam<br><b>Rata-rata isi penuh:</b> ${st.avgFillSec ? fmt(st.avgFillSec) : '-'}`;
+  $('#histList').innerHTML = r.history.map(h => `<div class="hist"><div><b>${esc(h.program)}</b><br><span class="muted">${h.start ? new Date(h.start * 1000).toLocaleString('id-ID') : '-'}</span></div><div style="text-align:right">${fmt(h.dur)}<br><span class="muted">${h.result}</span></div></div>`).join('') || '<p class="muted">Belum ada riwayat.</p>';
+}
+async function loadFw() {
+  const i = await api('/api/update/info');
+  $('#fwInfo').innerHTML = `<b>Versi aktif:</b> ${esc(i.version)} · ${esc(i.build)}<br><b>Partisi:</b> ${i.running} (cadangan: ${i.other})<br><b>Ukuran firmware:</b> ${(i.sketchSize / 1024).toFixed(0)} KB · ruang ${(i.freeSpace / 1024).toFixed(0)} KB<br><b>Versi sebelumnya:</b> ${i.canRollback ? esc(i.previousBuild || 'tersedia') : 'tidak ada'}`;
+  $('#btnRollback').disabled = !i.canRollback;
+}
+$('#btnFlash').onclick = () => {
+  const f = $('#fwFile').files[0];
+  if (!f) return toast('Pilih file .bin dulu');
+  if (last && last.state !== 'idle') return toast('Mesin sedang bekerja. Hentikan proses dulu.');
+  if (!confirm(`Flash ${f.name} (${(f.size / 1024).toFixed(0)} KB)? Mesin akan restart.`)) return;
+  const fd = new FormData(); fd.append('firmware', f, f.name);
+  const x = new XMLHttpRequest(); x.open('POST', '/api/update');
+  x.upload.onprogress = e => { if (e.lengthComputable) { const p = Math.round(e.loaded / e.total * 100); $('#fwBar').style.width = p + '%'; $('#fwMsg').textContent = `Mengunggah ${p}%`; } };
+  x.onload = () => { let r = {}; try { r = JSON.parse(x.responseText); } catch { } $('#fwMsg').textContent = r.msg || 'Selesai'; toast(r.msg || 'Selesai'); if (r.ok) setTimeout(() => location.reload(), 9000); };
+  x.onerror = () => { $('#fwMsg').textContent = 'Koneksi terputus (mesin mungkin sedang restart).'; };
+  x.send(fd);
+};
+$('#btnRollback').onclick = async () => {
+  if (!confirm('Kembali ke firmware sebelumnya dan restart?')) return;
+  const r = await api('/api/rollback', 'POST'); toast(r.msg);
+};
+function renderSys() {
+  if (!last) return;
+  const s = last;
+  $('#sysInfo').innerHTML = `<b>Firmware:</b> v${esc(s.fw)}<br><b>Uptime:</b> ${fmt(s.uptime)}<br><b>Heap bebas:</b> ${(s.heap / 1024).toFixed(0)} KB<br><b>Alasan reset terakhir:</b> ${esc(s.reset)}<br><b>WiFi:</b> ${s.wifi.online ? esc(s.wifi.ssid) + ' · ' + esc(s.wifi.ip) : 'offline'}<br><b>Hotspot:</b> ${s.wifi.apOn ? esc(s.wifi.ap) + ' AKTIF (' + s.wifi.apClients + ' klien)' : 'nonaktif'}<br><b>Jam:</b> ${esc(s.wifi.time)}<br><b>Notifikasi:</b> ${esc(s.notif)}`;
+}
+$('#btnPw').onclick = async () => { const r = await cmd('web_password', $('#newPw').value); if (r && r.ok) { $('#newPw').value = ''; toast('Password diganti. Silakan login ulang.'); setTimeout(showLogin, 800); } };
+$('#btnRestart').onclick = () => confirm('Restart mesin?') && cmd('restart');
+
+// -------------------------------------------------------------- Custom Proses ----
+const POLA = [['3', 'Ikut Pengaturan'], ['0', 'Normal'], ['1', 'Gentle'], ['2', 'Hijab']];
+const CI = {
+  wash: { label: 'Cuci', icon: '🧼', hint: 'isi air → putar → buang', f: [['a', 'Menit putar', 15]], pola: 1, g: 'blok' },
+  soakwash: { label: 'Soak + Cuci', icon: '🫧', hint: 'isi air → soak → putar → buang', f: [['a', 'Sesi soak', 2], ['b', 'Menit cuci', 15]], pola: 1, g: 'blok' },
+  rinse: { label: 'Bilas', icon: '💧', hint: 'isi air → putar → buang', f: [['a', 'Menit putar', 10]], pola: 1, g: 'blok' },
+  rinseperfume: { label: 'Bilas + Pewangi', icon: '🌸', hint: 'isi air → pewangi → putar → buang', f: [['a', 'Menit putar', 10]], pola: 1, cups: 1, g: 'blok' },
+  fill: { label: 'Isi air', icon: '🚰', f: [], g: 'dasar' },
+  agitate: { label: 'Putar', icon: '🔄', f: [['a', 'Menit', 5]], pola: 1, g: 'dasar' },
+  soak: { label: 'Soak (rendam)', icon: '🛁', hint: '1 mnt putar + 4 mnt rendam per sesi', f: [['a', 'Sesi', 2]], pola: 1, g: 'dasar' },
+  perfume: { label: 'Pewangi', icon: '🌼', f: [], cups: 1, g: 'dasar' },
+  drain: { label: 'Buang air', icon: '🚿', f: [], g: 'dasar' },
+  spin: { label: 'Spin', icon: '🌀', f: [['a', 'Menit', 10]], g: 'dasar' },
+  wait: { label: 'Tunggu', icon: '⏳', f: [['a', 'Menit', 5]], g: 'dasar' },
+};
+const PRESETS = {
+  normal: [['soakwash', 2, 15, 0], ['rinse', 10, 0, 0], ['rinseperfume', 10, 0, 0]],
+  gentle: [['soakwash', 2, 12, 1], ['rinse', 8, 0, 1], ['rinseperfume', 8, 0, 1]],
+  hijab: [['soakwash', 1, 10, 2], ['rinse', 8, 0, 2], ['rinseperfume', 8, 0, 2]],
+  cepat: [['wash', 8, 0, 0], ['rinse', 5, 0, 0], ['rinseperfume', 5, 0, 0]],
+};
+let cpUid = 1, cpSlots = [];
+const cp = { slot: 0, items: [] };
+const newItem = (t, a, b, p) => { const m = CI[t]; return { uid: cpUid++, t, a: a ?? (m.f[0] ? m.f[0][2] : 0), b: b ?? (m.f[1] ? m.f[1][2] : 0), p: p ?? 3, c: 0 }; };
+const stepsOf = it => ({ wash: 3, rinse: 3, soakwash: 4, rinseperfume: 4 }[it.t] || 1);
+function estMin(it) {
+  const c = settings && settings.calib ? settings.calib : {};
+  const fillM = c.fillSec ? c.fillSec / 60 : 10, drM = ((settings && settings.drainTime) || 5) + 0.2;
+  switch (it.t) {
+    case 'wash': case 'rinse': return fillM + it.a + drM;
+    case 'soakwash': return fillM + it.a * 5 + it.b + drM;
+    case 'rinseperfume': return fillM + it.a + drM + 0.3;
+    case 'fill': return fillM; case 'drain': return drM; case 'perfume': return 0.3;
+    case 'agitate': case 'spin': case 'wait': return it.a; case 'soak': return it.a * 5;
+  }
+  return 0;
+}
+const fmtMin = m => m >= 60 ? `${Math.floor(m / 60)} j ${Math.round(m % 60)} mnt` : `${Math.round(m)} mnt`;
+const itemText = it => { const m = CI[it.t]; const v = m.f.map(([k]) => it[k]); return m.f.length === 0 ? m.label : it.t === 'soakwash' ? `${m.label} ${v[0]}×/${v[1]}m` : it.t === 'soak' ? `${m.label} ${v[0]}×` : `${m.label} ${v[0]}m`; };
+const cpTotal = items => ({ steps: items.reduce((n, i) => n + stepsOf(i), 0), min: items.reduce((n, i) => n + estMin(i), 0) });
+
+function buildPalette() {
+  for (const g of ['blok', 'dasar']) {
+    $(g === 'blok' ? '#cpPalBlok' : '#cpPalDasar').innerHTML = Object.entries(CI).filter(([, m]) => m.g === g)
+      .map(([t, m]) => `<button class="btn" data-add="${t}" title="${esc(m.hint || '')}">${m.icon} ${m.label}</button>`).join('');
+  }
+  $$('[data-add]').forEach(b => b.onclick = () => { cp.items.push(newItem(b.dataset.add)); renderStack(); const st = $('#cpStack'); st.lastElementChild && st.lastElementChild.scrollIntoView({ block: 'nearest' }); });
+}
+function rowHtml(it, i) {
+  const m = CI[it.t];
+  const fields = m.f.map(([k, lab]) => `<label>${lab}<input type="number" min="1" max="1440" inputmode="numeric" data-uid="${it.uid}" data-k="${k}" value="${it[k]}"></label>`).join('');
+  const pola = m.pola ? `<label>Pola putar<select data-uid="${it.uid}" data-k="p">${POLA.map(([v, l]) => `<option value="${v}"${+v === it.p ? ' selected' : ''}>${l}</option>`).join('')}</select></label>` : '';
+  const cups = m.cups ? `<label>Pewangi (cup)<input type="number" step="0.5" min="0" max="20" inputmode="decimal" data-uid="${it.uid}" data-k="c" value="${it.c ? it.c / 2 : ''}" placeholder="ikut Pengaturan"></label>` : '';
+  return `<div class="crow" data-uid="${it.uid}"><span class="handle" title="Tahan &amp; geser untuk menukar urutan">☰</span>
+    <div class="cbody"><div class="ctitle"><span class="num">${i + 1}</span> ${m.icon} <b>${m.label}</b> <span class="muted">${m.hint || ''}</span></div><div class="fields">${fields}${pola}${cups}</div></div>
+    <div class="cacts"><button data-act="up" title="Naik">▲</button><button data-act="down" title="Turun">▼</button><button data-act="dup" title="Gandakan">⧉</button><button data-act="del" title="Hapus">🗑</button></div></div>`;
+}
+function renderStack() {
+  $('#cpStack').innerHTML = cp.items.map(rowHtml).join('');
+  $('#cpEmpty').hidden = cp.items.length > 0;
+  updateSummary();
+}
+function renumber() { $$('#cpStack .crow').forEach((r, i) => { $('.num', r).textContent = i + 1; }); }
+function updateSummary() {
+  const t = cpTotal(cp.items);
+  $('#cpSummary').textContent = cp.items.length ? `${cp.items.length} langkah (${t.steps} langkah mesin) · perkiraan ± ${fmtMin(t.min)}${t.steps > 99 ? ' · TERLALU PANJANG' : ''}` : '';
+}
+const findItem = uid => cp.items.find(x => x.uid === +uid);
+$('#cpStack').addEventListener('input', e => {
+  const el = e.target.closest('[data-k]'); if (!el) return;
+  const it = findItem(el.dataset.uid); if (!it) return;
+  const k = el.dataset.k;
+  if (k === 'p') it.p = +el.value;
+  else if (k === 'c') it.c = Math.max(0, Math.min(40, Math.round((parseFloat(el.value) || 0) * 2)));
+  else it[k] = parseInt(el.value, 10) || 0;
+  updateSummary();
+});
+$('#cpStack').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const uid = +b.closest('.crow').dataset.uid, i = cp.items.findIndex(x => x.uid === uid);
+  if (b.dataset.act === 'del') cp.items.splice(i, 1);
+  else if (b.dataset.act === 'up' && i > 0) [cp.items[i - 1], cp.items[i]] = [cp.items[i], cp.items[i - 1]];
+  else if (b.dataset.act === 'down' && i < cp.items.length - 1) [cp.items[i + 1], cp.items[i]] = [cp.items[i], cp.items[i + 1]];
+  else if (b.dataset.act === 'dup') cp.items.splice(i + 1, 0, { ...cp.items[i], uid: cpUid++ });
+  renderStack();
+});
+// Geser untuk menukar urutan (pointer events: jalan di mouse & layar sentuh)
+$('#cpStack').addEventListener('pointerdown', e => {
+  const h = e.target.closest('.handle'); if (!h) return;
+  const list = $('#cpStack'), row = h.closest('.crow');
+  e.preventDefault(); h.setPointerCapture(e.pointerId); row.classList.add('drag');
+  const move = ev => {
+    const others = [...list.children].filter(r => r !== row);
+    const target = others.find(r => { const b = r.getBoundingClientRect(); return ev.clientY < b.top + b.height / 2; });
+    if (target) { if (row.nextElementSibling !== target) list.insertBefore(row, target); } else list.appendChild(row);
+    if (ev.clientY < 70) window.scrollBy(0, -12); else if (ev.clientY > innerHeight - 70) window.scrollBy(0, 12);
+  };
+  const up = () => {
+    h.removeEventListener('pointermove', move); h.removeEventListener('pointerup', up); h.removeEventListener('pointercancel', up);
+    row.classList.remove('drag');
+    const ids = [...list.children].map(r => +r.dataset.uid);
+    cp.items = ids.map(id => findItem(id));
+    renumber(); updateSummary();
+  };
+  h.addEventListener('pointermove', move); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
+});
+$('#cpPreset').onchange = e => {
+  const p = PRESETS[e.target.value]; if (!p) return;
+  if (cp.items.length && !confirm('Ganti susunan sekarang dengan contoh ini?')) { e.target.value = ''; return; }
+  cp.items = p.map(([t, a, b, pola]) => newItem(t, a, b, pola));
+  if (!$('#cpName').value.trim()) $('#cpName').value = 'Salinan ' + CI_NAME(e.target.value);
+  e.target.value = ''; renderStack();
+};
+const CI_NAME = k => ({ normal: 'Normal', gentle: 'Gentle', hijab: 'Hijab', cepat: 'Cepat' }[k]);
+function cpClear(title) { cp.slot = 0; cp.items = []; $('#cpName').value = ''; $('#cpError').hidden = true; $('#cpTitle').textContent = title || 'Proses baru'; renderStack(); }
+$('#cpReset').onclick = () => { if (!cp.items.length || confirm('Kosongkan editor?')) cpClear(); };
+async function cpSave(asNew) {
+  const err = $('#cpError'); err.hidden = true;
+  const name = $('#cpName').value.trim();
+  const fail = m => { err.textContent = m; err.hidden = false; err.scrollIntoView({ block: 'nearest' }); };
+  if (!name) return fail('Nama proses wajib diisi.');
+  if (!cp.items.length) return fail('Tambahkan minimal satu langkah.');
+  for (let i = 0; i < cp.items.length; i++) {
+    const it = cp.items[i], m = CI[it.t];
+    for (const [k, lab] of m.f) if (!(it[k] >= 1 && it[k] <= 1440)) return fail(`Langkah ${i + 1} (${m.label}): "${lab}" harus 1-1440.`);
+  }
+  if (cpTotal(cp.items).steps > 99) return fail('Terlalu panjang. Kurangi langkah.');
+  const body = { slot: asNew ? 0 : cp.slot, name, items: cp.items.map(({ t, a, b, p, c }) => ({ t, a, b, p, c })) };
+  let r; try { r = await api('/api/custom', 'POST', body); } catch (e) { return; }
+  if (!r.ok) return fail(r.msg);
+  cp.slot = r.slot; toast('✅ ' + r.msg);
+  $('#cpTitle').textContent = `Mengedit: ${name} (slot ${r.slot})`;
+  loadCustom();
+}
+$('#cpSave').onclick = () => cpSave(false);
+$('#cpSaveNew').onclick = () => cpSave(true);
+function cpLoad(slotObj, asCopy) {
+  cp.slot = asCopy ? 0 : slotObj.slot;
+  cp.items = slotObj.items.map(i => ({ uid: cpUid++, t: i.t, a: i.a, b: i.b, p: i.p, c: i.c }));
+  $('#cpName').value = asCopy ? slotObj.name + ' (salinan)' : slotObj.name;
+  $('#cpTitle').textContent = asCopy ? 'Proses baru (salinan)' : `Mengedit: ${slotObj.name} (slot ${slotObj.slot})`;
+  $('#cpError').hidden = true;
+  renderStack(); $('#cpEditor').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+async function loadCustom() {
+  let r; try { r = await api('/api/custom'); } catch { return; }
+  cpSlots = r.slots.filter(Boolean);
+  const idle = !last || last.state === 'idle';
+  $('#cpList').innerHTML = cpSlots.map(s => {
+    const t = cpTotal(s.items.map(i => ({ ...i, t: i.t })));
+    return `<div class="card cpcard"><div class="info"><b>${s.slot}. ${esc(s.name)}</b><br><span class="muted">${esc(s.items.map(itemText).join(' → '))}</span><br><span class="muted">${s.items.length} langkah · ± ${fmtMin(t.min)}</span></div>
+    <div class="row"><button class="btn primary sm cpRun" data-run="${s.slot}" ${idle ? '' : 'disabled'}>▶ Jalankan</button><button class="btn sm" data-edit="${s.slot}">✎ Edit</button><button class="btn sm" data-copy="${s.slot}">⧉ Salin</button><button class="btn danger sm" data-del="${s.slot}">Hapus</button></div></div>`;
+  }).join('') || '<p class="muted">Belum ada proses tersimpan.</p>';
+  $$('#cpList [data-run]').forEach(b => b.onclick = () => cmd('custom', b.dataset.run));
+  $$('#cpList [data-edit]').forEach(b => b.onclick = () => cpLoad(cpSlots.find(s => s.slot === +b.dataset.edit), false));
+  $$('#cpList [data-copy]').forEach(b => b.onclick = () => cpLoad(cpSlots.find(s => s.slot === +b.dataset.copy), true));
+  $$('#cpList [data-del]').forEach(b => b.onclick = async () => {
+    const s = cpSlots.find(x => x.slot === +b.dataset.del);
+    if (!confirm(`Hapus proses "${s.name}"?`)) return;
+    const d = await api('/api/custom?slot=' + s.slot, 'DELETE'); toast(d.ok ? '🗑 ' + d.msg : '⚠ ' + d.msg);
+    if (cp.slot === s.slot) cpClear(); loadCustom();
+  });
+  const hc = $('#homeCustom');
+  hc.hidden = cpSlots.length === 0;
+  $('#homeCustomGrid').innerHTML = cpSlots.map(s => `<button class="card prog cpRun" data-hrun="${s.slot}" ${idle ? '' : 'disabled'}><b>🗂 ${esc(s.name)}</b><small>${s.items.length} langkah · ± ${fmtMin(cpTotal(s.items).min)}</small></button>`).join('');
+  $$('#homeCustomGrid [data-hrun]').forEach(b => b.onclick = () => cmd('custom', b.dataset.hrun));
+}
+buildPalette(); renderStack();
+
+// ---------------------------------------------------- perangkat yang diingat ----
+const fmtDate = e => e ? new Date(e * 1000).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '-';
+async function loadDevices() {
+  let r; try { r = await api('/api/devices'); } catch { return; }
+  $('#devHint').textContent = r.temporary
+    ? 'Sesi ini TIDAK diingat (login ulang saat browser ditutup). Centang "Ingat perangkat ini" saat login.'
+    : `Maksimal ${r.max} perangkat. Bila penuh, yang terlama otomatis dihapus. Perangkat tetap masuk sampai kamu menghapusnya.`;
+  $('#devList').innerHTML = r.devices.map(d => `<div class="wifirow" style="margin:8px 0"><div><b>${esc(d.name)}</b> ${d.current ? '<span class="chip run">Perangkat ini</span>' : ''}<br><span class="muted">Masuk ${fmtDate(d.created)} · terakhir aktif ${fmtDate(d.lastSeen)}</span></div>
+    <button class="btn danger" data-dev="${d.id}" data-cur="${d.current ? 1 : 0}">Hapus</button></div>`).join('') || '<p class="muted">Belum ada perangkat yang diingat.</p>';
+  $$('#devList [data-dev]').forEach(b => b.onclick = async () => {
+    if (!confirm(b.dataset.cur === '1' ? 'Hapus perangkat INI? Kamu akan keluar.' : 'Hapus perangkat ini dari daftar?')) return;
+    const d = await api('/api/devices?id=' + b.dataset.dev, 'DELETE');
+    toast(d.ok ? '✅ ' + d.msg : '⚠ ' + d.msg);
+    if (d.self) showLogin(); else loadDevices();
+  });
+}
+$('#btnDevOthers').onclick = async () => {
+  if (!confirm('Keluarkan semua perangkat lain?')) return;
+  const d = await api('/api/devices?others=1', 'DELETE'); toast(d.msg); loadDevices();
+};
+
+// ---------------------------------------------------------------- koneksi ----
+// Tanpa WebSocket (hemat memori ESP32): polling status + log tiap 2 dtk, 10 dtk saat tab tersembunyi.
+let pollTimer = null, pollBusy = false;
+async function pollOnce() {
+  if (pollBusy) return;
+  pollBusy = true;
+  try {
+    const r = await api('/api/poll?since=' + lastSeq);
+    if (r.status) renderStatus(r.status);
+    updateRemoteBanner(r.remote);
+    addEntries(r.log.entries, true);
+  } catch (e) { /* koneksi tersendat: dicoba lagi di putaran berikutnya */ } finally { pollBusy = false; }
+}
+function schedulePoll() {
+  clearTimeout(pollTimer);
+  pollTimer = setTimeout(async () => { if (!$('#app').hidden) await pollOnce(); schedulePoll(); }, document.hidden ? 10000 : 2000);
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden && !$('#app').hidden) { pollOnce(); schedulePoll(); } });
+// Mode jarak jauh (Worker Cloudflare): kode UI sama, tetapi fitur sensitif disembunyikan.
+function applyRemote() { $$('[data-local]').forEach(e => { e.hidden = true; }); }
+function updateRemoteBanner(rm) {
+  const b = $('#bannerOffline');
+  if (!rm) { b.hidden = true; document.body.classList.remove('offline'); return; }
+  b.hidden = rm.online;
+  document.body.classList.toggle('offline', !rm.online);
+  if (!rm.online) {
+    const t = rm.lastSeen ? new Date(rm.lastSeen).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : null;
+    b.textContent = t ? `⚠ Mesin offline sejak ${t}. Kontrol dinonaktifkan sampai tersambung kembali.` : '⚠ Mesin belum pernah terhubung ke server.';
+  }
+}
+async function start() {
+  let r;
+  try { r = await api('/api/poll?since=0'); } catch { return; }
+  $('#app').hidden = false; $('#login').hidden = true;
+  try { const info = await api('/api/info'); if (info && info.remote) applyRemote(); } catch { /* ESP32 lama tanpa /api/info */ }
+  if (r.status) renderStatus(r.status);
+  updateRemoteBanner(r.remote);
+  addEntries(r.log.entries, false);
+  if (r.log.entries.length >= 30) await fetchLogsAll();
+  loadSettings().then(loadCustom); schedulePoll();
+}
+start();
+</script>
+</body>
+</html>

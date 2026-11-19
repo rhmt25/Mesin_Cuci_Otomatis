@@ -338,6 +338,10 @@ static void setupRoutes() {
     REQUIRE_AUTH(r);
     sendJsonRefresh(r, statusJson());
   });
+  server.on("/api/info", HTTP_GET, [](AsyncWebServerRequest* r) {
+    REQUIRE_AUTH(r);
+    sendJson(r, 200, String("{\"remote\":false,\"online\":true,\"fw\":\"") + FW_VERSION + "\"}");
+  });
   // Status + log baru dalam satu balasan (pengganti WebSocket). since = seq log terakhir yang sudah diterima.
   server.on("/api/poll", HTTP_GET, [](AsyncWebServerRequest* r) {
     REQUIRE_AUTH(r);

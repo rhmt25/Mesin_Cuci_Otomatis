@@ -276,10 +276,10 @@ $('#conForm').onsubmit = async e => {
   pollOnce();
 };
 async function pollLogs() {
-  try { const r = await api('/api/logs?since=' + lastSeq + '&limit=50'); addEntries(r.entries); return r.entries.length; } catch { return 0; }
+  try { const r = await api('/api/poll?since=' + lastSeq); addEntries(r.log.entries); return r.log.entries.length; } catch { return 0; }
 }
-// Server membatasi 50 entri per balasan (hemat memori); ambil lanjutannya sampai habis.
-async function fetchLogsAll() { for (let i = 0; i < 6; i++) { if ((await pollLogs()) < 50) break; } }
+// Server membatasi 30 entri per balasan (hemat memori); ambil lanjutannya sampai habis.
+async function fetchLogsAll() { for (let i = 0; i < 6; i++) { if ((await pollLogs()) < 30) break; } }
 
 // -------------------------------------------------------- riwayat/fw/sistem ----
 async function loadHistory() {
@@ -515,7 +515,8 @@ async function pollOnce() {
   pollBusy = true;
   try {
     const r = await api('/api/poll?since=' + lastSeq);
-    renderStatus(r.status);
+    if (r.status) renderStatus(r.status);
+    updateRemoteBanner(r.remote);
     addEntries(r.log.entries, true);
   } catch (e) { /* koneksi tersendat: dicoba lagi di putaran berikutnya */ } finally { pollBusy = false; }
 }
@@ -524,9 +525,27 @@ function schedulePoll() {
   pollTimer = setTimeout(async () => { if (!$('#app').hidden) await pollOnce(); schedulePoll(); }, document.hidden ? 10000 : 2000);
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && !$('#app').hidden) { pollOnce(); schedulePoll(); } });
+// Mode jarak jauh (Worker Cloudflare): kode UI sama, tetapi fitur sensitif disembunyikan.
+function applyRemote() { $$('[data-local]').forEach(e => { e.hidden = true; }); }
+function updateRemoteBanner(rm) {
+  const b = $('#bannerOffline');
+  if (!rm) { b.hidden = true; document.body.classList.remove('offline'); return; }
+  b.hidden = rm.online;
+  document.body.classList.toggle('offline', !rm.online);
+  if (!rm.online) {
+    const t = rm.lastSeen ? new Date(rm.lastSeen).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : null;
+    b.textContent = t ? `⚠ Mesin offline sejak ${t}. Kontrol dinonaktifkan sampai tersambung kembali.` : '⚠ Mesin belum pernah terhubung ke server.';
+  }
+}
 async function start() {
-  try { renderStatus(await api('/api/status')); } catch { return; }
-  await fetchLogsAll();
+  let r;
+  try { r = await api('/api/poll?since=0'); } catch { return; }
+  $('#app').hidden = false; $('#login').hidden = true;
+  try { const info = await api('/api/info'); if (info && info.remote) applyRemote(); } catch { /* ESP32 lama tanpa /api/info */ }
+  if (r.status) renderStatus(r.status);
+  updateRemoteBanner(r.remote);
+  addEntries(r.log.entries, false);
+  if (r.log.entries.length >= 30) await fetchLogsAll();
   loadSettings().then(loadCustom); schedulePoll();
 }
 start();

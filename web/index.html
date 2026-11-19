@@ -37,15 +37,16 @@
     <button data-tab="relay">Relay</button>
     <button data-tab="settings">Pengaturan</button>
     <button data-tab="water">Air</button>
-    <button data-tab="wifi">WiFi</button>
+    <button data-tab="wifi" data-local>WiFi</button>
     <button data-tab="log">Log</button>
-    <button data-tab="console">Konsol</button>
+    <button data-tab="console" data-local>Konsol</button>
     <button data-tab="history">Riwayat</button>
-    <button data-tab="firmware">Firmware</button>
+    <button data-tab="firmware" data-local>Firmware</button>
     <button data-tab="system">Sistem</button>
   </nav>
 
   <main>
+    <div id="bannerOffline" class="banner err" hidden></div>
     <!-- BERANDA -->
     <section id="tab-home" class="tab on">
       <div id="bannerResume" class="banner warn" hidden>
@@ -271,13 +272,13 @@
     <!-- SISTEM -->
     <section id="tab-system" class="tab">
       <div class="card" id="sysInfo"></div>
-      <div class="card">
+      <div class="card" data-local>
         <b>Perangkat yang diingat</b>
         <p class="muted" id="devHint"></p>
         <div id="devList"></div>
         <div class="row" style="margin-top:10px"><button class="btn" id="btnDevOthers">Keluarkan semua perangkat lain</button></div>
       </div>
-      <div class="card form">
+      <div class="card form" data-local>
         <label>Ganti password web<input id="newPw" type="password" minlength="6" placeholder="password baru (min 6)"></label>
         <button class="btn" id="btnPw">Ganti</button>
       </div>

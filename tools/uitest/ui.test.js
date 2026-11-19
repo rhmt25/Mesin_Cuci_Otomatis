@@ -17,7 +17,7 @@ const S = {
   settings: { pola: 0, soak: 2, wash: 15, rinse: 10, parfume: 1, spin: 10, fillLevel: 0, fillPercent: 50, fillTime: 30, flH: 0, flM: 30, flS: 0, fillRetryCount: 3, fillRetryWait: 15, drainMode: 0, drainTime: 5, drainSessionLimit: 3, drainProbeSec: 45, fillPrecheck: 0, unjamCount: 2, dH: 0, dM: 0, dS: 0, finishAt: -1, notif: 0, calib: { fillSec: 600, nFill: 2 }, timeSynced: true },
   slots: [null, null, null, null, null],
   devices: [{ id: 0, name: 'Chrome - Android', created: 1760000000, lastSeen: 1760000500, current: false }, { id: 1, name: 'Edge - Windows', created: 1760100000, lastSeen: 1760100500, current: true }],
-  cmds: [], posts: [], logQueue: [],
+  cmds: [], posts: [], logQueue: [], info: { remote: false, online: true }, remote: null,
 };
 function route(url, opt) {
   const m = (opt && opt.method) || 'GET', u = new URL(url, 'http://x/'), p = u.pathname;
@@ -25,7 +25,8 @@ function route(url, opt) {
   const json = (o, code = 200) => Promise.resolve({ status: code, json: () => Promise.resolve(o) });
   if (p === '/api/status') return json(S.status);
   if (p === '/api/logs') return json({ entries: [], last: 0 });
-  if (p === '/api/poll') { const e = S.logQueue.splice(0); return json({ status: S.status, log: { entries: e, last: e.length ? e[e.length - 1].s : 0 } }); }
+  if (p === '/api/info') return json(S.info);
+  if (p === '/api/poll') { const e = S.logQueue.splice(0); const o = { status: S.status, log: { entries: e, last: e.length ? e[e.length - 1].s : 0 } }; if (S.remote) o.remote = S.remote; return json(o); }
   if (p === '/api/settings') return json(S.settings);
   if (p === '/api/cmd') { S.cmds.push(body); return json({ ok: !(body.cmd === 'relay' && body.args === 'kanan on'), msg: body.cmd === 'relay' ? 'Ditolak: motor kiri sedang aktif' : 'ok' }); }
   if (p === '/api/custom' && m === 'GET') return json({ max: 5, maxItems: 24, slots: S.slots });
@@ -161,6 +162,18 @@ function route(url, opt) {
   type(probe, '30'); click($('[data-set="set_probe_buang"]')); await sleep(60);
   ok(S.cmds.some(c => c.cmd === 'set_probe_buang' && c.args === '30'), 'probe diubah lewat set_probe_buang');
   ok(/penuh|tidak penuh/.test($('#tab-water').textContent), 'teks bantuan sensor di atas tampil');
+
+  console.log('[U9] Mode jarak jauh: fitur sensitif disembunyikan, banner offline');
+  ok(!$('[data-tab="wifi"]').hidden && !$('[data-tab="firmware"]').hidden, 'mode lokal: tab WiFi/Firmware tampil');
+  S.info = { remote: true, online: false }; S.remote = { online: false, lastSeen: Date.now() - 600000 };
+  await w.start(); await sleep(80);
+  ok($('[data-tab="wifi"]').hidden && $('[data-tab="console"]').hidden && $('[data-tab="firmware"]').hidden, 'jarak jauh: tab WiFi/Konsol/Firmware disembunyikan');
+  ok($$('#tab-system [data-local]').every(e => e.hidden), 'jarak jauh: ganti password & perangkat diingat disembunyikan');
+  ok(!$('#bannerOffline').hidden && /offline sejak/.test($('#bannerOffline').textContent) && d.body.classList.contains('offline'), 'banner "Mesin offline sejak ..." + kontrol dinonaktifkan');
+  S.remote = { online: true, lastSeen: Date.now() }; await w.pollOnce();
+  ok($('#bannerOffline').hidden && !d.body.classList.contains('offline'), 'tersambung kembali: banner hilang');
+  S.status = null; S.remote = { online: false, lastSeen: 0 }; await w.pollOnce();
+  ok(/belum pernah terhubung/.test($('#bannerOffline').textContent), 'belum pernah terhubung: pesan jelas, tidak error');
 
   console.log(`\n${pass + fail} pemeriksaan UI, ${fail} gagal`);
   process.exit(fail ? 1 : 0);

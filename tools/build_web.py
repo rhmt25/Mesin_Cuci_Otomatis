@@ -2,10 +2,12 @@
 """Gabungkan web/index.html + style.css + app.js menjadi satu halaman, gzip, lalu
 tulis firmware/mesin_cuci_otomatis/web_ui.h. Jalankan setiap selesai mengubah web/.
 
-    python tools/build_web.py
+    python tools/build_web.py            # web_ui.h untuk ESP32
+    python tools/build_web.py --remote   # + cloud/public/index.html untuk Worker (UI jarak jauh, kode sama)
 """
 import gzip
 import pathlib
+import sys
 
 root = pathlib.Path(__file__).resolve().parent.parent
 web = root / "web"
@@ -30,3 +32,9 @@ out.write_text(
     encoding="utf-8",
 )
 print("web_ui.h: %d byte gzip (%d byte asli)" % (len(data), len(html.encode("utf-8"))))
+
+if "--remote" in sys.argv:
+    pub = root / "cloud" / "public"
+    pub.mkdir(parents=True, exist_ok=True)
+    (pub / "index.html").write_text(html, encoding="utf-8")
+    print("cloud/public/index.html: %d byte" % len(html.encode("utf-8")))
