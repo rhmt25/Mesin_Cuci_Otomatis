@@ -36,6 +36,7 @@ static void pollSerial() {
 
 void setup() {
   relayInit();               // paling awal: semua relay mati sebelum hal lain
+  Serial.setTxBufferSize(1024);   // log tidak memblokir task saat buffer cukup
   Serial.begin(115200);
   loggerInit();
   logf(LOG_INFO, "Mesin Cuci v%s boot (%s)", FW_VERSION, loggerResetReason());

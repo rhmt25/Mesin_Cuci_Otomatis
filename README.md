@@ -29,14 +29,13 @@ Modul relay: **Normally Open, trigger LOW**. Pengaturan ada di `config.h`
 
 Salin `firmware/mesin_cuci_otomatis/secrets.example.h` menjadi `secrets.h` (tidak di-commit) lalu isi:
 `WIFI_SSID/PASSWORD`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `AP_PASSWORD` (hotspot, min. 8 karakter),
-`WEB_PASSWORD` (login dashboard), `OTA_PASSWORD` (flash lewat jaringan).
+`WEB_PASSWORD` (login dashboard).
 
 ## Flash
 
 ### PlatformIO
 ```
 pio run -e rymcu-esp32-devkitc -t upload      # lewat USB
-pio run -e ota -t upload                       # lewat jaringan (isi OTA_PASSWORD di env OTA_PASSWORD)
 ```
 Berkas `.bin`: `.pio/build/rymcu-esp32-devkitc/firmware.bin`.
 
@@ -45,8 +44,7 @@ Berkas `.bin`: `.pio/build/rymcu-esp32-devkitc/firmware.bin`.
 2. Board: *ESP32 Dev Module*. **Tools → Partition Scheme → "Minimal SPIFFS (1.9MB APP with OTA)"** (wajib).
 3. Library Manager: `UniversalTelegramBot`, `ArduinoJson` (v7), `AsyncTCP` dan `ESPAsyncWebServer`
    (keduanya versi **mathieucarbou**; jika perlu pasang dari GitHub).
-4. Upload lewat USB, atau lewat jaringan: muncul sebagai *Network Port* `mesincuci` (password = `OTA_PASSWORD`).
-   *Sketch → Export Compiled Binary* menghasilkan `.bin` untuk flash lewat web.
+4. Upload lewat USB. *Sketch → Export Compiled Binary* menghasilkan `.bin` untuk flash lewat web (tab Firmware).
 
 ### Lewat web
 Dashboard → tab **Firmware** → pilih `.bin` → *Flash*. Hanya saat mesin siap (IDLE). Firmware lama tetap
@@ -57,7 +55,7 @@ utuh di partisi cadangan; tombol **Kembali ke versi sebelumnya** tersedia.
 | Dari | Alamat |
 |---|---|
 | Jaringan rumah | `http://mesincuci.local` atau IP yang dikirim Telegram saat online |
-| Hotspot ESP32 | sambung ke `MesinCuci-XXXX` (password `AP_PASSWORD`) → otomatis terbuka / `http://192.168.4.1` |
+| Hotspot ESP32 (darurat) | **hanya menyala bila semua WiFi tersimpan gagal**: sambung ke `MesinCuci-XXXX` (password `AP_PASSWORD`) → `http://192.168.4.1`. Mati lagi 2 menit setelah WiFi rumah pulih dan tanpa klien |
 
 Tab: Beranda, Manual, Pengaturan, Air, WiFi, Log, Konsol (serial monitor web), Riwayat, Firmware, Sistem.
 Sumber dashboard ada di `web/`; setelah diubah jalankan `python tools/build_web.py` (menghasilkan `web_ui.h`).
@@ -135,3 +133,11 @@ tab **Sistem → Perangkat yang diingat**. Mengganti password web mengeluarkan s
 ## Uji antarmuka (opsional)
 
 `cd tools/uitest && npm install && npm test` — jsdom + server palsu: editor Custom, drag & drop, penguncian relay, pesan penolakan, daftar perangkat.
+
+## Ringan & andal (Tahap 2)
+
+- Dashboard memakai **polling** (`/api/poll`, 2 dtk; 10 dtk saat tab tersembunyi), tanpa WebSocket server. ArduinoOTA dihapus
+  (flash lewat web atau USB). Ring log 100 entri, antrean notifikasi 30 entri.
+- **Watchdog konektivitas:** tiap 30 dtk ping gateway; 3 kali gagal → sambung ulang WiFi; 3 kali reconnect gagal → WiFi dimulai
+  ulang. Aktif hanya setelah gateway pernah menjawab ping (router yang memblokir ICMP tidak memicu apa pun).
+- Log DEBUG ke serial USB hanya bila diaktifkan: konsol `serial debug on|off` (tidak disimpan).

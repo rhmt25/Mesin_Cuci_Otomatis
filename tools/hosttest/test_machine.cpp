@@ -7,6 +7,7 @@
 #include "Preferences.h"
 #include "logger.h"
 #include "machine.h"
+#include "net_policy.h"
 #include "relay.h"
 #include "settings.h"
 #include "water_sensor.h"
@@ -618,6 +619,53 @@ static void t23_settingsMigration() {
   CHECK(S.drainProbeSec == 45, "probe < 5 dtk ditolak (default)");
 }
 
+static void t24_connWatchdog() {
+  printf("[T24] Watchdog konektivitas: link zombie dipulihkan, router yang memblokir ping tidak memicu apa pun\n");
+  ConnWatchdog w; connWdInit(w);
+  bool noAct = true;
+  for (int i = 0; i < 10; i++) noAct = noAct && connWdReport(w, false) == CONN_NONE;
+  CHECK(noAct && !w.armed, "gateway tidak pernah menjawab ping: watchdog tidak aktif (tidak ada reconnect palsu)");
+  connWdInit(w);
+  CHECK(connWdReport(w, true) == CONN_NONE && w.armed, "ping berhasil -> aktif");
+  CHECK(connWdReport(w, false) == CONN_NONE && connWdReport(w, false) == CONN_NONE, "2 gagal berturut-turut belum bertindak");
+  CHECK(connWdReport(w, false) == CONN_RECONNECT, "gagal ke-3 -> reconnect");
+  connWdReport(w, false); connWdReport(w, false);
+  CHECK(connWdReport(w, false) == CONN_RECONNECT, "3 gagal lagi -> reconnect ke-2");
+  connWdReport(w, false); connWdReport(w, false);
+  CHECK(connWdReport(w, false) == CONN_RESTART_WIFI, "3 reconnect tanpa hasil -> WiFi dimulai ulang");
+  connWdInit(w); connWdReport(w, true);
+  connWdReport(w, false); connWdReport(w, false);
+  CHECK(connWdReport(w, true) == CONN_NONE, "ping berhasil di tengah mereset hitungan");
+  CHECK(connWdReport(w, false) == CONN_NONE && connWdReport(w, false) == CONN_NONE, "hitungan mulai dari nol lagi");
+}
+
+static void t25_apPolicy() {
+  printf("[T25] Hotspot hanya bila semua SSID gagal; mati lagi setelah WiFi pulih\n");
+  ApPolicy p; apPolicyInit(p);
+  CHECK(!apPolicyStep(p, 1000, true, false, 0), "WiFi tersambung sejak awal: hotspot mati");
+  CHECK(!apPolicyStep(p, 60000, true, false, 0), "tetap mati");
+  apPolicyInit(p);
+  CHECK(!apPolicyStep(p, 1000, false, false, 0), "WiFi belum tersambung tetapi belum semua gagal: hotspot mati");
+  CHECK(!apPolicyStep(p, 20000, false, false, 0), "masih mencoba SSID: mati");
+  CHECK(apPolicyStep(p, 40000, false, true, 0), "semua SSID gagal: hotspot nyala");
+  CHECK(apPolicyStep(p, 90000, false, false, 0), "tetap nyala selama WiFi belum tersambung (walau flag gagal dihapus)");
+  CHECK(apPolicyStep(p, 100000, true, false, 1), "WiFi pulih tetapi ada klien di hotspot: tetap nyala");
+  CHECK(apPolicyStep(p, 200000, true, false, 1), "klien masih ada: tetap nyala");
+  CHECK(apPolicyStep(p, 250000, true, false, 0), "klien pergi, belum 2 menit: tetap nyala");
+  CHECK(!apPolicyStep(p, 250000 + AP_IDLE_OFF_MS + 10, true, false, 0), "2 menit tanpa klien setelah WiFi pulih: mati");
+  CHECK(!apPolicyStep(p, 900000, true, false, 0), "tetap mati");
+  // tidak ada SSID tersimpan
+  apPolicyInit(p);
+  CHECK(apPolicyStep(p, 500, false, true, 0), "tanpa SSID tersimpan: hotspot langsung nyala");
+  // WiFi pulih tanpa klien -> mati setelah 2 menit
+  apPolicyInit(p);
+  apPolicyStep(p, 0, false, true, 0);
+  CHECK(apPolicyStep(p, 10000, true, false, 0), "pulih: belum 2 menit, nyala");
+  CHECK(!apPolicyStep(p, 10000 + AP_IDLE_OFF_MS, true, false, 0), "pulih tanpa klien: mati setelah 2 menit");
+  // putus lagi -> hotspot hanya bila semua gagal lagi
+  CHECK(!apPolicyStep(p, 1000000, false, false, 0), "putus sesaat tanpa semua gagal: hotspot tidak nyala");
+}
+
 int main(int argc, char** argv) {
   g_verbose = argc > 1;
   t1_fullNormal();
@@ -643,6 +691,8 @@ int main(int argc, char** argv) {
   t21_manualDrainSoft();
   t22_partialFill();
   t23_settingsMigration();
+  t24_connWatchdog();
+  t25_apPolicy();
   checks++;
   if (g_violations != 0) { failures++; printf("  GAGAL: %ld tick melanggar invarian keselamatan\n", g_violations); }
   else printf("  ok: 0 pelanggaran invarian (kiri+kanan, isi+buang, buang+motor) di seluruh skenario\n");

@@ -38,7 +38,3 @@
 #define WEB_PASSWORD "PASSWORD_WEB"
 #endif
 
-// Password flash lewat jaringan (ArduinoOTA)
-#ifndef OTA_PASSWORD
-#define OTA_PASSWORD "PASSWORD_OTA"
-#endif

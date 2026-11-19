@@ -1,9 +1,6 @@
 #pragma once
-// Flash firmware: web (upload .bin), ArduinoOTA, rollback ke partisi sebelumnya.
+// Flash firmware: web (upload .bin) atau USB; rollback ke partisi sebelumnya.
 #include <Arduino.h>
-
-void otaNetBegin();        // ArduinoOTA + mDNS (dipanggil dari netBegin)
-void otaNetLoop();         // ArduinoOTA.handle()
 
 bool otaBusy();            // sedang menulis firmware (Telegram jeda polling)
 bool otaWebBegin(size_t totalSize, String& err);

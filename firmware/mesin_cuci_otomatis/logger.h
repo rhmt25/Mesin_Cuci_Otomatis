@@ -15,6 +15,8 @@ struct LogEntry {
 };
 
 void loggerInit();
+void loggerSetSerialDebug(bool on);   // DEBUG ke USB hanya bila diaktifkan (hemat waktu task)
+bool loggerSerialDebug();
 void logf(LogLevel level, const char* fmt, ...) __attribute__((format(printf, 2, 3)));
 void logStr(LogLevel level, const String& text);
 

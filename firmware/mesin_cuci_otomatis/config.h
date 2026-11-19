@@ -49,15 +49,14 @@ inline uint32_t secToMs(uint32_t seconds) { return scaledMs(seconds * 1000UL); }
 #define ANOMALY_FAST_FACTOR     0.2f
 
 // --- Log / jaringan --------------------------------------------------------
-#define LOG_RING_SIZE           200
-#define LOG_TEXT_LEN            128
+#define LOG_RING_SIZE           100
+#define LOG_TEXT_LEN            96
 #define RTC_TRACE_LINES         40
 #define RTC_TRACE_LEN           80
 #define MAX_WIFI_NETWORKS       5
 #define WIFI_TRY_TIMEOUT_MS     10000
-#define MAX_WS_CLIENTS          3
 #define NOTIF_BATCH_MS          1500
-#define NOTIF_OFFLINE_MAX       60
+#define NOTIF_OFFLINE_MAX       30
 #define NTP_TZ                  "WIB-7"
 
 // Password wajib diisi di secrets.h (tidak ada nilai bawaan di kode)
@@ -66,9 +65,6 @@ inline uint32_t secToMs(uint32_t seconds) { return scaledMs(seconds * 1000UL); }
 #endif
 #ifndef WEB_PASSWORD
 #error "WEB_PASSWORD belum diisi di secrets.h (lihat secrets.example.h)"
-#endif
-#ifndef OTA_PASSWORD
-#error "OTA_PASSWORD belum diisi di secrets.h (lihat secrets.example.h)"
 #endif
 #ifndef WIFI_SSID_2
 #define WIFI_SSID_2 ""

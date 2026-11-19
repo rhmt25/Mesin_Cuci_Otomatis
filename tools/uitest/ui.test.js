@@ -3,8 +3,7 @@ const fs = require('fs');
 const root = require('path').resolve(__dirname, '../../web') + '/';
 let html = fs.readFileSync(root + 'index.html', 'utf8')
   .replace('/*CSS*/', fs.readFileSync(root + 'style.css', 'utf8'))
-  .replace('/*JS*/', '');
-const js = fs.readFileSync(root + 'app.js', 'utf8');
+  .replace('/*JS*/', () => fs.readFileSync(root + 'app.js', 'utf8'));
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log('  ok:', m); } else { fail++; console.log('  GAGAL:', m); } };
@@ -18,7 +17,7 @@ const S = {
   settings: { pola: 0, soak: 2, wash: 15, rinse: 10, parfume: 1, spin: 10, fillLevel: 0, fillPercent: 50, fillTime: 30, flH: 0, flM: 30, flS: 0, fillRetryCount: 3, fillRetryWait: 15, drainMode: 0, drainTime: 5, drainSessionLimit: 3, drainProbeSec: 45, fillPrecheck: 0, unjamCount: 2, dH: 0, dM: 0, dS: 0, finishAt: -1, notif: 0, calib: { fillSec: 600, nFill: 2 }, timeSynced: true },
   slots: [null, null, null, null, null],
   devices: [{ id: 0, name: 'Chrome - Android', created: 1760000000, lastSeen: 1760000500, current: false }, { id: 1, name: 'Edge - Windows', created: 1760100000, lastSeen: 1760100500, current: true }],
-  cmds: [], posts: [],
+  cmds: [], posts: [], logQueue: [],
 };
 function route(url, opt) {
   const m = (opt && opt.method) || 'GET', u = new URL(url, 'http://x/'), p = u.pathname;
@@ -26,6 +25,7 @@ function route(url, opt) {
   const json = (o, code = 200) => Promise.resolve({ status: code, json: () => Promise.resolve(o) });
   if (p === '/api/status') return json(S.status);
   if (p === '/api/logs') return json({ entries: [], last: 0 });
+  if (p === '/api/poll') { const e = S.logQueue.splice(0); return json({ status: S.status, log: { entries: e, last: e.length ? e[e.length - 1].s : 0 } }); }
   if (p === '/api/settings') return json(S.settings);
   if (p === '/api/cmd') { S.cmds.push(body); return json({ ok: !(body.cmd === 'relay' && body.args === 'kanan on'), msg: body.cmd === 'relay' ? 'Ditolak: motor kiri sedang aktif' : 'ok' }); }
   if (p === '/api/custom' && m === 'GET') return json({ max: 5, maxItems: 24, slots: S.slots });
@@ -48,10 +48,10 @@ function route(url, opt) {
 (async () => {
   let wsInst = null;
   const dom = new JSDOM(html, {
-    runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/',
+    runScripts: 'dangerously', pretendToBeVisual: true, url: 'http://localhost/',
     beforeParse(w) {
       w.fetch = (u, o) => route(u, o);
-      w.WebSocket = class { constructor() { wsInst = this; setTimeout(() => this.onopen && this.onopen(), 0); } close() { } };
+      w.WebSocket = class { constructor() { wsInst = this; } close() { } };
       w.confirm = () => true;
       w.matchMedia = () => ({ matches: false });
       w.Element.prototype.setPointerCapture = () => { };
@@ -60,7 +60,6 @@ function route(url, opt) {
     },
   });
   const w = dom.window, d = w.document;
-  w.eval(js);
   await sleep(150);
   const $ = s => d.querySelector(s), $$ = s => [...d.querySelectorAll(s)];
   const click = el => el.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
@@ -123,22 +122,22 @@ function route(url, opt) {
   const onBtn = k => $(`[data-rl="${k}"][data-on="1"]`);
   ok(!onBtn('kiri').disabled && !$('#btnSeq').disabled, 'saat siap: ON kiri & uji berurutan aktif');
   S.status = { ...S.status, relays: { ...S.status.relays, kiri: true } };
-  wsInst.onmessage({ data: JSON.stringify(S.status) });
+  await w.pollOnce();
   ok(onBtn('kanan').disabled && /Motor kiri sedang aktif/.test($('#hint-kanan').textContent), 'kiri ON -> tombol ON kanan terkunci + petunjuk jelas');
   ok(!$(`[data-rl="kiri"][data-on="0"]`).disabled, 'OFF kiri aktif');
   S.status = { ...S.status, state: 'running', program: 'Normal', stage: 'Bilas 2/3', relays: { ...S.status.relays, kiri: false } };
-  wsInst.onmessage({ data: JSON.stringify(S.status) });
+  await w.pollOnce();
   ok($$('[data-rl]').every(b => b.disabled) && $('#btnSeq').disabled, 'proses berjalan: semua ON/OFF & uji berurutan terkunci');
   ok(!$('#relayLock').hidden && $('#relayLock').textContent.includes('Normal'), 'banner kunci menyebut proses yang berjalan');
   ok($$('.prog').every(b => b.disabled) && !$('#progLock').hidden, 'kartu program di Beranda juga terkunci');
   S.status = { ...S.status, state: 'idle', program: '' };
-  wsInst.onmessage({ data: JSON.stringify(S.status) });
+  await w.pollOnce();
   ok(!onBtn('isi').disabled && $('#relayLock').hidden, 'kembali siap: terbuka lagi');
 
   console.log('[U6] Pesan penolakan');
   onBtn('kanan').disabled = false; click(onBtn('kanan')); await sleep(80);
   ok(/Ditolak: motor kiri sedang aktif/.test($('#toast').textContent), 'toast menampilkan alasan penolakan dari server');
-  wsInst.onmessage({ data: JSON.stringify({ type: 'log', last: 5, entries: [{ s: 5, t: 1, e: 0, l: 4, m: 'Interlock menolak relay kanan' }] }) });
+  S.logQueue.push({ s: 5, t: 1, e: 0, l: 4, m: 'Interlock menolak relay kanan' }); await w.pollOnce();
   ok(/Interlock menolak relay kanan/.test($('#toast').textContent), 'log ERROR dari mesin muncul sebagai toast');
 
   console.log('[U7] Perangkat diingat');
@@ -149,6 +148,7 @@ function route(url, opt) {
   click($('#devList [data-dev="1"]')); await sleep(100);
   ok(!$('#login').hidden, 'menghapus perangkat sendiri -> kembali ke login');
 
+  ok(wsInst === null, 'dashboard tidak memakai WebSocket');
   console.log('[U8] Tab Air: probe tarikan & pra-cek isi');
   d.querySelector('#login').hidden = true; d.querySelector('#app').hidden = false;
   click($('[data-tab="water"]')); await sleep(120);

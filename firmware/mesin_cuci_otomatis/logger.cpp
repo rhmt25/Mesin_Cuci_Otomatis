@@ -14,6 +14,7 @@ RTC_NOINIT_ATTR static uint8_t rtcHead;
 RTC_NOINIT_ATTR static char rtcTrace[RTC_TRACE_LINES][RTC_TRACE_LEN];
 static String previousTrace;
 static const char* resetReasonText = "tidak diketahui";
+static volatile bool serialDebug = false;
 
 static const char* reasonName(esp_reset_reason_t r) {
   switch (r) {
@@ -93,7 +94,7 @@ static void pushEntry(LogLevel level, const char* text) {
   trimUtf8(slot);
   rtcHead = (rtcHead + 1) % RTC_TRACE_LINES;
 
-  Serial.printf("[%8lu] %-5s %s\n", (unsigned long)e.ms, logLevelName(level), e.text);
+  if (level > LOG_DEBUG || serialDebug) Serial.printf("[%8lu] %-5s %s\n", (unsigned long)e.ms, logLevelName(level), e.text);
   xSemaphoreGive(logMutex);
 }
 
@@ -121,6 +122,9 @@ size_t logRead(uint32_t sinceSeq, LogEntry* out, size_t maxCount) {
   xSemaphoreGive(logMutex);
   return n;
 }
+
+void loggerSetSerialDebug(bool on) { serialDebug = on; }
+bool loggerSerialDebug() { return serialDebug; }
 
 const char* loggerResetReason() { return resetReasonText; }
 String loggerPreviousTrace() { return previousTrace; }

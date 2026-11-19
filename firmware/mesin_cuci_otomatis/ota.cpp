@@ -1,7 +1,5 @@
 #include "ota.h"
-#include <ArduinoOTA.h>
 #include <ArduinoJson.h>
-#include <ESPmDNS.h>
 #include <Update.h>
 #include <esp_ota_ops.h>
 #include "config.h"
@@ -24,29 +22,6 @@ static void stopMachineForFlash() {
   machinePost(c);
   relayAllOff();
 }
-
-// ---------------------------------------------------------------- ArduinoOTA ----
-void otaNetBegin() {
-  ArduinoOTA.setHostname(DEVICE_HOSTNAME);
-  ArduinoOTA.setPassword(OTA_PASSWORD);
-  ArduinoOTA.onStart([]() {
-    busy = true;
-    stopMachineForFlash();
-    logf(LOG_WARN, "ArduinoOTA: mulai menulis firmware");
-  });
-  ArduinoOTA.onProgress([](unsigned int done, unsigned int total) {
-    progress = total ? (uint8_t)(done * 100ULL / total) : 0;
-  });
-  ArduinoOTA.onEnd([]() { logf(LOG_INFO, "ArduinoOTA: selesai, restart"); });
-  ArduinoOTA.onError([](ota_error_t e) {
-    busy = false;
-    machineHold(false);
-    logf(LOG_ERROR, "ArduinoOTA gagal (kode %u)", (unsigned)e);
-  });
-  ArduinoOTA.begin();   // juga menjalankan mDNS mesincuci.local
-}
-
-void otaNetLoop() { ArduinoOTA.handle(); }
 
 // ----------------------------------------------------------------- Web flash ----
 bool otaWebBegin(size_t totalSize, String& err) {

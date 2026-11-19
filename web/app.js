@@ -1,7 +1,7 @@
 'use strict';
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
-let ws = null, wsOk = false, last = null, settings = null, lastState = 'idle';
+let last = null, settings = null, lastState = 'idle';
 let conPaused = false, conLines = [], logLines = [], lastSeq = 0;
 
 // ---------------------------------------------------------------- util ----
@@ -64,7 +64,7 @@ function onTab(t) {
 }
 
 // --------------------------------------------------------------- login ----
-function showLogin() { $('#login').hidden = false; $('#app').hidden = true; if (ws) { ws.close(); ws = null; } }
+function showLogin() { $('#login').hidden = false; $('#app').hidden = true; clearTimeout(pollTimer); }
 $('#loginForm').onsubmit = async e => {
   e.preventDefault();
   const r = await api('/api/login', 'POST', { password: $('#pw').value, remember: $('#remember').checked }).catch(() => ({ ok: false, msg: 'Gagal terhubung' }));
@@ -215,7 +215,7 @@ $('#btnAllOff').onclick = () => cmd('relay', 'semua off');
 // ----------------------------------------------------------------- WiFi ----
 async function loadWifi() {
   const w = await api('/api/wifi');
-  $('#wifiInfo').innerHTML = `<b>Hotspot:</b> ${esc(w.ap)} (192.168.4.1)<br><b>Jaringan:</b> ${w.online ? esc(w.ssid) + ' · ' + esc(w.ip) + ' · ' + w.rssi + ' dBm' : 'offline'}`;
+  $('#wifiInfo').innerHTML = `<b>Hotspot:</b> ${w.apOn ? esc(w.ap) + ' AKTIF (192.168.4.1)' : 'nonaktif (menyala otomatis bila semua WiFi gagal)'}<br><b>Jaringan:</b> ${w.online ? esc(w.ssid) + ' · ' + esc(w.ip) + ' · ' + w.rssi + ' dBm' : 'offline'}`;
   $('#wifiList').innerHTML = w.networks.map(n => `<div class="card wifirow"><div><b>${n.i}. ${esc(n.ssid)}</b> ${n.active ? '✅' : ''}<br><span class="muted">${n.secured ? '••••' : 'terbuka'}</span></div>
     <div class="row" style="margin:0"><button class="btn" data-up="${n.i}">↑</button><button class="btn" data-dn="${n.i}">↓</button><button class="btn danger" data-del="${n.i}">Hapus</button></div></div>`).join('') || '<p class="muted">Belum ada WiFi.</p>';
   $$('[data-del]').forEach(b => b.onclick = async () => { await cmd('wifi_hapus', b.dataset.del); loadWifi(); });
@@ -273,7 +273,7 @@ $('#conForm').onsubmit = async e => {
   const v = $('#conIn').value.trim(); if (!v) return;
   $('#conIn').value = '';
   await api('/api/console', 'POST', { line: v }).catch(() => { });
-  if (!ws || !wsOk) pollLogs();
+  pollOnce();
 };
 async function pollLogs() {
   try { const r = await api('/api/logs?since=' + lastSeq + '&limit=50'); addEntries(r.entries); return r.entries.length; } catch { return 0; }
@@ -312,7 +312,7 @@ $('#btnRollback').onclick = async () => {
 function renderSys() {
   if (!last) return;
   const s = last;
-  $('#sysInfo').innerHTML = `<b>Firmware:</b> v${esc(s.fw)}<br><b>Uptime:</b> ${fmt(s.uptime)}<br><b>Heap bebas:</b> ${(s.heap / 1024).toFixed(0)} KB<br><b>Alasan reset terakhir:</b> ${esc(s.reset)}<br><b>WiFi:</b> ${s.wifi.online ? esc(s.wifi.ssid) + ' · ' + esc(s.wifi.ip) : 'offline'}<br><b>Hotspot:</b> ${esc(s.wifi.ap)} (${s.wifi.apClients} klien)<br><b>Jam:</b> ${esc(s.wifi.time)}<br><b>Notifikasi:</b> ${esc(s.notif)}`;
+  $('#sysInfo').innerHTML = `<b>Firmware:</b> v${esc(s.fw)}<br><b>Uptime:</b> ${fmt(s.uptime)}<br><b>Heap bebas:</b> ${(s.heap / 1024).toFixed(0)} KB<br><b>Alasan reset terakhir:</b> ${esc(s.reset)}<br><b>WiFi:</b> ${s.wifi.online ? esc(s.wifi.ssid) + ' · ' + esc(s.wifi.ip) : 'offline'}<br><b>Hotspot:</b> ${s.wifi.apOn ? esc(s.wifi.ap) + ' AKTIF (' + s.wifi.apClients + ' klien)' : 'nonaktif'}<br><b>Jam:</b> ${esc(s.wifi.time)}<br><b>Notifikasi:</b> ${esc(s.notif)}`;
 }
 $('#btnPw').onclick = async () => { const r = await cmd('web_password', $('#newPw').value); if (r && r.ok) { $('#newPw').value = ''; toast('Password diganti. Silakan login ulang.'); setTimeout(showLogin, 800); } };
 $('#btnRestart').onclick = () => confirm('Restart mesin?') && cmd('restart');
@@ -508,25 +508,25 @@ $('#btnDevOthers').onclick = async () => {
 };
 
 // ---------------------------------------------------------------- koneksi ----
-function connectWs() {
-  if (ws) return;
-  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
-  ws.onopen = () => { wsOk = true; };
-  ws.onmessage = e => {
-    const m = JSON.parse(e.data);
-    if (m.type === 'status') renderStatus(m); else if (m.type === 'log') addEntries(m.entries, true);
-  };
-  ws.onclose = () => { wsOk = false; ws = null; setTimeout(() => { if (!$('#app').hidden) connectWs(); }, 2500); };
-}
-async function start() {
+// Tanpa WebSocket (hemat memori ESP32): polling status + log tiap 2 dtk, 10 dtk saat tab tersembunyi.
+let pollTimer = null, pollBusy = false;
+async function pollOnce() {
+  if (pollBusy) return;
+  pollBusy = true;
   try {
-    const s = await api('/api/status'); renderStatus(s);
-  } catch { return; }
-  await fetchLogsAll();
-  loadSettings().then(loadCustom); connectWs();
+    const r = await api('/api/poll?since=' + lastSeq);
+    renderStatus(r.status);
+    addEntries(r.log.entries, true);
+  } catch (e) { /* koneksi tersendat: dicoba lagi di putaran berikutnya */ } finally { pollBusy = false; }
 }
-setInterval(async () => {   // cadangan bila WebSocket putus
-  if ($('#app').hidden || wsOk) return;
-  try { renderStatus(await api('/api/status')); pollLogs(); } catch { }
-}, 3000);
+function schedulePoll() {
+  clearTimeout(pollTimer);
+  pollTimer = setTimeout(async () => { if (!$('#app').hidden) await pollOnce(); schedulePoll(); }, document.hidden ? 10000 : 2000);
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden && !$('#app').hidden) { pollOnce(); schedulePoll(); } });
+async function start() {
+  try { renderStatus(await api('/api/status')); } catch { return; }
+  await fetchLogsAll();
+  loadSettings().then(loadCustom); schedulePoll();
+}
 start();

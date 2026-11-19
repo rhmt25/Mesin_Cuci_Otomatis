@@ -308,6 +308,8 @@ static void telegramTask(void*) {
   bool started = false;
   bool resumePrompted = false;
   uint32_t lastPoll = 0;
+  uint32_t nextTryMs = 0;
+  uint8_t backoffLevel = 0;
   bool lastOnline = false;
 
   for (;;) {
@@ -355,8 +357,20 @@ static void telegramTask(void*) {
     }
     if (!ms.resumePending) resumePrompted = false;
 
-    if (millis() - lastPoll >= 300) {
+    if (millis() >= nextTryMs && millis() - lastPoll >= 300) {
       lastPoll = millis();
+      // Backoff saat DNS/TLS gagal (mis. internet putus): 30 dtk, 1, 2, 5 mnt; jangan menghantam jaringan tiap beberapa detik.
+      IPAddress dnsProbe;
+      if (!WiFi.hostByName("api.telegram.org", dnsProbe)) {
+        static const uint32_t steps[] = {30000, 60000, 120000, 300000};
+        uint32_t wait = steps[backoffLevel < 3 ? backoffLevel : 3];
+        if (backoffLevel < 3) backoffLevel++;
+        nextTryMs = millis() + wait;
+        logf(LOG_DEBUG, "Telegram: DNS gagal, coba lagi %lu dtk", (unsigned long)(wait / 1000));
+        vTaskDelay(pdMS_TO_TICKS(200));
+        continue;
+      }
+      backoffLevel = 0;
       uint32_t pollStart = millis();
       int n = bot.getUpdates(bot.last_message_received + 1);
       uint32_t pollMs = millis() - pollStart;

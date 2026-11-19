@@ -15,8 +15,10 @@
 #include "settings.h"
 #include "web_ui.h"
 
+static String logsJson(uint32_t since, size_t maxCount, uint32_t* lastOut);
+static bool lowMemory(size_t needBytes);
+
 static AsyncWebServer server(80);
-static AsyncWebSocket ws("/ws");
 
 // ============================================================================
 // Sesi login (token tersimpan di NVS lewat settings.cpp -> bertahan saat restart)
@@ -76,6 +78,15 @@ static void sendJson(AsyncWebServerRequest* r, int code, const String& body) {
   r->send(code, "application/json", body);
 }
 
+// Balasan 200 + perpanjang cookie bila perangkat diingat
+static void sendJsonRefresh(AsyncWebServerRequest* r, const String& body) {
+  AsyncWebServerResponse* res = r->beginResponse(200, "application/json", body);
+  String tok = currentToken(r);
+  if (sessionSlot(tok) >= 0)
+    res->addHeader("Set-Cookie", "sid=" + tok + "; Path=/; HttpOnly; SameSite=Lax; Max-Age=" REMEMBER_COOKIE_AGE);
+  r->send(res);
+}
+
 static void scheduleRestart(uint32_t delayMs) {
   xTaskCreate(
       [](void* p) {
@@ -119,6 +130,7 @@ static String statusJson() {
   d["wifi"]["rssi"] = netRssi();
   d["wifi"]["ip"] = netIp();
   d["wifi"]["ap"] = netApSsid();
+  d["wifi"]["apOn"] = netApOn();
   d["wifi"]["apClients"] = netApClients();
   d["wifi"]["time"] = netTimeString();
   d["notif"] = notifModeName(S.notif);
@@ -178,7 +190,7 @@ static void addLogEntries(JsonArray arr, const LogEntry* e, size_t n) {
 // Log dibaca per potongan kecil (stack) agar tidak ada alokasi heap besar yang bisa gagal.
 // Jumlah entri dibatasi (LOGS_MAX_PER_REPLY); klien mengambil lanjutannya dengan since=last.
 #define LOGS_MAX_PER_REPLY 50
-static String logsJson(uint32_t since, size_t maxCount, uint32_t* lastOut = nullptr) {
+static String logsJson(uint32_t since, size_t maxCount, uint32_t* lastOut = nullptr) {  // NOLINT
   if (maxCount > LOGS_MAX_PER_REPLY) maxCount = LOGS_MAX_PER_REPLY;
   if (maxCount == 0) maxCount = 1;
   JsonDocument d;
@@ -203,7 +215,7 @@ static String logsJson(uint32_t since, size_t maxCount, uint32_t* lastOut = null
 }
 
 // Memori heap tinggal sedikit? Tolak permintaan berat daripada berisiko crash.
-static bool lowMemory(size_t needBytes = 12288) { return ESP.getMaxAllocHeap() < needBytes; }
+static bool lowMemory(size_t needBytes) { return ESP.getMaxAllocHeap() < needBytes; }
 
 static String historyJson() {
   JsonDocument d;
@@ -241,6 +253,7 @@ static String wifiJson() {
   }
   d["max"] = MAX_WIFI_NETWORKS;
   d["ap"] = netApSsid();
+  d["apOn"] = netApOn();
   d["online"] = netOnline();
   d["ssid"] = active;
   d["rssi"] = netRssi();
@@ -323,11 +336,24 @@ static void setupRoutes() {
   // ---- status & data ----
   server.on("/api/status", HTTP_GET, [](AsyncWebServerRequest* r) {
     REQUIRE_AUTH(r);
-    AsyncWebServerResponse* res = r->beginResponse(200, "application/json", statusJson());
-    String tok = currentToken(r);
-    if (sessionSlot(tok) >= 0)   // perangkat diingat: perpanjang cookie
-      res->addHeader("Set-Cookie", "sid=" + tok + "; Path=/; HttpOnly; SameSite=Lax; Max-Age=" REMEMBER_COOKIE_AGE);
-    r->send(res);
+    sendJsonRefresh(r, statusJson());
+  });
+  // Status + log baru dalam satu balasan (pengganti WebSocket). since = seq log terakhir yang sudah diterima.
+  server.on("/api/poll", HTTP_GET, [](AsyncWebServerRequest* r) {
+    REQUIRE_AUTH(r);
+    if (lowMemory(8192)) {
+      sendJson(r, 503, "{\"ok\":false,\"msg\":\"memori rendah, coba lagi\"}");
+      return;
+    }
+    uint32_t since = r->hasParam("since") ? r->getParam("since")->value().toInt() : 0;
+    String out;
+    out.reserve(2800);
+    out += "{\"status\":";
+    out += statusJson();
+    out += ",\"log\":";
+    out += logsJson(since, 30);
+    out += "}";
+    sendJsonRefresh(r, out);
   });
   server.on("/api/settings", HTTP_GET, [](AsyncWebServerRequest* r) {
     REQUIRE_AUTH(r);
@@ -357,7 +383,7 @@ static void setupRoutes() {
     REQUIRE_AUTH(r);
     uint32_t since = r->hasParam("since") ? r->getParam("since")->value().toInt() : 0;
     long lim = r->hasParam("limit") ? r->getParam("limit")->value().toInt() : 50;
-    if (lowMemory()) {
+    if (lowMemory(12288)) {
       sendJson(r, 503, "{\"ok\":false,\"msg\":\"memori rendah, coba lagi\"}");
       return;
     }
@@ -550,7 +576,7 @@ static void setupRoutes() {
     }
     logf(LOG_DEBUG, "> %s", line.c_str());
     String out = consoleExec(line, SRC_WEB);
-    // keluaran dikirim baris per baris ke log agar tampil di konsol (WebSocket)
+    // keluaran dikirim baris per baris ke log agar tampil di konsol (polling)
     int start = 0;
     while (start < (int)out.length()) {
       int nl = out.indexOf('\n', start);
@@ -619,56 +645,8 @@ static void setupRoutes() {
   });
 }
 
-// ============================================================================
-// WebSocket
-// ============================================================================
-static void onWsEvent(AsyncWebSocket* srv, AsyncWebSocketClient* client, AwsEventType type, void* arg, uint8_t* data,
-                      size_t len) {
-  if (type == WS_EVT_CONNECT) {
-    AsyncWebServerRequest* req = (AsyncWebServerRequest*)arg;
-    bool ok = req && req->hasHeader("Cookie") && tokenValid(cookieToken(req->header("Cookie")));
-    if (!ok || srv->count() > MAX_WS_CLIENTS) {
-      client->close();
-      return;
-    }
-    client->text(statusJson());
-  }
-}
-
-static void wsTask(void*) {
-  uint32_t lastSeq = logLastSeq();
-  uint32_t lastStatus = 0;
-  for (;;) {
-    ws.cleanupClients(MAX_WS_CLIENTS);
-    if (ws.count() > 0) {
-      uint32_t now = millis();
-      // log baru
-      if (logLastSeq() != lastSeq) {
-        if (!lowMemory(8192)) {
-          uint32_t newLast = lastSeq;
-          String j = logsJson(lastSeq, 30, &newLast);
-          lastSeq = newLast;
-          ws.textAll(j);
-        } else {
-          lastSeq = logLastSeq();   // memori rendah: lewati batch ini
-        }
-      }
-      if (now - lastStatus >= 1000) {
-        lastStatus = now;
-        ws.textAll(statusJson());
-      }
-    } else {
-      lastSeq = logLastSeq();
-    }
-    vTaskDelay(pdMS_TO_TICKS(250));
-  }
-}
-
 void webBegin() {
   setupRoutes();
-  ws.onEvent(onWsEvent);
-  server.addHandler(&ws);
   server.begin();
   logf(LOG_INFO, "Dashboard web aktif di port 80");
-  xTaskCreatePinnedToCore(wsTask, "ws", 6144, nullptr, 1, nullptr, 0);
 }

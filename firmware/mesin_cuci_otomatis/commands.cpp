@@ -253,7 +253,7 @@ String wifiListText() {
     t += "\n";
   }
   if (wifiCount() == 0) t += "(kosong)\n";
-  t += "Hotspot: " + netApSsid() + "\n";
+  t += netApOn() ? "Hotspot: " + netApSsid() + " AKTIF\n" : String("Hotspot: nonaktif (menyala otomatis bila semua WiFi gagal)\n");
   t.trim();
   return t;
 }
@@ -327,7 +327,7 @@ String helpText() {
          "relay <kiri|kanan|isi|buang|spin|pewangi> <on|off>, relay semua off, kalibrasi_relay [detik]\n"
          "set_probe_buang <detik>, pra_cek_isi <buang|jeda|pakai>\n"
          "custom [nomor] (proses buatan sendiri, disusun di dashboard web)\n"
-         "Konsol: heap, tasks, relay_test <nama>, log";
+         "Konsol: heap, tasks, relay_test <nama>, log, serial debug on|off";
 }
 
 // ============================================================================
@@ -529,7 +529,7 @@ CmdResult executeCommand(const String& command, const String& argsIn, CmdSource 
     String t = String("Firmware v") + FW_VERSION + " (" + __DATE__ + ")\n";
     t += "Heap bebas: " + String(ESP.getFreeHeap() / 1024) + " KB (min " + String(ESP.getMinFreeHeap() / 1024) + " KB)\n";
     t += String("Alasan reset terakhir: ") + loggerResetReason() + "\n";
-    t += "Hotspot: " + netApSsid() + " (192.168.4.1)\n";
+    t += netApOn() ? "Hotspot: " + netApSsid() + " AKTIF (192.168.4.1)\n" : String("Hotspot: nonaktif (menyala otomatis bila semua WiFi gagal)\n");
     t += "WiFi: " + (netOnline() ? netSsid() + " " + netIp() : String("offline")) + "\n";
     t += "Jam: " + netTimeString() + "\nDashboard: http://" + DEVICE_HOSTNAME + ".local";
     return ok(t);
@@ -717,6 +717,14 @@ String consoleExec(const String& lineIn, CmdSource src) {
     out = "Tasks: " + String(uxTaskGetNumberOfTasks()) + ", uptime " + fmtDuration(millis() / 1000);
   } else if (cmd == "log") {
     out = "Seq log terakhir: " + String(logLastSeq()) + ". Jejak boot sebelumnya:\n" + loggerPreviousTrace();
+  } else if (cmd == "serial") {
+    String a = token(args, 0), b = token(args, 1);
+    if (a == "debug" && (b == "on" || b == "off")) {
+      loggerSetSerialDebug(b == "on");
+      out = String("Log DEBUG ke serial USB: ") + (b == "on" ? "aktif (tidak disimpan)" : "mati");
+    } else {
+      out = "Format: serial debug on|off";
+    }
   } else if (cmd == "reboot") {
     out = executeCommand("restart", "", src).msg;
   } else {
