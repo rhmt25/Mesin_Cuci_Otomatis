@@ -2,3 +2,8 @@
 version = 1
 firmware = '.pio/build/wokwi/firmware.bin'
 elf = '.pio\build\wokwi\firmware.elf'
+
+# Dashboard web dari browser: http://localhost:8180
+[[net.forward]]
+from = "localhost:8180"
+to = "target:80"
