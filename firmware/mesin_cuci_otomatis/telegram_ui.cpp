@@ -332,6 +332,7 @@ static void telegramTask(void*) {
       boot += String("Reset terakhir: ") + loggerResetReason();
       sendText(boot);
       started = true;
+      logf(LOG_DEBUG, "Telegram siap. Heap bebas %u B, blok terbesar %u B", (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap());
     }
 
     String msg;
@@ -350,7 +351,7 @@ static void telegramTask(void*) {
     }
     if (!ms.resumePending) resumePrompted = false;
 
-    if (millis() - lastPoll >= 1000) {
+    if (millis() - lastPoll >= 2000) {
       lastPoll = millis();
       int n = bot.getUpdates(bot.last_message_received + 1);
       while (n) {

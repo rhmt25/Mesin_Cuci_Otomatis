@@ -51,8 +51,17 @@ void setup() {
   telegramBegin();           // Telegram + notifikasi
 }
 
+static void logHeapPeriodically() {
+  static uint32_t last = 0;
+  if (millis() - last < 30000) return;
+  last = millis();
+  logf(LOG_DEBUG, "Heap bebas %u B, blok terbesar %u B, minimum %u B", (unsigned)ESP.getFreeHeap(),
+       (unsigned)ESP.getMaxAllocHeap(), (unsigned)ESP.getMinFreeHeap());
+}
+
 void loop() {
   pollSerial();
+  logHeapPeriodically();
   otaMarkValidIfHealthy();
   vTaskDelay(pdMS_TO_TICKS(20));
 }

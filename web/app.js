@@ -269,8 +269,10 @@ $('#conForm').onsubmit = async e => {
   if (!ws || !wsOk) pollLogs();
 };
 async function pollLogs() {
-  try { const r = await api('/api/logs?since=' + lastSeq + '&limit=100'); addEntries(r.entries); } catch { }
+  try { const r = await api('/api/logs?since=' + lastSeq + '&limit=50'); addEntries(r.entries); return r.entries.length; } catch { return 0; }
 }
+// Server membatasi 50 entri per balasan (hemat memori); ambil lanjutannya sampai habis.
+async function fetchLogsAll() { for (let i = 0; i < 6; i++) { if ((await pollLogs()) < 50) break; } }
 
 // -------------------------------------------------------- riwayat/fw/sistem ----
 async function loadHistory() {
@@ -513,8 +515,7 @@ async function start() {
   try {
     const s = await api('/api/status'); renderStatus(s);
   } catch { return; }
-  const logs = await api('/api/logs?since=0&limit=100').catch(() => ({ entries: [] }));
-  addEntries(logs.entries);
+  await fetchLogsAll();
   loadSettings().then(loadCustom); connectWs();
 }
 setInterval(async () => {   // cadangan bila WebSocket putus

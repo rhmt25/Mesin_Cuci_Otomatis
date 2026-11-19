@@ -177,20 +177,35 @@ static void addLogEntries(JsonArray arr, const LogEntry* e, size_t n) {
   }
 }
 
-static String logsJson(uint32_t since, size_t maxCount) {
-  if (maxCount > LOG_RING_SIZE) maxCount = LOG_RING_SIZE;
+// Log dibaca per potongan kecil (stack) agar tidak ada alokasi heap besar yang bisa gagal.
+// Jumlah entri dibatasi (LOGS_MAX_PER_REPLY); klien mengambil lanjutannya dengan since=last.
+#define LOGS_MAX_PER_REPLY 50
+static String logsJson(uint32_t since, size_t maxCount, uint32_t* lastOut = nullptr) {
+  if (maxCount > LOGS_MAX_PER_REPLY) maxCount = LOGS_MAX_PER_REPLY;
   if (maxCount == 0) maxCount = 1;
-  std::unique_ptr<LogEntry[]> bufHolder(new LogEntry[maxCount]);
-  LogEntry* buf = bufHolder.get();
-  size_t n = logRead(since, buf, maxCount);
   JsonDocument d;
   d["type"] = "log";
-  d["last"] = n ? buf[n - 1].seq : since;
-  addLogEntries(d["entries"].to<JsonArray>(), buf, n);
+  JsonArray arr = d["entries"].to<JsonArray>();
+  LogEntry chunk[6];
+  uint32_t last = since;
+  size_t total = 0;
+  while (total < maxCount) {
+    size_t want = min<size_t>(6, maxCount - total);
+    size_t n = logRead(last, chunk, want);
+    if (n == 0) break;
+    addLogEntries(arr, chunk, n);
+    last = chunk[n - 1].seq;
+    total += n;
+  }
+  d["last"] = last;
+  if (lastOut) *lastOut = last;
   String out;
   serializeJson(d, out);
   return out;
 }
+
+// Memori heap tinggal sedikit? Tolak permintaan berat daripada berisiko crash.
+static bool lowMemory(size_t needBytes = 12288) { return ESP.getMaxAllocHeap() < needBytes; }
 
 static String historyJson() {
   JsonDocument d;
@@ -344,8 +359,12 @@ static void setupRoutes() {
   server.on("/api/logs", HTTP_GET, [](AsyncWebServerRequest* r) {
     REQUIRE_AUTH(r);
     uint32_t since = r->hasParam("since") ? r->getParam("since")->value().toInt() : 0;
-    size_t limit = r->hasParam("limit") ? r->getParam("limit")->value().toInt() : 100;
-    sendJson(r, 200, logsJson(since, limit));
+    long lim = r->hasParam("limit") ? r->getParam("limit")->value().toInt() : 50;
+    if (lowMemory()) {
+      sendJson(r, 503, "{\"ok\":false,\"msg\":\"memori rendah, coba lagi\"}");
+      return;
+    }
+    sendJson(r, 200, logsJson(since, lim > 0 ? (size_t)lim : 1));
   });
   server.on("/api/history", HTTP_GET, [](AsyncWebServerRequest* r) {
     REQUIRE_AUTH(r);
@@ -628,10 +647,14 @@ static void wsTask(void*) {
       uint32_t now = millis();
       // log baru
       if (logLastSeq() != lastSeq) {
-        String j = logsJson(lastSeq, 40);
-        JsonDocument d;
-        if (deserializeJson(d, j) == DeserializationError::Ok) lastSeq = d["last"] | lastSeq;
-        ws.textAll(j);
+        if (!lowMemory(8192)) {
+          uint32_t newLast = lastSeq;
+          String j = logsJson(lastSeq, 30, &newLast);
+          lastSeq = newLast;
+          ws.textAll(j);
+        } else {
+          lastSeq = logLastSeq();   // memori rendah: lewati batch ini
+        }
       }
       if (now - lastStatus >= 1000) {
         lastStatus = now;
@@ -650,5 +673,5 @@ void webBegin() {
   server.addHandler(&ws);
   server.begin();
   logf(LOG_INFO, "Dashboard web aktif di port 80");
-  xTaskCreatePinnedToCore(wsTask, "ws", 8192, nullptr, 1, nullptr, 0);
+  xTaskCreatePinnedToCore(wsTask, "ws", 6144, nullptr, 1, nullptr, 0);
 }
