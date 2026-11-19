@@ -62,6 +62,7 @@ static void beginTry() {
 }
 
 static void onConnected() {
+  WiFi.setSleep(false);
   online = true;
   backoffMs = 30000;
   wstate = W_IDLE;
@@ -132,6 +133,7 @@ void netBegin() {
   WiFi.persistent(false);
   WiFi.setAutoReconnect(false);
   WiFi.mode(WIFI_AP_STA);
+  WiFi.setSleep(false);   // matikan power-save WiFi: tanpa ini dashboard lambat/putus-putus
   WiFi.setHostname(DEVICE_HOSTNAME);
 
   uint8_t mac[6];

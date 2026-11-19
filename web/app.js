@@ -13,7 +13,12 @@ function toast(msg) {
 async function api(path, method = 'GET', body) {
   const opt = { method, headers: {} };
   if (body !== undefined) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
-  const r = await fetch(path, opt);
+  let r, lastErr;
+  // GET aman diulang bila koneksi tersendat sesaat; POST/DELETE tidak diulang (bisa terkirim dua kali)
+  for (let i = 0; i < (method === 'GET' ? 3 : 1); i++) {
+    try { r = await fetch(path, opt); break; } catch (e) { lastErr = e; await new Promise(res => setTimeout(res, 500)); }
+  }
+  if (!r) throw new Error('Koneksi ke mesin terputus. Coba lagi sebentar.');
   if (r.status === 401 && path !== '/api/login') { showLogin(); throw new Error('login'); }
   return r.json();
 }

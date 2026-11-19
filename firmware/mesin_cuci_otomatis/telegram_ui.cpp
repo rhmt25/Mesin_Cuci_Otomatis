@@ -11,6 +11,9 @@
 #include "settings.h"
 
 #define CHAT_ID TELEGRAM_CHAT_ID
+#ifndef TG_LONG_POLL_SEC
+#define TG_LONG_POLL_SEC 6
+#endif
 
 static WiFiClientSecure client;
 static UniversalTelegramBot bot(TELEGRAM_BOT_TOKEN, client);
@@ -322,6 +325,7 @@ static void telegramTask(void*) {
 
     if (!started) {
       client.setCACert(TELEGRAM_CERTIFICATE_ROOT);
+      bot.longPoll = TG_LONG_POLL_SEC;   // long polling: perintah masuk langsung, handshake TLS jauh lebih jarang
       for (int i = 0; i < 20 && bot.getUpdates(bot.last_message_received + 1); i++) vTaskDelay(pdMS_TO_TICKS(100));
       logf(LOG_DEBUG, "Pesan Telegram lama dibersihkan");
       bot.setMyCommands(kCommandList);
@@ -351,9 +355,14 @@ static void telegramTask(void*) {
     }
     if (!ms.resumePending) resumePrompted = false;
 
-    if (millis() - lastPoll >= 2000) {
+    if (millis() - lastPoll >= 300) {
       lastPoll = millis();
+      uint32_t pollStart = millis();
       int n = bot.getUpdates(bot.last_message_received + 1);
+      uint32_t pollMs = millis() - pollStart;
+      if (pollMs > (TG_LONG_POLL_SEC + 4) * 1000UL)   // lebih lama dari long poll: jaringan/TLS bermasalah
+        logf(LOG_DEBUG, "Telegram poll lambat %lu ms (heap %u, blok terbesar %u)", (unsigned long)pollMs,
+             (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap());
       while (n) {
         handleUpdates(n);
         n = bot.getUpdates(bot.last_message_received + 1);
@@ -364,5 +373,5 @@ static void telegramTask(void*) {
 }
 
 void telegramBegin() {
-  xTaskCreatePinnedToCore(telegramTask, "telegram", 12288, nullptr, 1, nullptr, 0);
+  xTaskCreatePinnedToCore(telegramTask, "telegram", 12288, nullptr, 1, nullptr, 1);   // core 1: handshake TLS tidak mengganggu WiFi/web di core 0
 }

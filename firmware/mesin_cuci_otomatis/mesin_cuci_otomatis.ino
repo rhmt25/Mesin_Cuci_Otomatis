@@ -48,7 +48,9 @@ void setup() {
   machineBegin();            // task kontrol mesin di Core 1
   netBegin();                // WiFi + hotspot + OTA di Core 0
   webBegin();                // dashboard web + WebSocket
+#ifndef NO_TELEGRAM
   telegramBegin();           // Telegram + notifikasi
+#endif
 }
 
 static void logHeapPeriodically() {
