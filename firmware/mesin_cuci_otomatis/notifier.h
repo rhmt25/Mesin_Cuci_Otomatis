@@ -1,6 +1,6 @@
 #pragma once
-// Notifier Telegram: filter mode (Lengkap/Ringkas/Senyap), batching 1,5 dtk,
-// antrean saat offline. Dipanggil hanya dari task Telegram.
+// Notifier: filter mode (Lengkap/Ringkas/Senyap), batching 1,5 dtk, antrean saat offline.
+// Dipanggil hanya dari task remote; teks dikirim ke Worker yang meneruskannya ke Telegram.
 #include <Arduino.h>
 
 void notifierInit();

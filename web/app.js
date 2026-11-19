@@ -319,6 +319,26 @@ function renderSys() {
 }
 $('#btnPw').onclick = async () => { const r = await cmd('web_password', $('#newPw').value); if (r && r.ok) { $('#newPw').value = ''; toast('Password diganti. Silakan login ulang.'); setTimeout(showLogin, 800); } };
 $('#btnRestart').onclick = () => confirm('Restart mesin?') && cmd('restart');
+// ---- cadangkan & pulihkan (khusus lokal) ----
+$('#btnBackup').onclick = () => { location.href = '/api/backup' + ($('#bkWifi').checked ? '?wifi=1' : ''); };
+function readFileText(f) {
+  return new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => rej(fr.error); fr.readAsText(f); });
+}
+$('#restoreFile').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  const msg = $('#restoreMsg');
+  if (!f) return;
+  if (f.size > 12288) { msg.textContent = '⚠ Berkas terlalu besar (maks 12 KB).'; return; }
+  let data;
+  try { data = JSON.parse(await readFileText(f)); } catch { msg.textContent = '⚠ Berkas bukan JSON yang valid.'; return; }
+  const dry = await api('/api/restore?dry=1', 'POST', data).catch(() => null);
+  if (!dry) { msg.textContent = '⚠ Gagal memeriksa berkas.'; return; }
+  if (!dry.ok) { msg.textContent = '⚠ ' + dry.msg; return; }
+  if (!confirm(`Pulihkan dari cadangan?\n${dry.msg}\n\nPengaturan, Custom Proses, dan daftar WiFi saat ini akan diganti.`)) { msg.textContent = 'Dibatalkan.'; return; }
+  const r = await api('/api/restore', 'POST', data).catch(() => null);
+  msg.textContent = r && r.ok ? '✅ ' + r.msg : '⚠ ' + (r ? r.msg : 'Gagal memulihkan.');
+  if (r && r.ok) { loadSettings(); loadCustom(); loadWifi(); toast('Pemulihan selesai'); }
+};
 
 // -------------------------------------------------------------- Custom Proses ----
 const POLA = [['3', 'Ikut Pengaturan'], ['0', 'Normal'], ['1', 'Gentle'], ['2', 'Hijab']];

@@ -3,6 +3,7 @@
 #include <ESPAsyncWebServer.h>
 #include <AsyncJson.h>
 #include "api_core.h"
+#include "backup.h"
 #include "config.h"
 #include "logger.h"
 #include "ota.h"
@@ -158,6 +159,26 @@ static void setupRoutes() {
     getRoute(p);
   for (const char* p : {"/api/custom", "/api/wifi"}) deleteRoute(p);
   for (const char* p : {"/api/settings", "/api/custom", "/api/cmd", "/api/wifi", "/api/console"}) postJsonRoute(p);
+
+  // ---- cadangkan & pulihkan (khusus lokal) ----
+  server.on("/api/backup", HTTP_GET, [](AsyncWebServerRequest* r) {
+    REQUIRE_AUTH(r);
+    ApiResult res = apiHandle(API_LOCAL, "GET", "/api/backup", [r](const char* k) {
+      return r->hasParam(k) ? r->getParam(k)->value() : String("");
+    }, "");
+    AsyncWebServerResponse* resp = r->beginResponse(res.code, "application/json", res.body);
+    if (res.code == 200) resp->addHeader("Content-Disposition", "attachment; filename=\"mesin-cuci-backup.json\"");
+    r->send(resp);
+  });
+  {
+    auto* h = new AsyncCallbackJsonWebHandler("/api/restore", [](AsyncWebServerRequest* r, JsonVariant& json) {
+      String body;
+      serializeJson(json, body);
+      bridge(r, "POST", body);
+    });
+    h->setMaxContentLength(RESTORE_MAX_BYTES + 512);
+    server.addHandler(h);
+  }
 
   // ---- perangkat yang diingat (khusus lokal: butuh cookie) ----
   server.on("/api/devices", HTTP_GET, [](AsyncWebServerRequest* r) {

@@ -2,7 +2,7 @@
 // Flash firmware: web (upload .bin) atau USB; rollback ke partisi sebelumnya.
 #include <Arduino.h>
 
-bool otaBusy();            // sedang menulis firmware (Telegram jeda polling)
+bool otaBusy();            // sedang menulis firmware (koneksi jarak jauh dijeda)
 bool otaWebBegin(size_t totalSize, String& err);
 bool otaWebWrite(uint8_t* data, size_t len);
 bool otaWebEnd(String& err);

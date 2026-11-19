@@ -13,7 +13,7 @@ struct CmdResult {
 CmdResult executeCommand(const String& command, const String& args, CmdSource src);
 String normalizeCommand(const String& raw);
 
-// Teks laporan (dipakai Telegram & konsol)
+// Teks laporan (dipakai konsol/perintah)
 String statusText();
 String settingsText();
 String helpText();

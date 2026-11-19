@@ -156,3 +156,12 @@ Web lokal (HTTP, rumah/hotspot) ─────► ESP32   (jalur utama, tetap j
   Flash firmware, WiFi, ganti password, perangkat diingat, konsol, dan restore **hanya** dari web lokal.
 - Konfigurasi & deploy Worker: `cloud/README.md` (panduan akun, 2FA, `npm test` untuk uji lokal tanpa akun).
 - Di web lokal: tab **Sistem → Kontrol jarak jauh** untuk mengaktifkan/menonaktifkan sambungan; `remote on|off` di konsol.
+
+## Cadangkan & pulihkan (tab Sistem, hanya web lokal)
+
+- **Unduh cadangan:** satu berkas JSON berisi pengaturan, Custom Proses (5 slot), dan daftar WiFi. Password WiFi hanya ikut bila
+  dicentang (simpan berkasnya dengan aman). Data kalibrasi dan jadwal sekali pakai tidak disertakan.
+- **Pulihkan dari berkas:** berkas diperiksa dulu (simulasi, `?dry=1`) dan ringkasannya ditampilkan untuk dikonfirmasi. Pemulihan
+  **atomik**: bila satu bagian tidak valid, tidak ada yang berubah. Nilai di luar rentang disesuaikan; batas berkas 12 KB
+  (kasus terburuk ±7,5 KB). Tanpa password di berkas, WiFi yang sama mempertahankan password lamanya.
+- Tidak tersedia dari jarak jauh. Logika ada di `backup.cpp` (murni, diuji di `tools/hosttest`).

@@ -37,6 +37,7 @@ struct Settings {
 extern Settings S;
 
 void settingsDefaults(Settings& s);
+void settingsSanitize(Settings& s);   // jepit nilai ke rentang valid
 void settingsLoad();
 void settingsSave();
 void settingsReset();

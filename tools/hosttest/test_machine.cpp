@@ -7,6 +7,7 @@
 #include "Preferences.h"
 #include "logger.h"
 #include "machine.h"
+#include "backup.h"
 #include "net_policy.h"
 #include "remote_policy.h"
 #include "relay.h"
@@ -696,6 +697,102 @@ static void t26_remotePolicy() {
   CHECK(!remoteCmdAllowed("") && !remoteCmdAllowed(nullptr), "perintah kosong ditolak");
 }
 
+static void wipeUserData() {
+  settingsDefaults(S);
+  for (int i = 0; i < CUSTOM_SLOTS; i++) customDelete(i);
+  while (wifiCount() > 0) wifiRemove(0);
+}
+
+static void t27_backupRestore() {
+  printf("[T27] Backup & restore: bolak-balik, atomik, validasi\n");
+  resetWorld();
+  wipeUserData();
+  S.wash = 20; S.drainProbeSec = 30; S.pola = POLA_HIJAB; S.parfume = 1.5f; S.fillPrecheck = PRECHECK_PAUSE; S.drainTime = 7;
+  CustomItem a{CI_RINSE, 1, 7, 0, 0, 0}, b{CI_SOAKWASH, 3, 3, 12, 0, 0}, c{CI_RINSEPERFUME, 0, 5, 0, 4, 0};
+  customSave(0, makeCustom("Handuk", {a, b}));
+  customSave(3, makeCustom("Bilas pewangi", {c}));
+  wifiAdd("RumahA", "rahasia-A-123");
+  wifiAdd("KantorB", "");
+
+  std::string full = backupBuild(true), slim = backupBuild(false);
+  CHECK(full.find("rahasia-A-123") != std::string::npos, "cadangan dengan password WiFi memuat password");
+  CHECK(slim.find("rahasia-A-123") == std::string::npos && slim.find("RumahA") != std::string::npos, "cadangan tanpa password hanya memuat nama jaringan");
+  CHECK(full.size() < RESTORE_MAX_BYTES, "ukuran cadangan di bawah batas impor 8 KB");
+  printf("  (ukuran %zu byte)\n", full.size());
+
+  wipeUserData();
+  CHECK(S.wash == 15 && wifiCount() == 0, "data dikosongkan");
+  RestoreReport dry = backupApply(full.c_str(), full.size(), true);
+  CHECK(dry.ok && dry.customSlots == 2 && dry.wifiNetworks == 2 && dry.settingsChanged >= 5, "simulasi (dry run): ringkasan benar");
+  CHECK(S.wash == 15 && wifiCount() == 0, "dry run tidak mengubah apa pun");
+  CustomProc cp;
+  CHECK(!customLoad(0, cp), "dry run tidak menulis Custom Proses");
+
+  RestoreReport r = backupApply(full.c_str(), full.size(), false);
+  CHECK(r.ok, "pemulihan berhasil");
+  CHECK(S.wash == 20 && S.drainProbeSec == 30 && S.pola == POLA_HIJAB && S.parfume == 1.5f && S.fillPrecheck == PRECHECK_PAUSE && S.drainTime == 7, "pengaturan pulih persis");
+  CHECK(customLoad(0, cp) && std::string(cp.name) == "Handuk" && cp.count == 2 && cp.items[1].b == 12, "Custom Proses slot 1 pulih");
+  CHECK(customLoad(3, cp) && std::string(cp.name) == "Bilas pewangi" && cp.items[0].cups2 == 4, "Custom Proses slot 4 pulih");
+  CHECK(!customLoad(1, cp) && !customLoad(2, cp) && !customLoad(4, cp), "slot kosong tetap kosong");
+  WifiCred w0, w1;
+  CHECK(wifiCount() == 2 && wifiGet(0, w0) && wifiGet(1, w1) && std::string(w0.ssid) == "RumahA" && std::string(w0.pass) == "rahasia-A-123" && std::string(w1.ssid) == "KantorB", "daftar WiFi pulih berurutan + password");
+
+  // pulihkan dari cadangan TANPA password: SSID yang sudah ada mempertahankan password lamanya
+  wifiAdd("BaruC", "pw-baru-c");
+  RestoreReport r2 = backupApply(slim.c_str(), slim.size(), false);
+  WifiCred x;
+  bool keptOld = false;
+  for (int i = 0; i < wifiCount(); i++) { wifiGet(i, x); if (std::string(x.ssid) == "RumahA") keptOld = std::string(x.pass) == "rahasia-A-123"; }
+  CHECK(r2.ok && wifiCount() == 2 && keptOld, "tanpa password di berkas: password lama SSID yang sama dipertahankan");
+  wipeUserData();
+  RestoreReport r3 = backupApply(slim.c_str(), slim.size(), true);
+  CHECK(r3.ok && r3.wifiNoPassword == 1, "SSID baru berpassword tanpa password di berkas ditandai perlu diisi manual");
+
+  // penolakan (atomik: tidak ada yang berubah)
+  resetWorld(); wipeUserData();
+  S.wash = 33;
+  const char* bad[] = {
+      "", "bukan json", "{\"app\":\"lain\",\"version\":1}", "{\"app\":\"mesin-cuci\",\"version\":2}",
+      "{\"app\":\"mesin-cuci\",\"version\":1,\"settings\":{\"wash\":\"abc\"}}",
+      "{\"app\":\"mesin-cuci\",\"version\":1,\"settings\":{\"wash\":5},\"custom\":[{\"slot\":1,\"name\":\"X\",\"items\":[{\"t\":\"wash\",\"a\":0}]}]}",
+      "{\"app\":\"mesin-cuci\",\"version\":1,\"settings\":{\"wash\":5},\"custom\":[{\"slot\":9,\"name\":\"X\",\"items\":[{\"t\":\"drain\"}]}]}",
+      "{\"app\":\"mesin-cuci\",\"version\":1,\"settings\":{\"wash\":5},\"custom\":[{\"slot\":1,\"name\":\"X\",\"items\":[{\"t\":\"drain\"}]},{\"slot\":1,\"name\":\"Y\",\"items\":[{\"t\":\"drain\"}]}]}",
+      "{\"app\":\"mesin-cuci\",\"version\":1,\"settings\":{\"wash\":5},\"wifi\":[{\"ssid\":\"a\"},{\"ssid\":\"b\"},{\"ssid\":\"c\"},{\"ssid\":\"d\"},{\"ssid\":\"e\"},{\"ssid\":\"f\"}]}",
+      "{\"app\":\"mesin-cuci\",\"version\":1,\"settings\":{\"wash\":5},\"custom\":[{\"slot\":1,\"name\":\"X\",\"items\":[{\"t\":\"ngawur\"}]}]}",
+  };
+  bool allRejected = true, untouched = true;
+  for (const char* js : bad) {
+    RestoreReport rr = backupApply(js, strlen(js), false);
+    allRejected = allRejected && !rr.ok;
+    untouched = untouched && S.wash == 33 && wifiCount() == 0;
+  }
+  CHECK(allRejected, "berkas rusak/tidak valid ditolak (10 kasus)");
+  CHECK(untouched, "penolakan atomik: tidak ada data yang berubah");
+  std::string big(RESTORE_MAX_BYTES + 10, ' ');
+  CHECK(!backupApply(big.c_str(), big.size(), false).ok, "berkas > 8 KB ditolak");
+  const char* clampJs = "{\"app\":\"mesin-cuci\",\"version\":1,\"settings\":{\"wash\":99999,\"soak\":3,\"tidakAda\":7}}";
+  RestoreReport rc = backupApply(clampJs, strlen(clampJs), false);
+  CHECK(rc.ok && rc.clamped == 1 && S.wash == 15 && S.soak == 3, "nilai di luar rentang disesuaikan (bukan ditolak), kunci asing diabaikan");
+  // kasus terburuk: 5 slot x 24 langkah terbesar + 5 WiFi terpanjang harus muat di batas impor
+  wipeUserData();
+  for (int sl = 0; sl < CUSTOM_SLOTS; sl++) {
+    std::vector<CustomItem> items(24, CustomItem{CI_RINSEPERFUME, 2, 1440, 1440, 40, 0});
+    CustomProc big2 = makeCustom("Nama proses yang cukup panjang", items);
+    customSave(sl, big2);
+  }
+  for (int i = 0; i < MAX_WIFI_NETWORKS; i++) {
+    std::string ssid(32, (char)('a' + i)), pw(64, (char)('A' + i));
+    wifiAdd(ssid.c_str(), pw.c_str());
+  }
+  std::string worst = backupBuild(true);
+  printf("  (kasus terburuk %zu byte, batas %d)\n", worst.size(), RESTORE_MAX_BYTES);
+  CHECK(worst.size() < RESTORE_MAX_BYTES, "cadangan kasus terburuk muat di batas impor");
+  wipeUserData();
+  RestoreReport rw = backupApply(worst.c_str(), worst.size(), false);
+  CHECK(rw.ok && rw.customSlots == 5 && rw.wifiNetworks == 5, "cadangan kasus terburuk bisa dipulihkan");
+  wipeUserData();
+}
+
 int main(int argc, char** argv) {
   g_verbose = argc > 1;
   t1_fullNormal();
@@ -724,6 +821,7 @@ int main(int argc, char** argv) {
   t24_connWatchdog();
   t25_apPolicy();
   t26_remotePolicy();
+  t27_backupRestore();
   checks++;
   if (g_violations != 0) { failures++; printf("  GAGAL: %ld tick melanggar invarian keselamatan\n", g_violations); }
   else printf("  ok: 0 pelanggaran invarian (kiri+kanan, isi+buang, buang+motor) di seluruh skenario\n");

@@ -4,7 +4,7 @@ set -e
 FW=firmware/mesin_cuci_otomatis
 OUT=${TMPDIR:-/tmp}/mesin_cuci_hosttest
 g++ -std=gnu++17 -O1 -Wall -Wno-unused-function -DHOST_TEST -DTIME_SCALE=60 \
-  -Itools/hosttest/stubs -I$FW \
+  -Itools/hosttest/stubs -I.pio/libdeps/rymcu-esp32-devkitc/ArduinoJson/src -I$FW \
   tools/hosttest/test_machine.cpp $FW/machine.cpp $FW/programs.cpp $FW/relay.cpp \
-  $FW/water_sensor.cpp $FW/settings.cpp $FW/net_policy.cpp $FW/remote_policy.cpp -o "$OUT"
+  $FW/water_sensor.cpp $FW/settings.cpp $FW/net_policy.cpp $FW/remote_policy.cpp $FW/backup.cpp -o "$OUT"
 "$OUT" "$@"

@@ -120,7 +120,7 @@
 
     <!-- CUSTOM PROSES -->
     <section id="tab-custom" class="tab">
-      <p class="muted">Susun prosesmu sendiri: pilih langkah, atur nilainya, geser <b>&#9776;</b> untuk menukar urutan. Simpan (maks 5), lalu jalankan dari sini, Beranda, atau Telegram (<code>/custom</code>).</p>
+      <p class="muted">Susun prosesmu sendiri: pilih langkah, atur nilainya, geser <b>&#9776;</b> untuk menukar urutan. Simpan (maks 5), lalu jalankan dari sini atau dari Beranda.</p>
       <h3>Tersimpan</h3>
       <div id="cpList"></div>
       <h3 id="cpTitle">Proses baru</h3>
@@ -172,7 +172,7 @@
         <button class="btn" data-cmd="reset_delay">Reset</button>
       </div>
       <div class="card form">
-        <label>Notifikasi Telegram
+        <label>Notifikasi (dikirim ke Telegram lewat server)
           <select id="sNotif"><option value="lengkap">Lengkap</option><option value="ringkas">Ringkas</option><option value="senyap">Senyap</option></select>
         </label>
         <button class="btn" id="btnNotif">Simpan</button>
@@ -277,6 +277,13 @@
         <p class="muted" id="devHint"></p>
         <div id="devList"></div>
         <div class="row" style="margin-top:10px"><button class="btn" id="btnDevOthers">Keluarkan semua perangkat lain</button></div>
+      </div>
+      <div class="card" data-local>
+        <b>Cadangkan &amp; pulihkan</b>
+        <p class="muted">Pengaturan, Custom Proses, dan daftar WiFi disimpan ke satu berkas JSON. Password WiFi hanya ikut bila dicentang: simpan berkasnya dengan aman.</p>
+        <label class="chk"><input type="checkbox" id="bkWifi"> Sertakan password WiFi</label>
+        <div class="row"><button class="btn" id="btnBackup">&#11015; Unduh cadangan</button><label class="btn" for="restoreFile">&#11014; Pulihkan dari berkas&hellip;</label><input id="restoreFile" type="file" accept=".json,application/json" hidden></div>
+        <p class="muted" id="restoreMsg"></p>
       </div>
       <div class="card" data-local>
         <b>Kontrol jarak jauh</b>

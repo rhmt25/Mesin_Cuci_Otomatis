@@ -69,6 +69,8 @@ static void sanitize(Settings& s) {
   if (s.remoteOn > 1) s.remoteOn = d.remoteOn;
 }
 
+void settingsSanitize(Settings& s) { sanitize(s); }
+
 uint32_t fillLimitSeconds() { return (uint32_t)S.flH * 3600UL + (uint32_t)S.flM * 60UL + (uint32_t)S.flS; }
 
 void settingsLoad() {

@@ -19,7 +19,7 @@
 #define REMOTE_DEVICE_TOKEN "ISI_TOKEN_PERANGKAT"
 #endif
 
-// Daftar WiFi cadangan awal (opsional, sampai 4 tambahan; bisa juga lewat Telegram/web)
+// Daftar WiFi cadangan awal (opsional, sampai 4 tambahan; bisa juga lewat web)
 #ifndef WIFI_SSID_2
 #define WIFI_SSID_2 ""
 #endif

@@ -48,4 +48,4 @@ bool machinePost(const MachineCmd& cmd);
 void machineGetStatus(MachineStatus& out);
 bool machineIsIdle();
 void machineHold(bool hold);                   // tahan program baru (saat flash firmware)
-String machineStatusLine();                    // ringkas untuk Telegram / konsol
+String machineStatusLine();                    // ringkas untuk konsol

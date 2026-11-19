@@ -1,5 +1,6 @@
 #include "api_core.h"
 #include <ArduinoJson.h>
+#include "backup.h"
 #include "commands.h"
 #include "config.h"
 #include "logger.h"
@@ -273,7 +274,7 @@ ApiResult apiHandle(ApiSource src, const char* method, const String& path, const
   CmdSource csrc = src == API_REMOTE ? SRC_REMOTE : SRC_WEB;
 
   JsonDocument doc;
-  if (isPost) {
+  if (isPost && path != "/api/restore") {
     if (deserializeJson(doc, body) != DeserializationError::Ok) return {400, msgJson(false, "JSON tidak valid")};
   }
 
@@ -315,6 +316,10 @@ ApiResult apiHandle(ApiSource src, const char* method, const String& path, const
       return {200, toString(d)};
     }
     if (path == "/api/update/info") return {200, otaInfoJson()};
+    if (path == "/api/backup") {
+      if (apiLowMemory(24576)) return {503, msgJson(false, "memori rendah, coba lagi")};
+      return {200, String(backupBuild(query("wifi") == "1").c_str())};
+    }
   } else if (isPost) {
     if (path == "/api/cmd") {
       String cmd = doc["cmd"] | "";
@@ -342,6 +347,22 @@ ApiResult apiHandle(ApiSource src, const char* method, const String& path, const
       return {200, toString(res)};
     }
     if (path == "/api/custom") return customSaveApi(doc.as<JsonVariant>());
+    if (path == "/api/restore") {
+      bool dry = query("dry") == "1";
+      if (apiLowMemory(24576)) return {503, msgJson(false, "memori rendah, coba lagi")};
+      RestoreReport rep = backupApply(body.c_str(), body.length(), dry);
+      JsonDocument d;
+      d["ok"] = rep.ok;
+      d["dry"] = dry;
+      d["msg"] = rep.msg.c_str();
+      d["settingsChanged"] = rep.settingsChanged;
+      d["customSlots"] = rep.customSlots;
+      d["wifiNetworks"] = rep.wifiNetworks;
+      d["wifiNoPassword"] = rep.wifiNoPassword;
+      d["clamped"] = rep.clamped;
+      if (rep.ok && !dry) logf(LOG_WARN, "Pengaturan dipulihkan dari cadangan: %s", rep.msg.c_str());
+      return {rep.ok ? 200 : 400, toString(d)};
+    }
     if (path == "/api/wifi") {
       String ssid = doc["ssid"] | "";
       String pass = doc["pass"] | "";

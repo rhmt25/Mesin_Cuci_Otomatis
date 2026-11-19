@@ -1,5 +1,5 @@
 // Mesin Cuci Otomatis - firmware ESP32 (WROOM)
-// Core 1: kontrol mesin (machine.cpp). Core 0: WiFi, Telegram, Web.
+// Core 1: kontrol mesin (machine.cpp). Core 0: WiFi, Web, kontrol jarak jauh.
 // Kredensial ada di secrets.h (salin dari secrets.example.h).
 #include <WiFi.h>
 #include "config.h"

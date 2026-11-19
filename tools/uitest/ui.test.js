@@ -17,7 +17,7 @@ const S = {
   settings: { pola: 0, soak: 2, wash: 15, rinse: 10, parfume: 1, spin: 10, fillLevel: 0, fillPercent: 50, fillTime: 30, flH: 0, flM: 30, flS: 0, fillRetryCount: 3, fillRetryWait: 15, drainMode: 0, drainTime: 5, drainSessionLimit: 3, drainProbeSec: 45, fillPrecheck: 0, unjamCount: 2, dH: 0, dM: 0, dS: 0, finishAt: -1, notif: 0, calib: { fillSec: 600, nFill: 2 }, timeSynced: true },
   slots: [null, null, null, null, null],
   devices: [{ id: 0, name: 'Chrome - Android', created: 1760000000, lastSeen: 1760000500, current: false }, { id: 1, name: 'Edge - Windows', created: 1760100000, lastSeen: 1760100500, current: true }],
-  cmds: [], posts: [], logQueue: [], info: { remote: false, online: true }, remote: null,
+  cmds: [], posts: [], logQueue: [], restores: [], restoreReply: { ok: true, dry: true, msg: '3 pengaturan berubah, 1 Custom Proses, 2 WiFi' }, info: { remote: false, online: true }, remote: null,
 };
 const BASE_STATUS = JSON.parse(JSON.stringify(S.status));
 function route(url, opt) {
@@ -27,6 +27,8 @@ function route(url, opt) {
   if (p === '/api/status') return json(S.status);
   if (p === '/api/logs') return json({ entries: [], last: 0 });
   if (p === '/api/info') return json(S.info);
+  if (p === '/api/wifi' && m === 'GET') return json({ networks: [], max: 5, ap: 'MesinCuci-1', apOn: false, online: true, ssid: 'x', rssi: -50, ip: '1.2.3.4' });
+  if (p === '/api/restore') { S.restores.push({ dry: u.searchParams.get('dry'), body }); return json(S.restoreReply); }
   if (p === '/api/poll') { const e = S.logQueue.splice(0); const o = { status: S.status, log: { entries: e, last: e.length ? e[e.length - 1].s : 0 } }; if (S.remote) o.remote = S.remote; return json(o); }
   if (p === '/api/settings') return json(S.settings);
   if (p === '/api/cmd') { S.cmds.push(body); return json({ ok: !(body.cmd === 'relay' && body.args === 'kanan on'), msg: body.cmd === 'relay' ? 'Ditolak: motor kiri sedang aktif' : 'ok' }); }
@@ -188,6 +190,28 @@ function route(url, opt) {
   ok(/Belum dikonfigurasi/.test($('#remoteInfo').textContent), 'belum dikonfigurasi: petunjuk secrets.h');
   click($('[data-cmd="remote"][data-args="off"]')); await sleep(40);
   ok(S.cmds.some(c => c.cmd === 'remote' && c.args === 'off'), 'tombol Nonaktifkan mengirim perintah remote off');
+
+  console.log('[U11] Backup & restore');
+  S.status = { ...BASE_STATUS }; S.info = { remote: false, online: true };
+  await w.start(); await sleep(60);
+  click($('[data-tab="system"]')); await sleep(60);
+  ok(!!$('#btnBackup') && !!$('#restoreFile') && !!$('#bkWifi'), 'kartu cadangkan & pulihkan tampil');
+  const mkFile = (text) => new w.File([text], 'cadangan.json', { type: 'application/json' });
+  const fire = async (text) => { const inp = $('#restoreFile'); Object.defineProperty(inp, 'files', { value: [mkFile(text)], configurable: true }); inp.dispatchEvent(new w.Event('change')); await sleep(150); };
+  await fire('bukan json');
+  ok(/bukan JSON/.test($('#restoreMsg').textContent), 'berkas bukan JSON ditolak di browser, tanpa memanggil server');
+  ok(S.restores.length === 0, 'tidak ada panggilan ke server untuk berkas rusak');
+  w.confirm = () => false;
+  await fire(JSON.stringify({ app: 'mesin-cuci', version: 1, settings: { wash: 20 } }));
+  ok(S.restores.length === 1 && S.restores[0].dry === '1', 'simulasi (dry=1) dikirim dulu');
+  ok(/Dibatalkan/.test($('#restoreMsg').textContent), 'dibatalkan pengguna: tidak diterapkan');
+  w.confirm = () => true; S.restoreReply = { ok: true, dry: false, msg: 'Dipulihkan: 3 pengaturan berubah' };
+  await fire(JSON.stringify({ app: 'mesin-cuci', version: 1, settings: { wash: 20 } }));
+  ok(S.restores.length === 3 && S.restores[2].dry === null, 'setelah konfirmasi: restore sungguhan dikirim');
+  ok(/Dipulihkan/.test($('#restoreMsg').textContent), 'hasil pemulihan ditampilkan');
+  S.restoreReply = { ok: false, msg: 'Versi cadangan tidak didukung.' };
+  await fire(JSON.stringify({ app: 'mesin-cuci', version: 9 }));
+  ok(/tidak didukung/.test($('#restoreMsg').textContent), 'penolakan server ditampilkan apa adanya');
 
   console.log(`\n${pass + fail} pemeriksaan UI, ${fail} gagal`);
   process.exit(fail ? 1 : 0);
