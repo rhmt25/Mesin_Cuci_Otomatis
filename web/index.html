@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mesin Cuci</title>
+<style>/*CSS*/</style>
+</head>
+<body>
+<div id="toast"></div>
+
+<section id="login" hidden>
+  <form id="loginForm" class="card login">
+    <h1>🧺 Mesin Cuci</h1>
+    <input id="pw" type="password" placeholder="Password" autocomplete="current-password" required>
+    <button class="btn primary" type="submit">Masuk</button>
+    <p id="loginMsg" class="muted"></p>
+  </form>
+</section>
+
+<div id="app" hidden>
+  <header>
+    <div class="brand">🧺 <b>Mesin Cuci</b></div>
+    <div class="chips">
+      <span id="chipState" class="chip">…</span>
+      <span id="chipWifi" class="chip">…</span>
+      <button id="btnTheme" class="icon" title="Tema">◐</button>
+      <button id="btnLogout" class="icon" title="Keluar">⎋</button>
+    </div>
+  </header>
+
+  <nav id="tabs">
+    <button data-tab="home" class="on">Beranda</button>
+    <button data-tab="manual">Manual</button>
+    <button data-tab="settings">Pengaturan</button>
+    <button data-tab="water">Air</button>
+    <button data-tab="wifi">WiFi</button>
+    <button data-tab="log">Log</button>
+    <button data-tab="console">Konsol</button>
+    <button data-tab="history">Riwayat</button>
+    <button data-tab="firmware">Firmware</button>
+    <button data-tab="system">Sistem</button>
+  </nav>
+
+  <main>
+    <!-- BERANDA -->
+    <section id="tab-home" class="tab on">
+      <div id="bannerResume" class="banner warn" hidden>
+        <div>⚡ Listrik sempat padam saat <b id="resumeInfo"></b>. Mesin tidak lanjut otomatis.</div>
+        <div class="row"><button class="btn primary" data-cmd="lanjutkan">Lanjutkan</button><button class="btn" data-cmd="batalkan">Batalkan</button></div>
+      </div>
+      <div id="bannerPause" class="banner err" hidden></div>
+
+      <div class="card hero">
+        <svg id="ring" viewBox="0 0 120 120" width="150" height="150">
+          <circle cx="60" cy="60" r="52" class="ringBg"/>
+          <circle id="ringFg" cx="60" cy="60" r="52" class="ringFg" transform="rotate(-90 60 60)"/>
+          <text id="ringText" x="60" y="66" text-anchor="middle">—</text>
+        </svg>
+        <div class="heroInfo">
+          <div id="stage" class="big">Siap</div>
+          <div id="detail" class="muted"></div>
+          <div class="kv"><span>Sisa tahap</span><b id="stepLeft">-</b></div>
+          <div class="kv"><span>Total sisa</span><b id="totalLeft">-</b></div>
+          <div class="kv"><span>Air</span><b id="water">-</b></div>
+        </div>
+      </div>
+
+      <div class="row ctl">
+        <button class="btn danger" id="btnStop">⏹ STOP</button>
+        <button class="btn" data-cmd="jeda">⏸ Jeda</button>
+        <button class="btn" data-cmd="lanjutkan">▶ Lanjutkan</button>
+        <button class="btn" data-cmd="lewati">⏭ Lewati</button>
+      </div>
+
+      <h3>Mulai program</h3>
+      <div class="grid">
+        <button class="card prog" data-cmd="program" data-args="normal"><b>▶ Normal</b><small>2 soak · wash 15 · bilas 10</small></button>
+        <button class="card prog" data-cmd="program" data-args="gentle"><b>🌸 Gentle</b><small>2 soak · wash 12 · bilas 8</small></button>
+        <button class="card prog" data-cmd="program" data-args="hijab"><b>🧕 Hijab</b><small>1 soak · wash 10 · bilas 8</small></button>
+        <button class="card prog" data-cmd="program" data-args="cepat"><b>⚡ Cepat</b><small>wash 8 · bilas 5</small></button>
+        <button class="card prog" data-cmd="program" data-args="kustom"><b>🛠 Kustom</b><small>sesuai Pengaturan</small></button>
+      </div>
+
+      <h3>Jadwalkan</h3>
+      <div class="card form">
+        <label>Mulai nanti (menit)<input id="inDelay" type="number" min="0" max="1439" placeholder="0"></label>
+        <button class="btn" id="btnDelay">Atur</button>
+        <label>Selesai jam<input id="inFinish" type="time"></label>
+        <button class="btn" id="btnFinish">Atur</button>
+        <p class="muted" id="schedNote">Berlaku untuk proses berikutnya.</p>
+      </div>
+    </section>
+
+    <!-- MANUAL -->
+    <section id="tab-manual" class="tab">
+      <p class="muted">Soak &amp; Motor membutuhkan air terisi. Hanya bisa dijalankan saat mesin siap.</p>
+      <div class="grid">
+        <button class="btn" data-cmd="soak">Soak</button>
+        <button class="btn" data-cmd="wash">Wash</button>
+        <button class="btn" data-cmd="soak_and_wash">Soak + Wash</button>
+        <button class="btn" data-cmd="rinse">Rinse</button>
+        <button class="btn" data-cmd="rinse_parfume">Rinse + Pewangi</button>
+        <button class="btn" data-cmd="spin">Spin</button>
+        <button class="btn" data-cmd="water_in">Isi air</button>
+        <button class="btn" data-cmd="water_out">Buang air</button>
+        <button class="btn" data-cmd="add_parfume">Pewangi</button>
+        <button class="btn" data-cmd="motor_on">Motor 5 mnt</button>
+        <button class="btn" data-cmd="cek_air">Cek air</button>
+      </div>
+    </section>
+
+    <!-- PENGATURAN -->
+    <section id="tab-settings" class="tab">
+      <div class="card form">
+        <label>Pola putaran
+          <select id="sPola"><option value="normal">Normal</option><option value="gentle">Gentle</option><option value="hijab">Hijab</option></select>
+        </label>
+        <button class="btn" id="btnPola">Simpan</button>
+      </div>
+      <div id="numSettings"></div>
+      <div class="card form">
+        <label>Delay mulai (jam / menit / detik)
+          <span class="tri"><input id="dH" type="number" min="0" max="23"><input id="dM" type="number" min="0" max="59"><input id="dS" type="number" min="0" max="59"></span>
+        </label>
+        <button class="btn" id="btnDelay3">Simpan</button>
+        <button class="btn" data-cmd="reset_delay">Reset</button>
+      </div>
+      <div class="card form">
+        <label>Notifikasi Telegram
+          <select id="sNotif"><option value="lengkap">Lengkap</option><option value="ringkas">Ringkas</option><option value="senyap">Senyap</option></select>
+        </label>
+        <button class="btn" id="btnNotif">Simpan</button>
+        <p class="muted">Log di web selalu lengkap.</p>
+      </div>
+      <button class="btn danger" id="btnResetAll">Reset semua pengaturan</button>
+    </section>
+
+    <!-- AIR -->
+    <section id="tab-water" class="tab">
+      <div class="card form">
+        <label>Level air
+          <select id="wLevel"><option value="penuh">Penuh (sensor)</option><option value="25">25%</option><option value="50">50%</option><option value="75">75%</option><option value="waktu">Waktu manual</option></select>
+        </label>
+        <label>Waktu isi (menit, untuk mode waktu)<input id="wTime" type="number" min="1" max="1440"></label>
+        <button class="btn" id="btnLevel">Simpan</button>
+        <p class="muted" id="calibNote"></p>
+      </div>
+      <div class="card form">
+        <label>Batas waktu isi (jam / menit / detik)
+          <span class="tri"><input id="fH" type="number" min="0" max="23"><input id="fM" type="number" min="0" max="59"><input id="fS" type="number" min="0" max="59"></span>
+        </label>
+        <button class="btn" id="btnLimit">Simpan</button>
+        <button class="btn" data-cmd="reset_batas_waktu_pengisian_air">Reset</button>
+      </div>
+      <div id="waterSettings"></div>
+      <div class="card form">
+        <label>Mode pembuangan
+          <select id="wDrain"><option value="sensor">Sensor (pantau sampai kosong)</option><option value="waktu">Waktu</option></select>
+        </label>
+        <button class="btn" id="btnDrainMode">Simpan</button>
+      </div>
+      <div class="row">
+        <button class="btn" data-cmd="cek_air">Cek air</button>
+        <button class="btn danger" id="btnCalib">Reset kalibrasi</button>
+      </div>
+    </section>
+
+    <!-- WIFI -->
+    <section id="tab-wifi" class="tab">
+      <div class="card"><div id="wifiInfo"></div></div>
+      <div id="wifiList"></div>
+      <form id="wifiForm" class="card form">
+        <label>SSID<input id="wSsid" required maxlength="32"></label>
+        <label>Password<input id="wPass" type="password" maxlength="64" placeholder="kosong bila terbuka"></label>
+        <button class="btn primary" type="submit">Tambah WiFi</button>
+      </form>
+      <p class="muted">Maksimal 5 WiFi, dicoba berurutan. Password tidak pernah ditampilkan.</p>
+    </section>
+
+    <!-- LOG -->
+    <section id="tab-log" class="tab">
+      <div class="row"><select id="logLevel"><option value="1">INFO+</option><option value="0">Semua (DEBUG)</option><option value="2">STEP+</option><option value="3">WARN+</option><option value="4">ERROR+</option></select></div>
+      <pre id="logBox" class="logbox"></pre>
+    </section>
+
+    <!-- KONSOL -->
+    <section id="tab-console" class="tab">
+      <div class="row">
+        <button class="btn" id="conPause">⏸ Pause</button>
+        <button class="btn" id="conClear">Bersihkan</button>
+        <button class="btn" id="conDl">⬇ Unduh .txt</button>
+        <button class="btn" id="conTrace">Jejak boot lalu</button>
+      </div>
+      <pre id="conBox" class="logbox mono"></pre>
+      <form id="conForm" class="row">
+        <input id="conIn" placeholder="ketik perintah: status, stop, heap, relay_test kiri …" autocomplete="off" autocapitalize="none">
+        <button class="btn primary" type="submit">Kirim</button>
+      </form>
+    </section>
+
+    <!-- RIWAYAT -->
+    <section id="tab-history" class="tab">
+      <div class="card" id="statsBox"></div>
+      <div id="histList"></div>
+    </section>
+
+    <!-- FIRMWARE -->
+    <section id="tab-firmware" class="tab">
+      <div class="card" id="fwInfo"></div>
+      <div class="card form">
+        <label>Pilih file .bin<input id="fwFile" type="file" accept=".bin"></label>
+        <button class="btn primary" id="btnFlash">Flash firmware</button>
+        <div class="bar"><div id="fwBar"></div></div>
+        <p class="muted" id="fwMsg">Hanya bisa saat mesin siap (tidak mencuci / dijeda). Mesin restart otomatis setelah berhasil.</p>
+      </div>
+      <button class="btn" id="btnRollback">↩ Kembali ke versi sebelumnya</button>
+    </section>
+
+    <!-- SISTEM -->
+    <section id="tab-system" class="tab">
+      <div class="card" id="sysInfo"></div>
+      <div class="card form">
+        <label>Ganti password web<input id="newPw" type="password" minlength="6" placeholder="password baru (min 6)"></label>
+        <button class="btn" id="btnPw">Ganti</button>
+      </div>
+      <button class="btn danger" id="btnRestart">Restart mesin</button>
+    </section>
+  </main>
+</div>
+<script>/*JS*/</script>
+</body>
+</html>
