@@ -165,3 +165,10 @@ Web lokal (HTTP, rumah/hotspot) ─────► ESP32   (jalur utama, tetap j
   **atomik**: bila satu bagian tidak valid, tidak ada yang berubah. Nilai di luar rentang disesuaikan; batas berkas 12 KB
   (kasus terburuk ±7,5 KB). Tanpa password di berkas, WiFi yang sama mempertahankan password lamanya.
 - Tidak tersedia dari jarak jauh. Logika ada di `backup.cpp` (murni, diuji di `tools/hosttest`).
+
+## Catatan jaringan WiFi (hasil ukur di perangkat)
+
+- Daya pancar diset **15 dBm** (`WIFI_TX_POWER` di `config.h`) dan bandwidth HT20. Pada daya penuh (19,5 dBm) perangkat ini kehilangan
+  ±20-35% paket (ping 1400 B hilang 36%, permintaan web sesekali tertahan 2-8 dtk); pada 15 dBm: 300/300 permintaan sukses.
+  Ini ciri suplai 5V/USB yang drop saat memancar: perbaiki suplai (kabel tebal, catu cukup arus, catu relay terpisah, kapasitor
+  470-1000 µF) sebelum menaikkan daya pancar.

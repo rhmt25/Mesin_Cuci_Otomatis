@@ -59,6 +59,12 @@ inline uint32_t secToMs(uint32_t seconds) { return scaledMs(seconds * 1000UL); }
 #define NOTIF_OFFLINE_MAX       30
 #define NTP_TZ                  "WIB-7"
 
+// Daya pancar WiFi. Default ESP32 (19,5 dBm) pada perangkat ini membuat ±20-35% paket hilang (kemungkinan suplai 5V/USB
+// drop saat memancar); 15 dBm terukur 300/300 permintaan sukses. Naikkan hanya bila suplai daya sudah diperbaiki.
+#ifndef WIFI_TX_POWER
+#define WIFI_TX_POWER WIFI_POWER_15dBm
+#endif
+
 // Password wajib diisi di secrets.h (tidak ada nilai bawaan di kode)
 #ifndef AP_PASSWORD
 #error "AP_PASSWORD belum diisi di secrets.h (lihat secrets.example.h)"
