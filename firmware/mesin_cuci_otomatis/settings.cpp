@@ -32,6 +32,7 @@ void settingsDefaults(Settings& s) {
   s.dH = 0; s.dM = 0; s.dS = 0;
   s.finishAt = -1;
   s.notif = NOTIF_LENGKAP;
+  s.remoteOn = 1;
 }
 
 static int clampInt(int v, int lo, int hi, int def) { return (v < lo || v > hi) ? def : v; }
@@ -65,6 +66,7 @@ static void sanitize(Settings& s) {
   s.dS = clampInt(s.dS, 0, 59, 0);
   s.finishAt = (s.finishAt < -1 || s.finishAt >= 1440) ? -1 : s.finishAt;
   if (s.notif > NOTIF_SENYAP) s.notif = d.notif;
+  if (s.remoteOn > 1) s.remoteOn = d.remoteOn;
 }
 
 uint32_t fillLimitSeconds() { return (uint32_t)S.flH * 3600UL + (uint32_t)S.flM * 60UL + (uint32_t)S.flS; }
@@ -105,6 +107,7 @@ void settingsLoad() {
   S.dS = p.getInt("dS", S.dS);
   S.finishAt = p.getInt("finishAt", S.finishAt);
   S.notif = p.getUChar("notif", S.notif);
+  S.remoteOn = p.getUChar("remoteOn", S.remoteOn);
   p.end();
   sanitize(S);
 }
@@ -138,13 +141,15 @@ void settingsSave() {
   p.putInt("dS", S.dS);
   p.putInt("finishAt", S.finishAt);
   p.putUChar("notif", S.notif);
+  p.putUChar("remoteOn", S.remoteOn);
   p.end();
 }
 
 void settingsReset() {
-  uint8_t keepNotif = S.notif;
+  uint8_t keepNotif = S.notif, keepRemote = S.remoteOn;
   settingsDefaults(S);
   S.notif = keepNotif;
+  S.remoteOn = keepRemote;
   settingsSave();
 }
 

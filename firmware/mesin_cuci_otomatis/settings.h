@@ -31,6 +31,7 @@ struct Settings {
   int dH, dM, dS;          // delay sebelum mulai
   int finishAt;            // menit-dalam-hari target selesai, -1 = tidak ada (sekali pakai)
   uint8_t notif;
+  uint8_t remoteOn;        // kontrol jarak jauh aktif (bila REMOTE_URL terisi)
 };
 
 extern Settings S;

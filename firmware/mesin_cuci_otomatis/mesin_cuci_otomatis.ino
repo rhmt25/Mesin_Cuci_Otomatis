@@ -11,7 +11,7 @@
 #include "commands.h"
 #include "net_wifi.h"
 #include "ota.h"
-#include "telegram_ui.h"
+#include "remote.h"
 #include "web_server.h"
 
 static String serialLine;
@@ -49,9 +49,7 @@ void setup() {
   machineBegin();            // task kontrol mesin di Core 1
   netBegin();                // WiFi + hotspot + OTA di Core 0
   webBegin();                // dashboard web + WebSocket
-#ifndef NO_TELEGRAM
-  telegramBegin();           // Telegram + notifikasi
-#endif
+  remoteBegin();             // kontrol jarak jauh + notifikasi (satu koneksi keluar)
 }
 
 static void logHeapPeriodically() {

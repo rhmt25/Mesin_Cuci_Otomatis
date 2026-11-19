@@ -1,11 +1,12 @@
 # Mesin Cuci Otomatis (ESP32)
 
-Firmware ESP32 (modul **WROOM**) untuk mesin cuci dua tabung: kontrol lewat **Telegram** dan
-**dashboard web** (jaringan rumah atau hotspot ESP32 sendiri), tanpa bergantung pada internet.
+Firmware ESP32 (modul **WROOM**) untuk mesin cuci dua tabung: kontrol lewat **dashboard web lokal** (jaringan rumah atau
+hotspot darurat ESP32) tanpa bergantung pada internet, plus **web jarak jauh** lewat Cloudflare Worker (opsional) dan
+**notifikasi Telegram** yang dikirim oleh Worker.
 
 - **Core 1** menjalankan mesin (state machine berbasis `millis()`, tanpa `delay()`), **Core 0** untuk WiFi/Telegram/Web.
 - Semua relay mati saat boot, error, atau STOP (relay trigger LOW, mode `OUTPUT_OPEN_DRAIN`).
-- Satu *command layer* dipakai Telegram, Web, dan Serial/Konsol → kontrolnya sama persis.
+- Satu *command layer* dan satu dispatcher API (`api_core`) dipakai web lokal, web jarak jauh, dan Serial/Konsol → kontrolnya sama persis.
 - Proses tetap jalan saat WiFi mati; log diantrekan dan dikirim begitu online.
 - Satu sumber kode: folder `firmware/mesin_cuci_otomatis/` dibuka di Arduino IDE **dan** PlatformIO.
 
@@ -28,8 +29,9 @@ Modul relay: **Normally Open, trigger LOW**. Pengaturan ada di `config.h`
 ## Menyiapkan `secrets.h`
 
 Salin `firmware/mesin_cuci_otomatis/secrets.example.h` menjadi `secrets.h` (tidak di-commit) lalu isi:
-`WIFI_SSID/PASSWORD`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `AP_PASSWORD` (hotspot, min. 8 karakter),
-`WEB_PASSWORD` (login dashboard).
+`WIFI_SSID/PASSWORD`, `AP_PASSWORD` (hotspot, min. 8 karakter),
+`WEB_PASSWORD` (login dashboard), dan (opsional) `REMOTE_URL` + `REMOTE_DEVICE_TOKEN` untuk kontrol jarak jauh.
+Token bot Telegram **tidak** ada di ESP32: disimpan sebagai secret Worker (lihat `cloud/README.md`).
 
 ## Flash
 
@@ -42,7 +44,7 @@ Berkas `.bin`: `.pio/build/rymcu-esp32-devkitc/firmware.bin`.
 ### Arduino IDE
 1. Buka `firmware/mesin_cuci_otomatis/mesin_cuci_otomatis.ino`.
 2. Board: *ESP32 Dev Module*. **Tools → Partition Scheme → "Minimal SPIFFS (1.9MB APP with OTA)"** (wajib).
-3. Library Manager: `UniversalTelegramBot`, `ArduinoJson` (v7), `AsyncTCP` dan `ESPAsyncWebServer`
+3. Library Manager: `ArduinoJson` (v7), `WebSockets` (Links2004), `AsyncTCP` dan `ESPAsyncWebServer`
    (keduanya versi **mathieucarbou**; jika perlu pasang dari GitHub).
 4. Upload lewat USB. *Sketch → Export Compiled Binary* menghasilkan `.bin` untuk flash lewat web (tab Firmware).
 
@@ -83,7 +85,7 @@ Opsi **pra-cek isi** (`/pra_cek_isi buang|jeda|pakai`): bila air masih penuh seb
 tunggu keputusan, atau pakai air yang ada. Saat mesin diam, firmware tidak menggerakkan relay apa pun sendiri.
 Listrik padam → saat menyala ditanya **Lanjutkan / Batalkan** (tidak pernah lanjut otomatis).
 
-## Perintah (Telegram `/` · Web · Serial)
+## Perintah (Web · Serial/Konsol)
 
 `/menu` (tombol), `/status`, `/program normal|gentle|hijab|cepat|kustom`, `/stop`, `/jeda`, `/lanjutkan`, `/lewati`,
 `/batalkan`, `/cek_air`, `/pengaturan`, `/riwayat`, `/statistik`, `/info`, `/bantuan`;
@@ -141,3 +143,16 @@ tab **Sistem → Perangkat yang diingat**. Mengganti password web mengeluarkan s
 - **Watchdog konektivitas:** tiap 30 dtk ping gateway; 3 kali gagal → sambung ulang WiFi; 3 kali reconnect gagal → WiFi dimulai
   ulang. Aktif hanya setelah gateway pernah menjawab ping (router yang memblokir ICMP tidak memicu apa pun).
 - Log DEBUG ke serial USB hanya bila diaktifkan: konsol `serial debug on|off` (tidak disimpan).
+
+## Kontrol jarak jauh & notifikasi (Tahap 3–4)
+
+```
+ESP32 ──(SATU koneksi WSS keluar)──► Cloudflare Worker + Durable Object ◄── HP/browser (UI sama, fitur sensitif disembunyikan)
+                                         └── notifikasi Telegram + alarm "mesin tidak terhubung"
+Web lokal (HTTP, rumah/hotspot) ─────► ESP32   (jalur utama, tetap jalan tanpa internet)
+```
+- Perintah chat Telegram dihapus; Telegram hanya untuk **notifikasi** (dikirim Worker). Daftar perintah yang boleh dari jarak jauh
+  ada di `cloud/src/allow.js` dan `firmware/.../remote_policy.cpp`, diuji identik dengan `cloud/test/allow-vectors.txt`.
+  Flash firmware, WiFi, ganti password, perangkat diingat, konsol, dan restore **hanya** dari web lokal.
+- Konfigurasi & deploy Worker: `cloud/README.md` (panduan akun, 2FA, `npm test` untuk uji lokal tanpa akun).
+- Di web lokal: tab **Sistem → Kontrol jarak jauh** untuk mengaktifkan/menonaktifkan sambungan; `remote on|off` di konsol.

@@ -19,6 +19,7 @@ const S = {
   devices: [{ id: 0, name: 'Chrome - Android', created: 1760000000, lastSeen: 1760000500, current: false }, { id: 1, name: 'Edge - Windows', created: 1760100000, lastSeen: 1760100500, current: true }],
   cmds: [], posts: [], logQueue: [], info: { remote: false, online: true }, remote: null,
 };
+const BASE_STATUS = JSON.parse(JSON.stringify(S.status));
 function route(url, opt) {
   const m = (opt && opt.method) || 'GET', u = new URL(url, 'http://x/'), p = u.pathname;
   const body = opt && opt.body ? JSON.parse(opt.body) : null;
@@ -174,6 +175,19 @@ function route(url, opt) {
   ok($('#bannerOffline').hidden && !d.body.classList.contains('offline'), 'tersambung kembali: banner hilang');
   S.status = null; S.remote = { online: false, lastSeen: 0 }; await w.pollOnce();
   ok(/belum pernah terhubung/.test($('#bannerOffline').textContent), 'belum pernah terhubung: pesan jelas, tidak error');
+
+  console.log('[U10] Sistem: kartu kontrol jarak jauh');
+  S.info = { remote: false, online: true }; S.remote = null;
+  S.status = { ...BASE_STATUS, remote: { configured: true, enabled: true, connected: false } };
+  await w.start(); await sleep(60);
+  click($('[data-tab="system"]')); await sleep(80);
+  ok(/Mencoba menyambung/.test($('#remoteInfo').textContent), 'status jarak jauh: mencoba menyambung');
+  S.status = { ...BASE_STATUS, remote: { configured: true, enabled: true, connected: true } }; await w.pollOnce(); await sleep(30);
+  ok(/Terhubung ke server/.test($('#remoteInfo').textContent), 'status jarak jauh: terhubung');
+  S.status = { ...BASE_STATUS, remote: { configured: false, enabled: true, connected: false } }; await w.pollOnce(); await sleep(30);
+  ok(/Belum dikonfigurasi/.test($('#remoteInfo').textContent), 'belum dikonfigurasi: petunjuk secrets.h');
+  click($('[data-cmd="remote"][data-args="off"]')); await sleep(40);
+  ok(S.cmds.some(c => c.cmd === 'remote' && c.args === 'off'), 'tombol Nonaktifkan mengirim perintah remote off');
 
   console.log(`\n${pass + fail} pemeriksaan UI, ${fail} gagal`);
   process.exit(fail ? 1 : 0);

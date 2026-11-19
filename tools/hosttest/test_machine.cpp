@@ -8,6 +8,7 @@
 #include "logger.h"
 #include "machine.h"
 #include "net_policy.h"
+#include "remote_policy.h"
 #include "relay.h"
 #include "settings.h"
 #include "water_sensor.h"
@@ -666,6 +667,35 @@ static void t25_apPolicy() {
   CHECK(!apPolicyStep(p, 1000000, false, false, 0), "putus sesaat tanpa semua gagal: hotspot tidak nyala");
 }
 
+static void t26_remotePolicy() {
+  printf("[T26] Allowlist jarak jauh identik dengan Worker (vektor bersama)\n");
+  FILE* f = fopen("cloud/test/allow-vectors.txt", "r");
+  CHECK(f != nullptr, "berkas vektor ditemukan");
+  if (!f) return;
+  char line[256];
+  int total = 0, bad = 0;
+  while (fgets(line, sizeof(line), f)) {
+    size_t n = strlen(line);
+    while (n && (line[n - 1] == '\n' || line[n - 1] == '\r')) line[--n] = 0;
+    if (!n || line[0] == '#') continue;
+    char kind[16], verdict[8], a[64] = "", b[128] = "";
+    int got = sscanf(line, "%15s %7s %63s %127s", kind, verdict, a, b);
+    if (got < 2) continue;
+    bool expect = strcmp(verdict, "allow") == 0;
+    bool actual;
+    if (strcmp(kind, "cmd") == 0) actual = remoteCmdAllowed(a);
+    else if (strcmp(kind, "apicmd") == 0) actual = remoteApiAllowed("POST", "/api/cmd", a);
+    else if (strcmp(kind, "api") == 0) actual = remoteApiAllowed(a, b, nullptr);
+    else continue;
+    total++;
+    if (actual != expect) { bad++; printf("  tidak cocok: %s\n", line); }
+  }
+  fclose(f);
+  printf("  (%d vektor)\n", total);
+  CHECK(total > 80 && bad == 0, "semua vektor allow/deny cocok dengan kebijakan Worker");
+  CHECK(!remoteCmdAllowed("") && !remoteCmdAllowed(nullptr), "perintah kosong ditolak");
+}
+
 int main(int argc, char** argv) {
   g_verbose = argc > 1;
   t1_fullNormal();
@@ -693,6 +723,7 @@ int main(int argc, char** argv) {
   t23_settingsMigration();
   t24_connWatchdog();
   t25_apPolicy();
+  t26_remotePolicy();
   checks++;
   if (g_violations != 0) { failures++; printf("  GAGAL: %ld tick melanggar invarian keselamatan\n", g_violations); }
   else printf("  ok: 0 pelanggaran invarian (kiri+kanan, isi+buang, buang+motor) di seluruh skenario\n");

@@ -10,14 +10,13 @@
 #define WIFI_PASSWORD "PASSWORD_WIFI"
 #endif
 
-// Token dari @BotFather
-#ifndef TELEGRAM_BOT_TOKEN
-#define TELEGRAM_BOT_TOKEN "ISI_TOKEN_BOT"
+// Kontrol jarak jauh (Cloudflare Worker, lihat cloud/README.md). Kosongkan untuk menonaktifkan.
+// Notifikasi Telegram dikirim oleh Worker (token bot disimpan sebagai secret Worker, bukan di ESP32).
+#ifndef REMOTE_URL
+#define REMOTE_URL "wss://mesin-cuci-relay.AKUN-KAMU.workers.dev/device"
 #endif
-
-// Chat ID tujuan notifikasi (lihat dari bot, mis. @userinfobot)
-#ifndef TELEGRAM_CHAT_ID
-#define TELEGRAM_CHAT_ID "ISI_CHAT_ID"
+#ifndef REMOTE_DEVICE_TOKEN
+#define REMOTE_DEVICE_TOKEN "ISI_TOKEN_PERANGKAT"
 #endif
 
 // Daftar WiFi cadangan awal (opsional, sampai 4 tambahan; bisa juga lewat Telegram/web)

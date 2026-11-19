@@ -66,6 +66,15 @@ inline uint32_t secToMs(uint32_t seconds) { return scaledMs(seconds * 1000UL); }
 #ifndef WEB_PASSWORD
 #error "WEB_PASSWORD belum diisi di secrets.h (lihat secrets.example.h)"
 #endif
+// Kontrol jarak jauh (Cloudflare Worker). Kosong = nonaktif. Diisi di secrets.h:
+//   #define REMOTE_URL "wss://mesin-cuci-relay.<akun>.workers.dev/device"
+//   #define REMOTE_DEVICE_TOKEN "ISI_DEVICE_TOKEN"   (nilai dari cloud/.secrets.local.json)
+#ifndef REMOTE_URL
+#define REMOTE_URL ""
+#endif
+#ifndef REMOTE_DEVICE_TOKEN
+#define REMOTE_DEVICE_TOKEN ""
+#endif
 #ifndef WIFI_SSID_2
 #define WIFI_SSID_2 ""
 #endif

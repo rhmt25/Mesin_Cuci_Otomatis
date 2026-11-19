@@ -2,22 +2,15 @@
 #include <ArduinoJson.h>
 #include <ESPAsyncWebServer.h>
 #include <AsyncJson.h>
-#include <time.h>
-#include <memory>
-#include "commands.h"
+#include "api_core.h"
 #include "config.h"
 #include "logger.h"
-#include "machine.h"
-#include "net_wifi.h"
-#include "notifier.h"
 #include "ota.h"
-#include "programs.h"
 #include "settings.h"
 #include "web_ui.h"
 
-static String logsJson(uint32_t since, size_t maxCount, uint32_t* lastOut);
-static bool lowMemory(size_t needBytes);
-
+// HTTP lokal: login/sesi, halaman, unggah firmware, dan pembungkus tipis ke api_core (dispatcher yang sama
+// dipakai jarak jauh lewat remote.cpp).
 static AsyncWebServer server(80);
 
 // ============================================================================
@@ -33,8 +26,6 @@ static String cookieToken(const String& cookie) {
   int e = cookie.indexOf(';', p);
   return cookie.substring(p + 4, e < 0 ? cookie.length() : e);
 }
-
-static bool tokenValid(const String& t) { return sessionValid(t); }
 
 static String currentToken(AsyncWebServerRequest* r) {
   return r->hasHeader("Cookie") ? cookieToken(r->header("Cookie")) : String("");
@@ -62,10 +53,9 @@ static String deviceNameFromUA(const String& ua) {
 // sehingga selama perangkat dipakai ia tidak pernah kedaluwarsa. Di server tidak ada kedaluwarsa.
 #define REMEMBER_COOKIE_AGE "34560000"
 
-
 static bool authed(AsyncWebServerRequest* r) {
   if (!r->hasHeader("Cookie")) return false;
-  return tokenValid(cookieToken(r->header("Cookie")));
+  return sessionValid(cookieToken(r->header("Cookie")));
 }
 
 #define REQUIRE_AUTH(r)                                                  \
@@ -78,9 +68,9 @@ static void sendJson(AsyncWebServerRequest* r, int code, const String& body) {
   r->send(code, "application/json", body);
 }
 
-// Balasan 200 + perpanjang cookie bila perangkat diingat
-static void sendJsonRefresh(AsyncWebServerRequest* r, const String& body) {
-  AsyncWebServerResponse* res = r->beginResponse(200, "application/json", body);
+// Balasan + perpanjang cookie bila perangkat diingat
+static void sendJsonRefresh(AsyncWebServerRequest* r, int code, const String& body) {
+  AsyncWebServerResponse* res = r->beginResponse(code, "application/json", body);
   String tok = currentToken(r);
   if (sessionSlot(tok) >= 0)
     res->addHeader("Set-Cookie", "sid=" + tok + "; Path=/; HttpOnly; SameSite=Lax; Max-Age=" REMEMBER_COOKIE_AGE);
@@ -96,199 +86,28 @@ static void scheduleRestart(uint32_t delayMs) {
       "restart", 2048, (void*)(uintptr_t)delayMs, 1, nullptr);
 }
 
-// ============================================================================
-// Builder JSON
-// ============================================================================
-static const char* stateName(uint8_t s) {
-  return s == MS_RUNNING ? "running" : s == MS_PAUSED ? "paused" : "idle";
+// Jembatan HTTP -> api_core
+static void bridge(AsyncWebServerRequest* r, const char* method, const String& body) {
+  REQUIRE_AUTH(r);
+  ApiResult res = apiHandle(API_LOCAL, method, r->url(), [r](const char* k) {
+    return r->hasParam(k) ? r->getParam(k)->value() : String("");
+  }, body);
+  sendJsonRefresh(r, res.code, res.body);
 }
 
-static String statusJson() {
-  MachineStatus s;
-  machineGetStatus(s);
-  JsonDocument d;
-  d["type"] = "status";
-  d["state"] = stateName(s.state);
-  d["program"] = s.state == MS_IDLE ? "" : s.name;
-  d["stage"] = s.stage;
-  d["detail"] = s.detail;
-  d["pause"] = s.pauseReason;
-  d["step"] = s.stepIndex;
-  d["steps"] = s.stepCount;
-  d["stepLeft"] = s.stepLeftSec;
-  d["totalLeft"] = s.totalLeftSec;
-  d["progress"] = s.progressPct;
-  static const char* water[] = {"kosong", "penuh", "mengukur"};
-  d["water"] = water[s.waterState];
-  d["waterRaw"] = s.waterRaw;
-  d["fault"] = s.relayFault;
-  d["resume"]["pending"] = s.resumePending;
-  d["resume"]["info"] = s.resumeInfo;
-  for (int i = 0; i < R_COUNT; i++) d["relays"][relayName((RelayId)i)] = s.relays[i];
-  d["wifi"]["online"] = netOnline();
-  d["wifi"]["ssid"] = netSsid();
-  d["wifi"]["rssi"] = netRssi();
-  d["wifi"]["ip"] = netIp();
-  d["wifi"]["ap"] = netApSsid();
-  d["wifi"]["apOn"] = netApOn();
-  d["wifi"]["apClients"] = netApClients();
-  d["wifi"]["time"] = netTimeString();
-  d["notif"] = notifModeName(S.notif);
-  d["uptime"] = s.uptimeSec;
-  d["heap"] = ESP.getFreeHeap();
-  d["fw"] = FW_VERSION;
-  d["reset"] = loggerResetReason();
-  d["otaBusy"] = otaBusy();
-  d["otaProgress"] = otaProgress();
-  String out;
-  serializeJson(d, out);
-  return out;
+static void getRoute(const char* path) {
+  server.on(path, HTTP_GET, [](AsyncWebServerRequest* r) { bridge(r, "GET", ""); });
 }
-
-static String settingsJson() {
-  JsonDocument d;
-  d["pola"] = S.pola;
-  d["soak"] = S.soak;
-  d["wash"] = S.wash;
-  d["rinse"] = S.rinse;
-  d["parfume"] = S.parfume;
-  d["spin"] = S.spin;
-  d["fillLevel"] = S.fillLevel;
-  d["fillPercent"] = S.fillPercent;
-  d["fillTime"] = S.fillTime;
-  d["flH"] = S.flH; d["flM"] = S.flM; d["flS"] = S.flS;
-  d["fillRetryCount"] = S.fillRetryCount;
-  d["fillRetryWait"] = S.fillRetryWait;
-  d["drainMode"] = S.drainMode;
-  d["drainTime"] = S.drainTime;
-  d["drainSessionLimit"] = S.drainSessionLimit;
-  d["drainProbeSec"] = S.drainProbeSec;
-  d["fillPrecheck"] = S.fillPrecheck;
-  d["unjamCount"] = S.unjamCount;
-  d["dH"] = S.dH; d["dM"] = S.dM; d["dS"] = S.dS;
-  d["finishAt"] = S.finishAt;
-  d["notif"] = S.notif;
-  d["calib"]["fillSec"] = (uint32_t)(C.avgFillMs / 1000);
-  d["calib"]["nFill"] = C.nFill;
-  d["timeSynced"] = netTimeSynced();
-  String out;
-  serializeJson(d, out);
-  return out;
+static void deleteRoute(const char* path) {
+  server.on(path, HTTP_DELETE, [](AsyncWebServerRequest* r) { bridge(r, "DELETE", ""); });
 }
-
-static void addLogEntries(JsonArray arr, const LogEntry* e, size_t n) {
-  for (size_t i = 0; i < n; i++) {
-    JsonObject o = arr.add<JsonObject>();
-    o["s"] = e[i].seq;
-    o["t"] = e[i].ms;
-    o["e"] = e[i].epoch;
-    o["l"] = e[i].level;
-    o["m"] = e[i].text;
-  }
+static void postJsonRoute(const char* path) {
+  server.addHandler(new AsyncCallbackJsonWebHandler(path, [](AsyncWebServerRequest* r, JsonVariant& json) {
+    String body;
+    serializeJson(json, body);
+    bridge(r, "POST", body);
+  }));
 }
-
-// Log dibaca per potongan kecil (stack) agar tidak ada alokasi heap besar yang bisa gagal.
-// Jumlah entri dibatasi (LOGS_MAX_PER_REPLY); klien mengambil lanjutannya dengan since=last.
-#define LOGS_MAX_PER_REPLY 50
-static String logsJson(uint32_t since, size_t maxCount, uint32_t* lastOut = nullptr) {  // NOLINT
-  if (maxCount > LOGS_MAX_PER_REPLY) maxCount = LOGS_MAX_PER_REPLY;
-  if (maxCount == 0) maxCount = 1;
-  JsonDocument d;
-  d["type"] = "log";
-  JsonArray arr = d["entries"].to<JsonArray>();
-  LogEntry chunk[6];
-  uint32_t last = since;
-  size_t total = 0;
-  while (total < maxCount) {
-    size_t want = min<size_t>(6, maxCount - total);
-    size_t n = logRead(last, chunk, want);
-    if (n == 0) break;
-    addLogEntries(arr, chunk, n);
-    last = chunk[n - 1].seq;
-    total += n;
-  }
-  d["last"] = last;
-  if (lastOut) *lastOut = last;
-  String out;
-  serializeJson(d, out);
-  return out;
-}
-
-// Memori heap tinggal sedikit? Tolak permintaan berat daripada berisiko crash.
-static bool lowMemory(size_t needBytes) { return ESP.getMaxAllocHeap() < needBytes; }
-
-static String historyJson() {
-  JsonDocument d;
-  JsonArray arr = d["history"].to<JsonArray>();
-  static const char* res[] = {"selesai", "dihentikan", "error"};
-  for (int i = 0; i < ST.histCount; i++) {
-    int pos = (ST.histHead - 1 - i + 20) % 10;
-    const HistoryEntry& e = ST.hist[pos];
-    JsonObject o = arr.add<JsonObject>();
-    o["program"] = programName(e.program);
-    o["start"] = e.startEpoch;
-    o["dur"] = e.durSec;
-    o["result"] = res[e.result < 3 ? e.result : 2];
-  }
-  d["stats"]["cycles"] = ST.totalCycles;
-  d["stats"]["motorSec"] = ST.motorSec + relayMotorSeconds();
-  d["stats"]["avgFillSec"] = (uint32_t)(C.avgFillMs / 1000);
-  String out;
-  serializeJson(d, out);
-  return out;
-}
-
-static String wifiJson() {
-  JsonDocument d;
-  JsonArray arr = d["networks"].to<JsonArray>();
-  String active = netSsid();
-  for (int i = 0; i < wifiCount(); i++) {
-    WifiCred c;
-    wifiGet(i, c);
-    JsonObject o = arr.add<JsonObject>();
-    o["i"] = i + 1;
-    o["ssid"] = c.ssid;
-    o["secured"] = c.pass[0] != 0;   // password tidak pernah dikirim
-    o["active"] = active == c.ssid;
-  }
-  d["max"] = MAX_WIFI_NETWORKS;
-  d["ap"] = netApSsid();
-  d["apOn"] = netApOn();
-  d["online"] = netOnline();
-  d["ssid"] = active;
-  d["rssi"] = netRssi();
-  d["ip"] = netIp();
-  String out;
-  serializeJson(d, out);
-  return out;
-}
-
-static String cmdResultJson(const CmdResult& r) {
-  JsonDocument d;
-  d["ok"] = r.ok;
-  d["msg"] = r.msg;
-  String out;
-  serializeJson(d, out);
-  return out;
-}
-
-// ============================================================================
-// Handler
-// ============================================================================
-struct KeyMap {
-  const char* key;
-  const char* cmd;
-};
-static const KeyMap settingKeys[] = {
-    {"pola", "pola"},
-    {"soak", "set_soak_session"}, {"wash", "set_wash_time"}, {"rinse", "set_rinse_time"},
-    {"spin", "set_spin_time"}, {"parfume", "set_jumlah_parfume"},
-    {"fillTime", "set_waktu_pengisian_air"}, {"drainTime", "set_waktu_pembuangan_air"},
-    {"drainSessionLimit", "set_batas_sesi_pembuangan_air"}, {"fillRetryCount", "set_coba_ulang_isi"},
-    {"fillRetryWait", "set_tunggu_coba_ulang"}, {"unjamCount", "set_unjam"},
-    {"drainProbeSec", "set_probe_buang"}, {"fillPrecheck", "pra_cek_isi"},
-    {"notif", "notif"}, {"level", "level_air"}, {"drainModeName", "mode_buang"},
-};
 
 static void setupRoutes() {
   // ---- halaman ----
@@ -333,72 +152,14 @@ static void setupRoutes() {
     r->send(res);
   });
 
-  // ---- status & data ----
-  server.on("/api/status", HTTP_GET, [](AsyncWebServerRequest* r) {
-    REQUIRE_AUTH(r);
-    sendJsonRefresh(r, statusJson());
-  });
-  server.on("/api/info", HTTP_GET, [](AsyncWebServerRequest* r) {
-    REQUIRE_AUTH(r);
-    sendJson(r, 200, String("{\"remote\":false,\"online\":true,\"fw\":\"") + FW_VERSION + "\"}");
-  });
-  // Status + log baru dalam satu balasan (pengganti WebSocket). since = seq log terakhir yang sudah diterima.
-  server.on("/api/poll", HTTP_GET, [](AsyncWebServerRequest* r) {
-    REQUIRE_AUTH(r);
-    if (lowMemory(8192)) {
-      sendJson(r, 503, "{\"ok\":false,\"msg\":\"memori rendah, coba lagi\"}");
-      return;
-    }
-    uint32_t since = r->hasParam("since") ? r->getParam("since")->value().toInt() : 0;
-    String out;
-    out.reserve(2800);
-    out += "{\"status\":";
-    out += statusJson();
-    out += ",\"log\":";
-    out += logsJson(since, 30);
-    out += "}";
-    sendJsonRefresh(r, out);
-  });
-  server.on("/api/settings", HTTP_GET, [](AsyncWebServerRequest* r) {
-    REQUIRE_AUTH(r);
-    sendJson(r, 200, settingsJson());
-  });
-  server.addHandler(new AsyncCallbackJsonWebHandler("/api/settings", [](AsyncWebServerRequest* r, JsonVariant& json) {
-    REQUIRE_AUTH(r);
-    JsonDocument res;
-    JsonArray msgs = res["results"].to<JsonArray>();
-    bool all = true;
-    for (const KeyMap& k : settingKeys) {
-      if (json[k.key].isNull()) continue;
-      String v = json[k.key].as<String>();
-      CmdResult cr = executeCommand(k.cmd, v, SRC_WEB);
-      all = all && cr.ok;
-      JsonObject o = msgs.add<JsonObject>();
-      o["key"] = k.key;
-      o["ok"] = cr.ok;
-      o["msg"] = cr.msg;
-    }
-    res["ok"] = all;
-    String out;
-    serializeJson(res, out);
-    sendJson(r, 200, out);
-  }));
-  server.on("/api/logs", HTTP_GET, [](AsyncWebServerRequest* r) {
-    REQUIRE_AUTH(r);
-    uint32_t since = r->hasParam("since") ? r->getParam("since")->value().toInt() : 0;
-    long lim = r->hasParam("limit") ? r->getParam("limit")->value().toInt() : 50;
-    if (lowMemory(12288)) {
-      sendJson(r, 503, "{\"ok\":false,\"msg\":\"memori rendah, coba lagi\"}");
-      return;
-    }
-    sendJson(r, 200, logsJson(since, lim > 0 ? (size_t)lim : 1));
-  });
-  server.on("/api/history", HTTP_GET, [](AsyncWebServerRequest* r) {
-    REQUIRE_AUTH(r);
-    sendJson(r, 200, historyJson());
-  });
+  // ---- API (dispatcher bersama api_core) ----
+  for (const char* p : {"/api/status", "/api/info", "/api/poll", "/api/settings", "/api/logs", "/api/history",
+                        "/api/custom", "/api/wifi", "/api/console", "/api/update/info"})
+    getRoute(p);
+  for (const char* p : {"/api/custom", "/api/wifi"}) deleteRoute(p);
+  for (const char* p : {"/api/settings", "/api/custom", "/api/cmd", "/api/wifi", "/api/console"}) postJsonRoute(p);
 
-  // ---- perangkat yang diingat ----
+  // ---- perangkat yang diingat (khusus lokal: butuh cookie) ----
   server.on("/api/devices", HTTP_GET, [](AsyncWebServerRequest* r) {
     REQUIRE_AUTH(r);
     DeviceInfo list[MAX_DEVICES];
@@ -437,166 +198,7 @@ static void setupRoutes() {
     sendJson(r, 200, String("{\"ok\":true,\"self\":") + (id == mine ? "true" : "false") + ",\"msg\":\"Perangkat dihapus\"}");
   });
 
-  // ---- Custom Proses ----
-  server.on("/api/custom", HTTP_GET, [](AsyncWebServerRequest* r) {
-    REQUIRE_AUTH(r);
-    JsonDocument d;
-    d["max"] = CUSTOM_SLOTS;
-    d["maxItems"] = CUSTOM_MAX_ITEMS;
-    JsonArray slots = d["slots"].to<JsonArray>();
-    for (int s = 0; s < CUSTOM_SLOTS; s++) {
-      CustomProc p;
-      if (!customLoad(s, p)) {
-        slots.add(nullptr);
-        continue;
-      }
-      JsonObject o = slots.add<JsonObject>();
-      o["slot"] = s + 1;
-      o["name"] = p.name;
-      o["steps"] = customStepCount(p);
-      JsonArray items = o["items"].to<JsonArray>();
-      for (int i = 0; i < p.count; i++) {
-        JsonObject it = items.add<JsonObject>();
-        it["t"] = customTypeName(p.items[i].type);
-        it["a"] = p.items[i].a;
-        it["b"] = p.items[i].b;
-        it["p"] = p.items[i].pola;
-        it["c"] = p.items[i].cups2;
-      }
-    }
-    String out;
-    serializeJson(d, out);
-    sendJson(r, 200, out);
-  });
-  server.addHandler(new AsyncCallbackJsonWebHandler("/api/custom", [](AsyncWebServerRequest* r, JsonVariant& json) {
-    REQUIRE_AUTH(r);
-    CustomProc p;
-    memset(&p, 0, sizeof(p));
-    String name = json["name"] | "";
-    name.trim();
-    strlcpy(p.name, name.c_str(), sizeof(p.name));
-    JsonArray items = json["items"].as<JsonArray>();
-    if (items.isNull() || items.size() > CUSTOM_MAX_ITEMS) {
-      sendJson(r, 400, String("{\"ok\":false,\"msg\":\"Langkah harus 1-") + CUSTOM_MAX_ITEMS + "\"}");
-      return;
-    }
-    for (JsonObject it : items) {
-      int t = customTypeFromName(String((const char*)(it["t"] | "")));
-      if (t < 0) {
-        sendJson(r, 400, "{\"ok\":false,\"msg\":\"Jenis langkah tidak dikenal\"}");
-        return;
-      }
-      CustomItem& ci = p.items[p.count++];
-      ci.type = t;
-      ci.a = it["a"] | 0;
-      ci.b = it["b"] | 0;
-      ci.pola = it["p"] | 3;
-      ci.cups2 = it["c"] | 0;
-    }
-    String err;
-    if (!customValidate(p, err)) {
-      JsonDocument d;
-      d["ok"] = false;
-      d["msg"] = err;
-      String out;
-      serializeJson(d, out);
-      sendJson(r, 400, out);
-      return;
-    }
-    int slot = json["slot"] | 0;   // 1..5, 0 = slot kosong pertama
-    if (slot < 1 || slot > CUSTOM_SLOTS) {
-      slot = 0;
-      for (int s = 0; s < CUSTOM_SLOTS && !slot; s++) {
-        CustomProc tmp;
-        if (!customLoad(s, tmp)) slot = s + 1;
-      }
-      if (!slot) {
-        sendJson(r, 400, "{\"ok\":false,\"msg\":\"Penyimpanan penuh (5 proses). Hapus satu dulu.\"}");
-        return;
-      }
-    }
-    customSave(slot - 1, p);
-    logf(LOG_INFO, "Custom proses disimpan: slot %d \"%s\" (%u langkah)", slot, p.name, (unsigned)customStepCount(p));
-    sendJson(r, 200, String("{\"ok\":true,\"slot\":") + slot + ",\"msg\":\"Tersimpan di slot " + slot + "\"}");
-  }));
-  server.on("/api/custom", HTTP_DELETE, [](AsyncWebServerRequest* r) {
-    REQUIRE_AUTH(r);
-    int slot = r->hasParam("slot") ? r->getParam("slot")->value().toInt() : 0;
-    if (slot < 1 || slot > CUSTOM_SLOTS || !customDelete(slot - 1)) {
-      sendJson(r, 400, "{\"ok\":false,\"msg\":\"Slot tidak valid\"}");
-      return;
-    }
-    sendJson(r, 200, "{\"ok\":true,\"msg\":\"Proses dihapus\"}");
-  });
-
-  // ---- perintah (SEMUA perintah Telegram) ----
-  server.addHandler(new AsyncCallbackJsonWebHandler("/api/cmd", [](AsyncWebServerRequest* r, JsonVariant& json) {
-    REQUIRE_AUTH(r);
-    String cmd = json["cmd"] | "";
-    String args = json["args"] | "";
-    if (cmd.length() == 0) {
-      sendJson(r, 400, "{\"ok\":false,\"msg\":\"cmd kosong\"}");
-      return;
-    }
-    logf(LOG_DEBUG, "Web: /%s %s", cmd.c_str(), args.c_str());
-    sendJson(r, 200, cmdResultJson(executeCommand(cmd, args, SRC_WEB)));
-  }));
-
-  // ---- WiFi ----
-  server.on("/api/wifi", HTTP_GET, [](AsyncWebServerRequest* r) {
-    REQUIRE_AUTH(r);
-    sendJson(r, 200, wifiJson());
-  });
-  server.addHandler(new AsyncCallbackJsonWebHandler("/api/wifi", [](AsyncWebServerRequest* r, JsonVariant& json) {
-    REQUIRE_AUTH(r);
-    String ssid = json["ssid"] | "";
-    String pass = json["pass"] | "";
-    if (pass.length() == 0) pass = "-";
-    sendJson(r, 200, cmdResultJson(executeCommand("wifi_tambah", ssid + "|" + pass, SRC_WEB)));
-  }));
-  server.on("/api/wifi", HTTP_DELETE, [](AsyncWebServerRequest* r) {
-    REQUIRE_AUTH(r);
-    String i = r->hasParam("i") ? r->getParam("i")->value() : "";
-    sendJson(r, 200, cmdResultJson(executeCommand("wifi_hapus", i, SRC_WEB)));
-  });
-
-  // ---- konsol (serial monitor web) ----
-  server.on("/api/console", HTTP_GET, [](AsyncWebServerRequest* r) {
-    REQUIRE_AUTH(r);
-    JsonDocument d;
-    d["reset"] = loggerResetReason();
-    d["trace"] = loggerPreviousTrace();
-    String out;
-    serializeJson(d, out);
-    sendJson(r, 200, out);
-  });
-  server.addHandler(new AsyncCallbackJsonWebHandler("/api/console", [](AsyncWebServerRequest* r, JsonVariant& json) {
-    REQUIRE_AUTH(r);
-    String line = json["line"] | "";
-    line.trim();
-    if (line.length() == 0) {
-      sendJson(r, 200, "{\"ok\":true}");
-      return;
-    }
-    logf(LOG_DEBUG, "> %s", line.c_str());
-    String out = consoleExec(line, SRC_WEB);
-    // keluaran dikirim baris per baris ke log agar tampil di konsol (polling)
-    int start = 0;
-    while (start < (int)out.length()) {
-      int nl = out.indexOf('\n', start);
-      String part = out.substring(start, nl < 0 ? out.length() : nl);
-      if (part.length()) logStr(LOG_DEBUG, part);
-      if (nl < 0) break;
-      start = nl + 1;
-    }
-    sendJson(r, 200, "{\"ok\":true}");
-  }));
-
-  // ---- flash firmware ----
-  server.on("/api/update/info", HTTP_GET, [](AsyncWebServerRequest* r) {
-    REQUIRE_AUTH(r);
-    sendJson(r, 200, otaInfoJson());
-  });
+  // ---- flash firmware (khusus lokal) ----
   server.on("/api/rollback", HTTP_POST, [](AsyncWebServerRequest* r) {
     REQUIRE_AUTH(r);
     String err;

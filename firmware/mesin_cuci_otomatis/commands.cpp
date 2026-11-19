@@ -6,6 +6,8 @@
 #include "net_wifi.h"
 #include "notifier.h"
 #include "ota.h"
+#include "remote.h"
+#include "remote_policy.h"
 #include "relay.h"
 #include "settings.h"
 
@@ -98,30 +100,6 @@ static const Alias aliases[] = {
     {"mulai", "program", "kustom"},
 };
 
-struct PromptDef {
-  const char* name;
-  uint8_t n;
-  const char* p[3];
-  char joiner;
-  bool danger;
-};
-static const PromptDef promptDefs[] = {
-    {"set_delay", 3, {"Kirim jam delay (0-23).", "Kirim menit delay (0-59).", "Kirim detik delay (0-59)."}, ' ', false},
-    {"set_batas_waktu_pengisian_air", 3,
-     {"Kirim jam batas waktu pengisian air (0-23).", "Kirim menit (0-59).", "Kirim detik (0-59)."}, ' ', false},
-    {"set_jumlah_parfume", 1, {"Kirim jumlah parfum dalam cup, kelipatan 0,5 (mis. 0,5 atau 1)."}, ' ', false},
-    {"wifi_tambah", 2, {"Kirim nama WiFi (SSID).", "Kirim password WiFi (kirim tanda - bila tanpa password)."}, '|', false},
-    {"wifi_hapus", 1, {"Kirim nomor WiFi yang dihapus (lihat /wifi_list)."}, ' ', false},
-    {"wifi_urutan", 2, {"Kirim nomor WiFi yang dipindah.", "Kirim nomor posisi tujuan."}, ' ', false},
-    {"mulai_nanti", 1, {"Kirim lama tunda sebelum mulai, dalam menit."}, ' ', false},
-    {"selesai_jam", 1, {"Kirim jam target selesai, format HH:MM (24 jam), mis. 07:30."}, ' ', false},
-    {"level_air", 1, {"Kirim level air: penuh, 25, 50, 75, atau waktu."}, ' ', false},
-    {"relay_test", 1, {"Kirim nama relay: kiri, kanan, isi, buang, spin, pewangi."}, ' ', false},
-    {"reset_semua", 0, {}, ' ', true},
-    {"restart", 0, {}, ' ', true},
-    {"kalibrasi_air", 0, {}, ' ', true},
-};
-
 // ---- pengaturan bilangan bulat (tabel) --------------------------------------
 struct IntSetting {
   const char* setCmd;
@@ -130,27 +108,20 @@ struct IntSetting {
   int lo, hi;
   const char* label;
   const char* unit;
-  const char* prompt;
 };
 static const IntSetting intSettings[] = {
-    {"set_soak_session", "reset_soak_session", &S.soak, 0, 1440, "Soak", "sesi", "Kirim jumlah sesi soak (0-1440)."},
-    {"set_wash_time", "reset_wash_time", &S.wash, 0, 1440, "Wash", "menit", "Kirim waktu wash dalam menit (0-1440)."},
-    {"set_rinse_time", "reset_rinse_time", &S.rinse, 0, 1440, "Rinse", "menit", "Kirim waktu rinse dalam menit (0-1440)."},
-    {"set_spin_time", "reset_spin_time", &S.spin, 0, 1440, "Spin", "menit", "Kirim waktu spin dalam menit (0-1440)."},
-    {"set_waktu_pengisian_air", "reset_waktu_pengisian_air", &S.fillTime, 1, 1440, "Waktu pengisian air", "menit",
-     "Kirim waktu pengisian air dalam menit (lebih dari 0)."},
-    {"set_waktu_pembuangan_air", "reset_waktu_pembuangan_air", &S.drainTime, 1, 1440, "Waktu pembuangan air", "menit",
-     "Kirim waktu pembuangan air dalam menit (lebih dari 0)."},
+    {"set_soak_session", "reset_soak_session", &S.soak, 0, 1440, "Soak", "sesi"},
+    {"set_wash_time", "reset_wash_time", &S.wash, 0, 1440, "Wash", "menit"},
+    {"set_rinse_time", "reset_rinse_time", &S.rinse, 0, 1440, "Rinse", "menit"},
+    {"set_spin_time", "reset_spin_time", &S.spin, 0, 1440, "Spin", "menit"},
+    {"set_waktu_pengisian_air", "reset_waktu_pengisian_air", &S.fillTime, 1, 1440, "Waktu pengisian air", "menit"},
+    {"set_waktu_pembuangan_air", "reset_waktu_pembuangan_air", &S.drainTime, 1, 1440, "Waktu pembuangan air", "menit"},
     {"set_batas_sesi_pembuangan_air", "reset_batas_sesi_pembuangan_air", &S.drainSessionLimit, 1, 1440,
-     "Batas sesi pembuangan air", "sesi", "Kirim batas sesi pembuangan air sebelum jeda (1-1440)."},
-    {"set_coba_ulang_isi", "reset_coba_ulang_isi", &S.fillRetryCount, 0, 20, "Coba ulang pengisian", "kali",
-     "Kirim jumlah coba ulang bila air habis (0-20)."},
-    {"set_tunggu_coba_ulang", "reset_tunggu_coba_ulang", &S.fillRetryWait, 0, 240, "Tunggu sebelum coba ulang", "menit",
-     "Kirim lama tunggu antar coba ulang dalam menit (0-240)."},
-    {"set_unjam", "reset_unjam", &S.unjamCount, 0, 10, "Unjam valve buang", "kali",
-     "Kirim jumlah percobaan unjam valve (0-10)."},
-    {"set_probe_buang", "reset_probe_buang", &S.drainProbeSec, 5, 600, "Probe tarikan valve buang", "detik",
-     "Kirim lama probe tarikan valve buang dalam detik (5-600)."},
+     "Batas sesi pembuangan air", "sesi"},
+    {"set_coba_ulang_isi", "reset_coba_ulang_isi", &S.fillRetryCount, 0, 20, "Coba ulang pengisian", "kali"},
+    {"set_tunggu_coba_ulang", "reset_tunggu_coba_ulang", &S.fillRetryWait, 0, 240, "Tunggu sebelum coba ulang", "menit"},
+    {"set_unjam", "reset_unjam", &S.unjamCount, 0, 10, "Unjam valve buang", "kali"},
+    {"set_probe_buang", "reset_probe_buang", &S.drainProbeSec, 5, 600, "Probe tarikan valve buang", "detik"},
 };
 static const size_t nIntSettings = sizeof(intSettings) / sizeof(intSettings[0]);
 
@@ -163,31 +134,6 @@ static String resolveAlias(const String& c, String& fixedArgs) {
     }
   }
   return c;
-}
-
-bool cmdInfo(const String& command, CmdInfo& out) {
-  String c = normalizeCommand(command);
-  out.name = resolveAlias(c, out.fixedArgs);
-  out.nPrompts = 0;
-  out.joiner = ' ';
-  out.danger = false;
-  for (const PromptDef& d : promptDefs) {
-    if (out.name == d.name) {
-      out.nPrompts = d.n;
-      for (int i = 0; i < d.n; i++) out.prompts[i] = d.p[i];
-      out.joiner = d.joiner;
-      out.danger = d.danger;
-      return true;
-    }
-  }
-  for (size_t i = 0; i < nIntSettings; i++) {
-    if (out.name == intSettings[i].setCmd) {
-      out.nPrompts = 1;
-      out.prompts[0] = intSettings[i].prompt;
-      return true;
-    }
-  }
-  return true;
 }
 
 // ============================================================================
@@ -325,7 +271,7 @@ String helpText() {
          "mulai_nanti <menit>, selesai_jam <HH:MM>, notif <lengkap|ringkas|senyap>\n"
          "kalibrasi_air, reset_semua, restart, info\n"
          "relay <kiri|kanan|isi|buang|spin|pewangi> <on|off>, relay semua off, kalibrasi_relay [detik]\n"
-         "set_probe_buang <detik>, pra_cek_isi <buang|jeda|pakai>\n"
+         "set_probe_buang <detik>, pra_cek_isi <buang|jeda|pakai>, remote [on|off]\n"
          "custom [nomor] (proses buatan sendiri, disusun di dashboard web)\n"
          "Konsol: heap, tasks, relay_test <nama>, log, serial debug on|off";
 }
@@ -393,9 +339,28 @@ CmdResult executeCommand(const String& command, const String& argsIn, CmdSource 
   args.trim();
   if (args.length() == 0) args = fixed;
 
+  // Permintaan dari jarak jauh: hanya perintah yang diizinkan (juga setelah alias diselesaikan)
+  if (src == SRC_REMOTE && (!remoteCmdAllowed(c.c_str()) || !remoteCmdAllowed(name.c_str())))
+    return fail("Perintah ini hanya bisa dari web lokal (demi keamanan).");
+
   if (name == "set_tambahan_buang" || name == "reset_tambahan_buang" || name == "set_maks_buang" || name == "reset_maks_buang")
     return fail("Pengaturan ini tidak dipakai lagi: sensor hanya di atas, jadi pembuangan memakai probe tarikan "
                 "(set_probe_buang) dan total waktu tarik (set_waktu_pembuangan_air).");
+  if (name == "remote") {
+    String a = token(args, 0);
+    a.toLowerCase();
+    if (a == "on" || a == "off") {
+      if (src == SRC_REMOTE) return fail("Hanya bisa diubah dari web lokal.");
+      S.remoteOn = a == "on";
+      settingsSave();
+      return ok(String("Kontrol jarak jauh ") + (S.remoteOn ? "diaktifkan." : "dinonaktifkan."));
+    }
+    String t = String("Kontrol jarak jauh: ");
+    if (!remoteConfigured()) t += "belum dikonfigurasi (REMOTE_URL / REMOTE_DEVICE_TOKEN di secrets.h)";
+    else if (!S.remoteOn) t += "dinonaktifkan";
+    else t += remoteConnected() ? "terhubung ke server" : "mencoba menyambung";
+    return ok(t);
+  }
   if (name == "pra_cek_isi") {
     String a = token(args, 0);
     a.toLowerCase();

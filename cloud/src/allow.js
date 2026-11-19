@@ -7,7 +7,7 @@ const CMD_NAMES = new Set([
   "stop", "jeda", "lanjutkan", "lanjutkan_proses", "lewati", "batalkan",
   "cek_air", "status", "pengaturan", "cek_variabel", "riwayat", "statistik", "info", "bantuan", "menu",
   "pola", "level_air", "mode_buang", "notif", "pra_cek_isi", "mulai_nanti", "selesai_jam", "kalibrasi_air",
-  "reset_semua", "reset_variabel", "restart",
+  "reset_semua", "reset_variabel", "restart", "remote",
 ]);
 const CMD_PATTERNS = [/^set_[a-z_]+$/, /^reset_[a-z_]+$/, /^mode_[a-z_]+$/];
 // Selalu ditolak, apa pun pola di atas

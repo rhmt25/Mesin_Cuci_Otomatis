@@ -313,6 +313,9 @@ function renderSys() {
   if (!last) return;
   const s = last;
   $('#sysInfo').innerHTML = `<b>Firmware:</b> v${esc(s.fw)}<br><b>Uptime:</b> ${fmt(s.uptime)}<br><b>Heap bebas:</b> ${(s.heap / 1024).toFixed(0)} KB<br><b>Alasan reset terakhir:</b> ${esc(s.reset)}<br><b>WiFi:</b> ${s.wifi.online ? esc(s.wifi.ssid) + ' · ' + esc(s.wifi.ip) : 'offline'}<br><b>Hotspot:</b> ${s.wifi.apOn ? esc(s.wifi.ap) + ' AKTIF (' + s.wifi.apClients + ' klien)' : 'nonaktif'}<br><b>Jam:</b> ${esc(s.wifi.time)}<br><b>Notifikasi:</b> ${esc(s.notif)}`;
+  const rm = s.remote || {};
+  const ri = $('#remoteInfo');
+  if (ri) ri.textContent = !rm.configured ? 'Belum dikonfigurasi (isi REMOTE_URL dan REMOTE_DEVICE_TOKEN di secrets.h).' : !rm.enabled ? 'Dinonaktifkan.' : rm.connected ? '✅ Terhubung ke server jarak jauh.' : '⏳ Mencoba menyambung ke server…';
 }
 $('#btnPw').onclick = async () => { const r = await cmd('web_password', $('#newPw').value); if (r && r.ok) { $('#newPw').value = ''; toast('Password diganti. Silakan login ulang.'); setTimeout(showLogin, 800); } };
 $('#btnRestart').onclick = () => confirm('Restart mesin?') && cmd('restart');

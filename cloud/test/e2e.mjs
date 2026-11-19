@@ -18,14 +18,27 @@ const ok = (c, m) => { if (c) { pass++; console.log("  ok:", m); } else { fail++
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---------- unit: allowlist (cepat) ----------
-console.log("[W1] Allowlist");
-ok(cmdAllowed("stop") && cmdAllowed("/program") && cmdAllowed("set_wash_time") && cmdAllowed("relay") && cmdAllowed("custom"), "perintah kontrol diizinkan");
-ok(!cmdAllowed("wifi_tambah") && !cmdAllowed("wifi_hapus") && !cmdAllowed("web_password") && !cmdAllowed("set_ssid") && !cmdAllowed("heap") && !cmdAllowed("serial"), "WiFi/password/konsol ditolak");
-ok(!cmdAllowed("") && !cmdAllowed("rm_rf") && !cmdAllowed("wifi_list"), "perintah asing/kosong ditolak");
-ok(isAllowed("POST", "/api/update", {}).ok === false && isAllowed("POST", "/api/rollback", {}).ok === false, "flash firmware ditolak");
-ok(isAllowed("GET", "/api/wifi").ok === false && isAllowed("DELETE", "/api/wifi").ok === false && isAllowed("GET", "/api/devices").ok === false, "WiFi & perangkat ditolak");
-ok(isAllowed("GET", "/api/console").ok === false && isAllowed("POST", "/api/console", {}).ok === false && isAllowed("POST", "/api/restore", {}).ok === false, "konsol & restore ditolak");
-ok(isAllowed("GET", "/api/status").ok && isAllowed("POST", "/api/cmd", { cmd: "jeda" }).ok && isAllowed("POST", "/api/custom", {}).ok && isAllowed("DELETE", "/api/custom").ok, "status, kontrol, custom diizinkan");
+console.log("[W1] Allowlist (vektor bersama dengan ESP32)");
+{
+  const lines = fs.readFileSync(path.join(root, "test", "allow-vectors.txt"), "utf8").split(/\r?\n/);
+  let total = 0, bad = 0;
+  for (const raw of lines) {
+    const line = raw.replace(/\s+$/, "");
+    if (!line || line.startsWith("#")) continue;
+    const m = line.match(/^(\S+)\s+(allow|deny)(?:\s+(.*))?$/);
+    if (!m) continue;
+    const [, kind, verdict, rest = ""] = m;
+    const expect = verdict === "allow";
+    let actual;
+    if (kind === "cmd") actual = cmdAllowed(rest.trim().split(/\s+/)[0] || "");
+    else if (kind === "apicmd") actual = isAllowed("POST", "/api/cmd", { cmd: rest.trim() }).ok;
+    else if (kind === "api") { const [meth, p] = rest.split(/\s+/); actual = isAllowed(meth, p, {}).ok; }
+    else continue;
+    total++;
+    if (actual !== expect) { bad++; console.log("  tidak cocok:", line); }
+  }
+  ok(total > 80 && bad === 0, `${total} vektor allow/deny cocok dengan kebijakan`);
+}
 
 // ---------- Telegram palsu ----------
 const tg = [];
