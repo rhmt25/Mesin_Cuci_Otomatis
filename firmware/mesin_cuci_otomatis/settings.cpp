@@ -355,9 +355,67 @@ bool authCheck(const String& password) {
   return sha256Hex(password) == stored;
 }
 
+// ---------------------------------------------------------------- Sesi ----
+static char sessions[MAX_SESSIONS][33];
+static uint8_t sessionNext = 0;
+static bool sessionsLoaded = false;
+
+static void sessionsLoad() {
+  if (sessionsLoaded) return;
+  sessionsLoaded = true;
+  memset(sessions, 0, sizeof(sessions));
+  Preferences p;
+  p.begin("sess", true);
+  if (p.isKey("tok") && p.getBytesLength("tok") == sizeof(sessions)) p.getBytes("tok", sessions, sizeof(sessions));
+  sessionNext = p.getUChar("next", 0) % MAX_SESSIONS;
+  p.end();
+  for (auto& s : sessions) s[32] = 0;
+}
+
+static void sessionsSave() {
+  Preferences p;
+  p.begin("sess", false);
+  p.putBytes("tok", sessions, sizeof(sessions));
+  p.putUChar("next", sessionNext);
+  p.end();
+}
+
+String sessionCreate() {
+  sessionsLoad();
+  char buf[33];
+  for (int i = 0; i < 4; i++) snprintf(buf + i * 8, 9, "%08x", (unsigned)esp_random());
+  memcpy(sessions[sessionNext], buf, 33);
+  sessionNext = (sessionNext + 1) % MAX_SESSIONS;
+  sessionsSave();
+  return String(buf);
+}
+
+bool sessionValid(const String& token) {
+  sessionsLoad();
+  if (token.length() != 32) return false;
+  for (auto& s : sessions)
+    if (s[0] && token == s) return true;
+  return false;
+}
+
+void sessionRevoke(const String& token) {
+  sessionsLoad();
+  bool changed = false;
+  for (auto& s : sessions)
+    if (s[0] && token == s) { memset(s, 0, sizeof(s)); changed = true; }
+  if (changed) sessionsSave();
+}
+
+void sessionRevokeAll() {
+  sessionsLoad();
+  memset(sessions, 0, sizeof(sessions));
+  sessionsSave();
+}
+
 void authSet(const String& password) {
   Preferences p;
   p.begin("auth", false);
   p.putString("hash", sha256Hex(password));
   p.end();
+  sessionRevokeAll();   // perangkat lain harus login ulang dengan password baru
 }

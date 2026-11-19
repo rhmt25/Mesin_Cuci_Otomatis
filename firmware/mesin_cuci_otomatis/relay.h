@@ -11,3 +11,11 @@ bool relayIsOn(RelayId id);
 const char* relayName(RelayId id);
 int relayFromName(const String& name);  // -1 bila tidak dikenal
 uint32_t relayMotorSeconds();           // akumulasi motor cuci menyala (detik, nyata)
+
+// Failsafe berlapis. Panggil tiap tick mesin.
+//   0 = aman
+//   1 = motor cuci menyala terlalu lama -> semua relay dimatikan (tidak terkunci)
+//   2 = pelanggaran interlock (mis. motor kiri & kanan nyala bersamaan) -> semua relay
+//       dimatikan dan TERKUNCI sampai mesin di-restart
+uint8_t relayGuard();
+bool relayFaulted();

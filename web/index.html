@@ -13,6 +13,7 @@
   <form id="loginForm" class="card login">
     <h1>🧺 Mesin Cuci</h1>
     <input id="pw" type="password" placeholder="Password" autocomplete="current-password" required>
+    <label class="chk"><input id="remember" type="checkbox" checked> Ingat perangkat ini (30 hari)</label>
     <button class="btn primary" type="submit">Masuk</button>
     <p id="loginMsg" class="muted"></p>
   </form>
@@ -32,6 +33,7 @@
   <nav id="tabs">
     <button data-tab="home" class="on">Beranda</button>
     <button data-tab="manual">Manual</button>
+    <button data-tab="relay">Relay</button>
     <button data-tab="settings">Pengaturan</button>
     <button data-tab="water">Air</button>
     <button data-tab="wifi">WiFi</button>
@@ -50,6 +52,7 @@
         <div class="row"><button class="btn primary" data-cmd="lanjutkan">Lanjutkan</button><button class="btn" data-cmd="batalkan">Batalkan</button></div>
       </div>
       <div id="bannerPause" class="banner err" hidden></div>
+      <div id="bannerFault" class="banner err" hidden>&#10060; <b>Relay terkunci</b>: pengaman mendeteksi pelanggaran interlock (mis. motor kiri &amp; kanan nyala bersamaan). Semua relay dimatikan. Restart mesin untuk membuka kunci.</div>
 
       <div class="card hero">
         <svg id="ring" viewBox="0 0 120 120" width="150" height="150">
@@ -108,6 +111,21 @@
         <button class="btn" data-cmd="motor_on">Motor 5 mnt</button>
         <button class="btn" data-cmd="cek_air">Cek air</button>
       </div>
+    </section>
+
+    <!-- RELAY -->
+    <section id="tab-relay" class="tab">
+      <div class="banner warn">&#9888; Lepas beban atau tutup kran air sebelum menguji. Motor kiri &amp; kanan <b>tidak pernah</b> bisa menyala bersamaan (dijaga berlapis). Kontrol manual hanya saat mesin siap dan otomatis mati setelah 60 detik.</div>
+      <div id="relayProgress" class="banner warn" hidden></div>
+      <div class="card form">
+        <b>Uji berurutan otomatis</b>
+        <p class="muted">Menyalakan lalu mematikan setiap relay satu per satu: kiri, kanan, isi, buang, spin, pewangi.</p>
+        <label>Lama menyala per relay (detik)<input id="seqSecs" type="number" min="1" max="30" value="3"></label>
+        <div class="row"><button class="btn primary" id="btnSeq">&#9654; Mulai uji berurutan</button><button class="btn danger" id="btnSeqStop">&#9209; Berhenti</button></div>
+      </div>
+      <h3>Kontrol per relay</h3>
+      <div id="relayCards"></div>
+      <button class="btn danger" id="btnAllOff">Matikan semua relay</button>
     </section>
 
     <!-- PENGATURAN -->

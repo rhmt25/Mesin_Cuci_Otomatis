@@ -11,14 +11,15 @@ static const Preset presets[] = {
 
 static const char* const names[PRG_COUNT] = {
     "Kustom", "Normal", "Gentle", "Hijab", "Cepat", "Soak", "Wash", "Soak+Wash", "Rinse",
-    "Rinse+Pewangi", "Spin", "Isi air", "Buang air", "Pewangi", "Motor", "Uji relay"};
+    "Rinse+Pewangi", "Spin", "Isi air", "Buang air", "Pewangi", "Motor", "Uji relay", "Kalibrasi relay"};
 static const char* const cmdNames[PRG_COUNT] = {
     "kustom", "normal", "gentle", "hijab", "cepat", "soak", "wash", "soak_and_wash", "rinse",
-    "rinse_parfume", "spin", "water_in", "water_out", "add_parfume", "motor_on", "relay_test"};
+    "rinse_parfume", "spin", "water_in", "water_out", "add_parfume", "motor_on", "relay_test", "kalibrasi_relay"};
 
 const char* programName(uint8_t id) { return id < PRG_COUNT ? names[id] : "?"; }
 const char* programCmdName(uint8_t id) { return id < PRG_COUNT ? cmdNames[id] : "?"; }
 bool programIsFull(uint8_t id) { return id <= PRG_CEPAT; }
+bool programIsTest(uint8_t id) { return id == PRG_TEST || id == PRG_RELAYSEQ; }
 
 int programFromCmdName(const String& name) {
   for (int i = 0; i < PRG_COUNT; i++)
@@ -129,6 +130,11 @@ uint8_t buildProgram(uint8_t id, const Settings& s, uint8_t arg, Step* out, uint
       b.add(ST_AGITATE, 5, pola, 0, KIND_NONE);
       break;
     case PRG_TEST: b.add(ST_TEST, arg, 0, 0, KIND_NONE); break;
+    case PRG_RELAYSEQ: {
+      uint8_t secs = arg ? arg : 3;
+      for (uint8_t r = 0; r < R_COUNT; r++) b.add(ST_TEST, r, secs, 0, KIND_NONE);
+      break;
+    }
     default: break;
   }
   return b.n;

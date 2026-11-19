@@ -63,7 +63,7 @@ static void sendMenu() {
   static const Btn btns[] = {
       {"\xE2\x96\xB6 Normal", "program normal"}, {"\xF0\x9F\x8C\xB8 Gentle", "program gentle"},
       {"\xF0\x9F\xA7\x95 Hijab", "program hijab"}, {"\xE2\x9A\xA1 Cepat", "program cepat"},
-      {"\xF0\x9F\x9B\xA0 Kustom", "program kustom"}, {"\xF0\x9F\x94\xA7 Manual", "#manual"},
+      {"\xF0\x9F\x9B\xA0 Kustom", "program kustom"}, {"\xF0\x9F\x94\xA7 Manual", "#manual"}, {"\xF0\x9F\x94\x8C Relay", "#relay"},
       {"\xF0\x9F\x93\x8A Status", "status"}, {"\xE2\x8F\xB8 Jeda", "jeda"},
       {"\xE2\x96\xB6 Lanjutkan", "lanjutkan"}, {"\xE2\x8F\xB9 STOP", "?stop"},
       {"\xE2\x9A\x99 Pengaturan", "#settings"}, {"\xF0\x9F\x92\xA7 Air", "#air"},
@@ -82,6 +82,20 @@ static void sendSubmenu(const String& name) {
         {"Motor 5 mnt", "motor_on"}, {"\xE2\xAC\x85 Menu", "#menu"},
     };
     sendWithKeyboard("\xF0\x9F\x94\xA7 Kontrol manual (butuh air untuk soak & motor)", keyboard(b, sizeof(b) / sizeof(b[0]), 3));
+  } else if (name == "relay") {
+    static const Btn b[] = {
+        {"Kiri ON", "relay kiri on"}, {"Kiri OFF", "relay kiri off"},
+        {"Kanan ON", "relay kanan on"}, {"Kanan OFF", "relay kanan off"},
+        {"Isi ON", "relay isi on"}, {"Isi OFF", "relay isi off"},
+        {"Buang ON", "relay buang on"}, {"Buang OFF", "relay buang off"},
+        {"Spin ON", "relay spin on"}, {"Spin OFF", "relay spin off"},
+        {"Pewangi ON", "relay pewangi on"}, {"Pewangi OFF", "relay pewangi off"},
+        {"\xF0\x9F\x94\x81 Uji berurutan", "kalibrasi_relay"}, {"\xE2\x9B\x94 Semua OFF", "relay semua off"},
+        {"\xE2\xAC\x85 Menu", "#menu"},
+    };
+    sendWithKeyboard("\xF0\x9F\x94\x8C Kontrol relay (hanya saat mesin siap, otomatis mati 60 dtk).\n"
+                     "Lepas beban / tutup kran dulu. Motor kiri & kanan tidak pernah bisa nyala bersamaan.",
+                     keyboard(b, sizeof(b) / sizeof(b[0]), 2));
   } else if (name == "settings") {
     static const Btn b[] = {
         {"Pola Normal", "pola normal"}, {"Pola Gentle", "pola gentle"}, {"Pola Hijab", "pola hijab"},

@@ -278,6 +278,7 @@ String statusText() {
   t += "\n";
   if (netOnline()) t += "\xF0\x9F\x93\xB6 " + netSsid() + " (" + netRssi() + " dBm)";
   else t += "\xF0\x9F\x93\xB4 WiFi offline";
+  if (s.relayFault) t += "\n\xE2\x9D\x8C RELAY TERKUNCI (pelanggaran interlock). Restart mesin.";
   t += String(" \xE2\x80\xA2 \xF0\x9F\x94\x94 ") + notifModeName(S.notif) + " \xE2\x80\xA2 \xE2\x8F\xB1 Uptime " + fmtDuration(s.uptimeSec);
   return t;
 }
@@ -325,6 +326,7 @@ String helpText() {
          "set_soak_session, set_wash_time, set_rinse_time, set_jumlah_parfume, set_spin_time, set_delay\n"
          "mulai_nanti <menit>, selesai_jam <HH:MM>, notif <lengkap|ringkas|senyap>\n"
          "kalibrasi_air, reset_semua, restart, info\n"
+         "relay <kiri|kanan|isi|buang|spin|pewangi> <on|off>, relay semua off, kalibrasi_relay [detik]\n"
          "Konsol: heap, tasks, relay_test <nama>, log";
 }
 
@@ -415,6 +417,33 @@ CmdResult executeCommand(const String& command, const String& argsIn, CmdSource 
     int r = relayFromName(token(args, 0));
     if (r < 0) return fail("Relay tidak dikenal. Pilihan: kiri, kanan, isi, buang, spin, pewangi.");
     return runProgram(PRG_TEST, r);
+  }
+  if (name == "kalibrasi_relay") {
+    int secs = 3;
+    if (args.length() && !parseInt(token(args, 0), 1, 30, secs)) return fail("Lama nyala per relay: 1-30 detik.");
+    return runProgram(PRG_RELAYSEQ, secs);
+  }
+  if (name == "relay") {
+    String who = token(args, 0);
+    String mode = token(args, 1);
+    who.toLowerCase();
+    mode.toLowerCase();
+    bool on = mode == "on" || mode == "nyala" || mode == "1";
+    bool off = mode == "off" || mode == "mati" || mode == "0";
+    if (!on && !off) return fail("Format: relay <kiri|kanan|isi|buang|spin|pewangi|semua> <on|off>");
+    if (who == "semua") {
+      if (on) return fail("Semua relay tidak boleh dinyalakan sekaligus. Gunakan kalibrasi_relay.");
+      return postSimple(MC_STOP, "Semua relay dimatikan.");
+    }
+    int r = relayFromName(who);
+    if (r < 0) return fail("Relay tidak dikenal. Pilihan: kiri, kanan, isi, buang, spin, pewangi, semua.");
+    MachineStatus st;
+    machineGetStatus(st);
+    if (st.state != MS_IDLE) return fail("Kontrol relay manual hanya saat mesin siap (tidak sedang bekerja).");
+    if (st.relayFault) return fail("Relay terkunci karena pelanggaran interlock. Restart mesin.");
+    MachineCmd c = {MC_RELAY, (uint8_t)r, (uint8_t)(on ? 1 : 0)};
+    if (!machinePost(c)) return fail("Antrean perintah mesin penuh, coba lagi.");
+    return ok(String("Relay ") + who + (on ? " dinyalakan (otomatis mati 60 detik; motor kiri & kanan tidak bisa bersamaan)." : " dimatikan."));
   }
   if (name == "stop") return postSimple(MC_STOP, "\xE2\x8F\xB9 Perintah STOP dikirim. Semua relay dimatikan.");
   if (name == "jeda") return postSimple(MC_PAUSE, "\xE2\x8F\xB8 Perintah jeda dikirim.");

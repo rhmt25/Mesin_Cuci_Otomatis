@@ -100,3 +100,14 @@ Sensor air disimulasikan dengan slide switch di GPIO27. Hotspot ESP32 tidak bisa
 
 `sh tools/hosttest/run.sh` (butuh `g++`) menjalankan state machine dengan jam palsu dan model tangki air:
 full proses, air habis, valve macet, stop, jeda/lanjutkan, listrik padam, level persen, pengaman meluap, interlock.
+
+## Uji relay & failsafe
+
+- Dashboard → tab **Relay**: tombol ON/OFF per relay (hanya saat mesin siap, otomatis mati 60 detik) dan **Uji berurutan**
+  (kiri → kanan → isi → buang → spin → pewangi). Telegram: menu **Relay**; perintah `relay <nama> <on|off>`,
+  `relay semua off`, `kalibrasi_relay [detik]`.
+- Motor kiri & kanan **tidak pernah** menyala bersamaan, dijaga berlapis: (1) interlock di `relaySet`, (2) pin motor lawan
+  dipaksa mati secara fisik sebelum motor dinyalakan, (3) jeda ganti arah, (4) `relayGuard()` tiap tick: bila terdeteksi
+  kiri+kanan / isi+buang / buang+motor, semua relay dimatikan dan **dikunci sampai restart**, (5) motor cuci dimatikan paksa
+  bila menyala terus > 65 detik, (6) semua relay mati saat boot, error, atau STOP.
+- Login web: centang **Ingat perangkat ini** untuk cookie 30 hari; sesi tersimpan di NVS sehingga tetap berlaku setelah restart.

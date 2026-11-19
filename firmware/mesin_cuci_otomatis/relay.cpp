@@ -12,6 +12,7 @@ static int8_t lastMotorDir = -1;     // 0 kiri, 1 kanan
 static uint32_t motorOnSince = 0;
 static uint64_t motorMsTotal = 0;
 static portMUX_TYPE relayMux = portMUX_INITIALIZER_UNLOCKED;
+static bool faulted = false;
 
 static inline int levelFor(bool on) {
 #if RELAY_ACTIVE_LOW
@@ -57,7 +58,9 @@ bool relaySet(RelayId id, bool on) {
   const char* deny = nullptr;
   portENTER_CRITICAL(&relayMux);
   bool motorsBefore = state[R_LEFT] || state[R_RIGHT];
-  if (on && !state[id]) {
+  if (on && faulted) {
+    deny = "relay terkunci karena pelanggaran interlock, restart mesin";
+  } else if (on && !state[id]) {
     switch (id) {
       case R_LEFT:
       case R_RIGHT: {
@@ -80,6 +83,10 @@ bool relaySet(RelayId id, bool on) {
     }
   }
   if (!deny) {
+    if (on && (id == R_LEFT || id == R_RIGHT)) {
+      // Sabuk & pengaman: paksa pin motor lawan mati secara fisik sebelum menyalakan
+      writePin(pins[id == R_LEFT ? R_RIGHT : R_LEFT], false);
+    }
     state[id] = on;
     writePin(pins[id], on);
     if (on && (id == R_LEFT || id == R_RIGHT)) lastMotorDir = id == R_LEFT ? 0 : 1;
@@ -117,4 +124,43 @@ uint32_t relayMotorSeconds() {
   uint64_t ms = motorMsTotal;
   if (state[R_LEFT] || state[R_RIGHT]) ms += millis() - motorOnSince;
   return (uint32_t)(ms / 1000);
+}
+
+bool relayFaulted() { return faulted; }
+
+#ifdef HOST_TEST
+// Hanya untuk uji: memaksa status internal agar failsafe bisa dites.
+void relayHostForce(RelayId id, bool on) { state[id] = on; }
+void relayHostUnfault() { faulted = false; }
+#endif
+
+uint8_t relayGuard() {
+  uint8_t result = 0;
+  const char* why = nullptr;
+  portENTER_CRITICAL(&relayMux);
+  bool bad = (state[R_LEFT] && state[R_RIGHT]) || (state[R_FILL] && state[R_DRAIN]) ||
+             (state[R_DRAIN] && (state[R_LEFT] || state[R_RIGHT]));
+  if (bad) {
+    for (int i = 0; i < R_COUNT; i++) {
+      state[i] = false;
+      writePin(pins[i], false);
+    }
+    updateMotorClock(true, false);
+    if (!faulted) {
+      faulted = true;
+      result = 2;
+      why = "PELANGGARAN INTERLOCK: semua relay dimatikan dan dikunci";
+    }
+  } else if ((state[R_LEFT] || state[R_RIGHT]) && millis() - motorOnSince > MOTOR_MAX_ON_MS) {
+    bool motorsBefore = true;
+    state[R_LEFT] = state[R_RIGHT] = false;
+    writePin(pins[R_LEFT], false);
+    writePin(pins[R_RIGHT], false);
+    updateMotorClock(motorsBefore, false);
+    result = 1;
+    why = "Motor cuci menyala terlalu lama, dimatikan paksa";
+  }
+  portEXIT_CRITICAL(&relayMux);
+  if (why) logf(LOG_ERROR, "%s", why);
+  return result;
 }

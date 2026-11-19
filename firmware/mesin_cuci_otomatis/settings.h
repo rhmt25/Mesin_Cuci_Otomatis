@@ -97,4 +97,11 @@ void statsAddMotorSec(uint32_t sec);
 
 // --- Auth web ---
 bool authCheck(const String& password);
-void authSet(const String& password);
+void authSet(const String& password);   // juga mencabut semua sesi login
+
+// Sesi login tersimpan di NVS (bertahan saat restart / flash ulang non-erase)
+#define MAX_SESSIONS 8
+String sessionCreate();                  // buat token baru (yang tertua digantikan)
+bool sessionValid(const String& token);
+void sessionRevoke(const String& token);
+void sessionRevokeAll();

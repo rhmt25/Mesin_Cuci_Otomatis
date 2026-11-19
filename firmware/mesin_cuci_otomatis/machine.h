@@ -13,6 +13,7 @@ enum MachineCmdType : uint8_t {
   MC_RESUME,        // lanjutkan dari jeda, atau dari pemulihan listrik padam
   MC_SKIP,
   MC_CANCEL_RESUME, // batalkan tawaran pemulihan listrik padam
+  MC_RELAY,         // kontrol relay manual (hanya saat siap): arg = RelayId, arg2 = 1 nyala / 0 mati
 };
 
 struct MachineCmd {
@@ -34,6 +35,7 @@ struct MachineStatus {
   uint8_t progressPct;
   uint8_t waterState;       // 0 kosong, 1 penuh, 2 mengukur
   bool waterRaw;
+  bool relayFault;          // interlock dilanggar: relay terkunci sampai restart
   bool resumePending;       // listrik sempat padam
   char resumeInfo[56];
   bool relays[R_COUNT];

@@ -11,6 +11,8 @@
 #include "settings.h"
 #include "water_sensor.h"
 
+void relayHostForce(RelayId id, bool on);
+void relayHostUnfault();
 void machineHostTick();
 void machineHostReset();
 
@@ -70,10 +72,14 @@ static void model(uint32_t dt) {
   g_raw = g_level >= 60.0;
 }
 
+static long g_violations = 0;   // pelanggaran invarian keselamatan di SEMUA skenario
 static void tick() {
   g_ms += TICK_MS;
   model(TICK_MS);
   machineHostTick();
+  if (relayIsOn(R_LEFT) && relayIsOn(R_RIGHT)) g_violations++;                       // kiri+kanan
+  if (relayIsOn(R_FILL) && relayIsOn(R_DRAIN)) g_violations++;                       // isi+buang
+  if (relayIsOn(R_DRAIN) && (relayIsOn(R_LEFT) || relayIsOn(R_RIGHT))) g_violations++;  // buang+motor
 }
 static bool runUntil(std::function<bool()> pred, uint32_t maxMs) {
   for (uint32_t t = 0; t < maxMs; t += TICK_MS) {
@@ -94,6 +100,7 @@ static void post(uint8_t type, uint8_t arg = 0, uint8_t arg2 = 0) { MachineCmd c
 static bool anyRelayOn() { for (int i = 0; i < R_COUNT; i++) if (relayIsOn((RelayId)i)) return true; return false; }
 
 static void resetWorld() {
+  relayHostUnfault();
   Preferences::db().clear();
   g_log.clear();
   g_level = 0; g_noWater = false; g_drainBroken = false; g_raw = false; g_fillOnMs = 0;
@@ -279,6 +286,111 @@ static void t10_skipAndHold() {
   tick();
 }
 
+static void t11_manualRelay() {
+  printf("[T11] Kontrol relay manual + batas waktu otomatis + interlock manual\n");
+  resetWorld();
+  post(MC_RELAY, R_LEFT, 1);
+  tick();
+  CHECK(relayIsOn(R_LEFT), "relay kiri menyala manual");
+  post(MC_RELAY, R_RIGHT, 1);
+  tick();
+  CHECK(!relayIsOn(R_RIGHT) && relayIsOn(R_LEFT), "kanan ditolak saat kiri menyala");
+  post(MC_RELAY, R_LEFT, 0);
+  tick();
+  CHECK(!relayIsOn(R_LEFT), "kiri dimatikan manual");
+  post(MC_RELAY, R_RIGHT, 1);
+  runUntil([] { return false; }, 40);
+  post(MC_RELAY, R_LEFT, 1);
+  tick();
+  CHECK(!(relayIsOn(R_LEFT) && relayIsOn(R_RIGHT)), "kiri tidak ikut menyala (kanan masih ON)");
+  // batas waktu manual
+  uint32_t t0 = g_ms;
+  bool off = runUntil([] { return !relayIsOn(R_RIGHT); }, 70000);
+  CHECK(off && g_ms - t0 >= 55000 && g_ms - t0 <= 62000, "relay manual otomatis mati ~60 dtk");
+  // manual ditolak saat program berjalan
+  post(MC_RUN, PRG_WASH);
+  tick();
+  post(MC_RELAY, R_SPIN, 1);
+  tick();
+  CHECK(!relayIsOn(R_SPIN), "relay manual ditolak saat mesin bekerja");
+  post(MC_STOP);
+  tick();
+  // program dimulai membatalkan relay manual
+  post(MC_RELAY, R_PERFUME, 1);
+  tick();
+  CHECK(relayIsOn(R_PERFUME), "pewangi manual ON");
+  post(MC_RUN, PRG_SPIN);
+  tick();
+  CHECK(!relayIsOn(R_PERFUME), "memulai program mematikan relay manual");
+  post(MC_STOP);
+  tick();
+}
+
+static void t12_relaySequence() {
+  printf("[T12] Uji relay berurutan otomatis\n");
+  resetWorld();
+  std::vector<int> order;
+  bool prev[R_COUNT] = {false};
+  post(MC_RUN, PRG_RELAYSEQ, 2);
+  bool done = false;
+  for (uint32_t t = 0; t < 600000 && !done; t += TICK_MS) {
+    tick();
+    for (int i = 0; i < R_COUNT; i++) {
+      bool now = relayIsOn((RelayId)i);
+      if (now && !prev[i]) order.push_back(i);
+      prev[i] = now;
+    }
+    done = idle();
+  }
+  CHECK(done, "uji berurutan selesai");
+  bool inOrder = order.size() == R_COUNT;
+  for (size_t i = 0; i < order.size(); i++) inOrder = inOrder && order[i] == (int)i;
+  CHECK(inOrder, "tiap relay menyala tepat sekali, urut kiri,kanan,isi,buang,spin,pewangi");
+  CHECK(!anyRelayOn(), "semua relay mati di akhir");
+  CHECK(ST.histCount == 0, "uji relay tidak masuk riwayat");
+  // stop di tengah uji
+  post(MC_RUN, PRG_RELAYSEQ, 5);
+  runUntil([] { return relayIsOn(R_LEFT); }, 5000);
+  post(MC_STOP);
+  tick();
+  CHECK(!anyRelayOn() && idle(), "Stop menghentikan uji berurutan");
+}
+
+static void t13_failsafe() {
+  printf("[T13] Failsafe: pelanggaran interlock mengunci relay\n");
+  resetWorld();
+  relayHostForce(R_LEFT, true);
+  relayHostForce(R_RIGHT, true);   // kondisi yang seharusnya mustahil
+  long before = g_violations;
+  tick();
+  CHECK(!anyRelayOn(), "guard mematikan semua relay pada tick berikutnya");
+  CHECK(g_violations == before, "tidak ada tick dengan kiri+kanan menyala setelah guard");
+  CHECK(relayFaulted() && st().relayFault, "relay terkunci & status fault terlapor");
+  CHECK(!relaySet(R_FILL, true) && !relaySet(R_LEFT, true), "semua relay ditolak saat terkunci");
+  post(MC_RUN, PRG_SPIN);
+  runUntil([] { return false; }, 200);
+  CHECK(!anyRelayOn(), "program tidak bisa menyalakan relay saat terkunci");
+  g_violations = before;   // pelanggaran paksaan uji tidak dihitung
+  relayHostUnfault();
+}
+
+static void t14_sessions() {
+  printf("[T14] Sesi login awet (ingat perangkat)\n");
+  resetWorld();
+  String t1 = sessionCreate();
+  CHECK(sessionValid(t1), "token baru valid");
+  CHECK(!sessionValid("salah"), "token acak ditolak");
+  // simulasi restart: RAM hilang, NVS tetap -> sesi harus tetap valid
+  CHECK(sessionValid(t1), "token tetap valid (disimpan ke NVS)");
+  String ts[9];
+  for (int i = 0; i < 9; i++) ts[i] = sessionCreate();
+  CHECK(!sessionValid(t1) && sessionValid(ts[8]), "slot tertua digantikan setelah 8 sesi");
+  sessionRevoke(ts[8]);
+  CHECK(!sessionValid(ts[8]), "logout mencabut sesi");
+  authSet("passwordbaru");
+  CHECK(!sessionValid(ts[7]), "ganti password mencabut semua sesi");
+}
+
 int main(int argc, char** argv) {
   g_verbose = argc > 1;
   t1_fullNormal();
@@ -291,6 +403,13 @@ int main(int argc, char** argv) {
   t8_timeOverflowGuard();
   t9_interlock();
   t10_skipAndHold();
+  t11_manualRelay();
+  t12_relaySequence();
+  t13_failsafe();
+  t14_sessions();
+  checks++;
+  if (g_violations != 0) { failures++; printf("  GAGAL: %ld tick melanggar invarian keselamatan\n", g_violations); }
+  else printf("  ok: 0 pelanggaran invarian (kiri+kanan, isi+buang, buang+motor) di seluruh skenario\n");
   printf("\n%d pemeriksaan, %d gagal\n", checks, failures);
   return failures ? 1 : 0;
 }

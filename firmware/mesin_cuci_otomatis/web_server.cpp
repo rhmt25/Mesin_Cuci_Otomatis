@@ -18,20 +18,11 @@ static AsyncWebServer server(80);
 static AsyncWebSocket ws("/ws");
 
 // ============================================================================
-// Sesi login
+// Sesi login (token tersimpan di NVS lewat settings.cpp -> bertahan saat restart)
 // ============================================================================
-#define MAX_SESSIONS 4
-static String sessions[MAX_SESSIONS];
-static uint8_t sessionNext = 0;
 static uint8_t loginFails = 0;
 static uint32_t lockUntil = 0;
 static volatile bool uploadOk = false;
-
-static String newToken() {
-  char buf[33];
-  for (int i = 0; i < 4; i++) snprintf(buf + i * 8, 9, "%08x", (unsigned)esp_random());
-  return String(buf);
-}
 
 static String cookieToken(const String& cookie) {
   int p = cookie.indexOf("sid=");
@@ -40,12 +31,7 @@ static String cookieToken(const String& cookie) {
   return cookie.substring(p + 4, e < 0 ? cookie.length() : e);
 }
 
-static bool tokenValid(const String& t) {
-  if (t.length() != 32) return false;
-  for (int i = 0; i < MAX_SESSIONS; i++)
-    if (sessions[i] == t) return true;
-  return false;
-}
+static bool tokenValid(const String& t) { return sessionValid(t); }
 
 static bool authed(AsyncWebServerRequest* r) {
   if (!r->hasHeader("Cookie")) return false;
@@ -96,6 +82,7 @@ static String statusJson() {
   static const char* water[] = {"kosong", "penuh", "mengukur"};
   d["water"] = water[s.waterState];
   d["waterRaw"] = s.waterRaw;
+  d["fault"] = s.relayFault;
   d["resume"]["pending"] = s.resumePending;
   d["resume"]["info"] = s.resumeInfo;
   for (int i = 0; i < R_COUNT; i++) d["relays"][relayName((RelayId)i)] = s.relays[i];
@@ -275,21 +262,21 @@ static void setupRoutes() {
       return;
     }
     loginFails = 0;
-    String token = newToken();
-    sessions[sessionNext] = token;
-    sessionNext = (sessionNext + 1) % MAX_SESSIONS;
+    String token = sessionCreate();
+    bool remember = json["remember"] | false;
     AsyncWebServerResponse* res = r->beginResponse(200, "application/json", "{\"ok\":true}");
-    res->addHeader("Set-Cookie", "sid=" + token + "; Path=/; HttpOnly; SameSite=Strict");
+    // "Ingat perangkat": cookie bertahan 30 hari. Tanpa itu, cookie hilang saat browser ditutup.
+    String cookie = "sid=" + token + "; Path=/; HttpOnly; SameSite=Lax";
+    if (remember) cookie += "; Max-Age=2592000";
+    res->addHeader("Set-Cookie", cookie);
     r->send(res);
   }));
 
   server.on("/api/logout", HTTP_POST, [](AsyncWebServerRequest* r) {
-    if (r->hasHeader("Cookie")) {
-      String t = cookieToken(r->header("Cookie"));
-      for (int i = 0; i < MAX_SESSIONS; i++)
-        if (sessions[i] == t) sessions[i] = "";
-    }
-    sendJson(r, 200, "{\"ok\":true}");
+    if (r->hasHeader("Cookie")) sessionRevoke(cookieToken(r->header("Cookie")));
+    AsyncWebServerResponse* res = r->beginResponse(200, "application/json", "{\"ok\":true}");
+    res->addHeader("Set-Cookie", "sid=; Path=/; Max-Age=0");
+    r->send(res);
   });
 
   // ---- status & data ----

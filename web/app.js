@@ -49,6 +49,7 @@ $$('#tabs button').forEach(b => b.onclick = () => {
 function onTab(t) {
   if (t === 'settings' || t === 'water') loadSettings();
   if (t === 'wifi') loadWifi();
+  if (t === 'relay') renderRelays();
   if (t === 'history') loadHistory();
   if (t === 'firmware') loadFw();
   if (t === 'system') renderSys();
@@ -60,7 +61,7 @@ function onTab(t) {
 function showLogin() { $('#login').hidden = false; $('#app').hidden = true; if (ws) { ws.close(); ws = null; } }
 $('#loginForm').onsubmit = async e => {
   e.preventDefault();
-  const r = await api('/api/login', 'POST', { password: $('#pw').value }).catch(() => ({ ok: false, msg: 'Gagal terhubung' }));
+  const r = await api('/api/login', 'POST', { password: $('#pw').value, remember: $('#remember').checked }).catch(() => ({ ok: false, msg: 'Gagal terhubung' }));
   if (r.ok) { $('#pw').value = ''; start(); } else $('#loginMsg').textContent = r.msg || 'Gagal';
 };
 $('#btnLogout').onclick = async () => { await api('/api/logout', 'POST'); showLogin(); };
@@ -98,6 +99,8 @@ function renderStatus(s) {
   const bp = $('#bannerPause');
   bp.hidden = s.state !== 'paused';
   bp.textContent = '⏸ Dijeda: ' + (s.pause || 'oleh pengguna') + '. Tekan Lanjutkan untuk mencoba lagi.';
+  $('#bannerFault').hidden = !s.fault;
+  updateRelays(s);
   if ($('#tab-system').classList.contains('on')) renderSys();
   if (s.otaBusy) { $('#fwBar').style.width = s.otaProgress + '%'; }
 }
@@ -147,6 +150,33 @@ $('#btnResetAll').onclick = () => confirm('Reset semua pengaturan ke default?') 
 $('#btnCalib').onclick = () => confirm('Reset data kalibrasi isi/buang?') && cmd('kalibrasi_air');
 $('#btnDelay').onclick = () => cmd('mulai_nanti', $('#inDelay').value || 0);
 $('#btnFinish').onclick = () => { const v = $('#inFinish').value; v ? cmd('selesai_jam', v) : cmd('selesai_jam', 'batal'); };
+
+// ------------------------------------------------------------------ Relay ----
+const RELAYS = [['kiri', 'Motor putar kiri', 'GPIO25'], ['kanan', 'Motor putar kanan', 'GPIO18'], ['isi', 'Valve isi air', 'GPIO17'],
+  ['buang', 'Motor valve buang', 'GPIO16'], ['spin', 'Motor spin', 'GPIO4'], ['pewangi', 'Pompa pewangi', 'GPIO13']];
+function renderRelays() {
+  const host = $('#relayCards');
+  if (host.dataset.ready) return;
+  host.dataset.ready = '1';
+  host.innerHTML = RELAYS.map(([k, label, pin]) => `<div class="card relayCard">
+    <div class="info"><span class="led" id="led-${k}"></span><div><b>${label}</b><br><span class="muted">${k} · ${pin}</span></div></div>
+    <div class="row" style="margin:0"><button class="btn primary" data-rl="${k}" data-on="1">ON</button><button class="btn" data-rl="${k}" data-on="0">OFF</button></div></div>`).join('');
+  $$('[data-rl]', host).forEach(b => b.onclick = () => cmd('relay', `${b.dataset.rl} ${b.dataset.on === '1' ? 'on' : 'off'}`));
+}
+function updateRelays(s) {
+  renderRelays();
+  RELAYS.forEach(([k]) => { const l = $('#led-' + k); if (l) l.classList.toggle('on', !!(s.relays && s.relays[k])); });
+  const idle = s.state === 'idle' && !s.fault;
+  $$('[data-rl]').forEach(b => { b.disabled = !idle && b.dataset.on === '1'; });
+  $('#btnSeq').disabled = !idle;
+  const seq = s.state !== 'idle' && s.program === 'Kalibrasi relay';
+  const bp = $('#relayProgress');
+  bp.hidden = !seq;
+  if (seq) bp.textContent = `Uji berurutan: ${s.detail} (langkah ${s.step}/${s.steps})`;
+}
+$('#btnSeq').onclick = () => cmd('kalibrasi_relay', $('#seqSecs').value || 3);
+$('#btnSeqStop').onclick = () => cmd('stop');
+$('#btnAllOff').onclick = () => cmd('relay', 'semua off');
 
 // ----------------------------------------------------------------- WiFi ----
 async function loadWifi() {
@@ -242,7 +272,7 @@ function renderSys() {
   const s = last;
   $('#sysInfo').innerHTML = `<b>Firmware:</b> v${esc(s.fw)}<br><b>Uptime:</b> ${fmt(s.uptime)}<br><b>Heap bebas:</b> ${(s.heap / 1024).toFixed(0)} KB<br><b>Alasan reset terakhir:</b> ${esc(s.reset)}<br><b>WiFi:</b> ${s.wifi.online ? esc(s.wifi.ssid) + ' · ' + esc(s.wifi.ip) : 'offline'}<br><b>Hotspot:</b> ${esc(s.wifi.ap)} (${s.wifi.apClients} klien)<br><b>Jam:</b> ${esc(s.wifi.time)}<br><b>Notifikasi:</b> ${esc(s.notif)}`;
 }
-$('#btnPw').onclick = async () => { const r = await cmd('web_password', $('#newPw').value); if (r && r.ok) $('#newPw').value = ''; };
+$('#btnPw').onclick = async () => { const r = await cmd('web_password', $('#newPw').value); if (r && r.ok) { $('#newPw').value = ''; toast('Password diganti. Silakan login ulang.'); setTimeout(showLogin, 800); } };
 $('#btnRestart').onclick = () => confirm('Restart mesin?') && cmd('restart');
 
 // ---------------------------------------------------------------- koneksi ----

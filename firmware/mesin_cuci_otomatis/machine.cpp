@@ -31,6 +31,7 @@ static char detail[56];
 static bool resumePending = false;
 static ResumeInfo resumeInfo;
 static char resumeText[56];
+static uint32_t manualSince[R_COUNT];   // kapan relay manual dinyalakan (0 = tidak)
 
 // ---- konteks langkah ----------------------------------------------------------
 struct Run {
@@ -112,7 +113,7 @@ static uint32_t estimateStepMs(const Step& st) {
     case ST_DRAIN: return estDrainMs() + stableMs();
     case ST_SPIN: return minToMs(st.a);
     case ST_CHECK: return stableMs();
-    case ST_TEST: return secToMs(2);
+    case ST_TEST: return scaledMs(MOTOR_REVERSE_GAP_MS) + secToMs(st.flag ? st.flag : 2);
   }
   return 0;
 }
@@ -496,9 +497,9 @@ static void stepInit() {
       setDetail("Memeriksa air");
       break;
     case ST_TEST:
-      R.left = secToMs(2);
-      if (!relaySet((RelayId)st.a, true)) R.left = 1;
-      setDetail("Uji relay %s", relayName((RelayId)st.a));
+      R.phase = 0;   // jeda dulu (juga memberi jeda ganti arah motor), lalu menyala
+      R.left = scaledMs(MOTOR_REVERSE_GAP_MS) + TICK_MS * 2;
+      setDetail("Uji relay %s (siap)", relayName((RelayId)st.a));
       break;
   }
 }
@@ -509,7 +510,7 @@ static void stepBegin() {
   stageLabelFor(progId, st, progGroups, stage, sizeof(stage));
   stepTitle(st, title, sizeof(title));
   logf(LOG_STEP, "%s: %s mulai", stage, title);
-  if (idx >= waitOffset) resumeSave(progId, idx - waitOffset);
+  if (idx >= waitOffset && !programIsTest(progId)) resumeSave(progId, idx - waitOffset);
   stepInit();
 }
 
@@ -525,7 +526,10 @@ static void stepEngage() {
       if (R.phase == 0 && R.left > 0) relaySet(R_PERFUME, true);
       break;
     case ST_SPIN: relaySet(R_SPIN, true); break;
-    case ST_TEST: relaySet((RelayId)st.a, true); break;
+    case ST_TEST:
+      R.phase = 0;
+      R.left = scaledMs(MOTOR_REVERSE_GAP_MS) + TICK_MS * 2;
+      break;
     case ST_FILL: fillBegin(); break;
     case ST_DRAIN: drainBegin(true, st.flag == 1); break;
     default: break;
@@ -536,9 +540,11 @@ static void endProgram(CycleResult res, const char* why) {
   relayAllOff();
   uint32_t durSec = (millis() - progStartMs) / 1000;
   uint32_t motorDelta = relayMotorSeconds() - progMotorStart;
-  statsRecord(progId, progStartEpoch, durSec * TIME_SCALE, res);
-  if (motorDelta) statsAddMotorSec(motorDelta);
-  resumeClear();
+  if (!programIsTest(progId)) {
+    statsRecord(progId, progStartEpoch, durSec * TIME_SCALE, res);
+    if (motorDelta) statsAddMotorSec(motorDelta);
+    resumeClear();
+  }
   mstate = MS_IDLE;
   detail[0] = 0;
   pauseReason[0] = 0;
@@ -619,7 +625,7 @@ static void startProgram(uint8_t id, uint8_t arg, int resumeIdx) {
   progTotalEst = 0;
   for (uint8_t i = 0; i < n; i++) progTotalEst += estimateStepMs(prog[i]);
 
-  if (resumeIdx < 0 && id != PRG_TEST) {
+  if (resumeIdx < 0 && !programIsTest(id)) {
     uint32_t waitSec = computeWaitSeconds(progTotalEst);
     if (waitSec > 0 && progN < MAX_STEPS) {
       memmove(prog + 1, prog, progN * sizeof(Step));
@@ -630,7 +636,7 @@ static void startProgram(uint8_t id, uint8_t arg, int resumeIdx) {
       logf(LOG_INFO, "Proses ditunda %lu menit %lu detik", (unsigned long)(waitSec / 60), (unsigned long)(waitSec % 60));
     }
   }
-  resumePending = false;
+  if (!programIsTest(id)) resumePending = false;
   idx = resumeIdx >= 0 ? (uint8_t)resumeIdx : 0;
   mstate = MS_RUNNING;
   progStartMs = millis();
@@ -699,12 +705,21 @@ static SR tickStep(uint32_t dt) {
       R.left -= dt;
       return SR_CONTINUE;
     case ST_TEST:
-      if (R.left <= dt) {
-        relaySet((RelayId)st.a, false);
-        return SR_DONE;
+      if (R.left > dt) {
+        R.left -= dt;
+        return SR_CONTINUE;
       }
-      R.left -= dt;
-      return SR_CONTINUE;
+      if (R.phase == 0) {
+        if (!relaySet((RelayId)st.a, true)) return failStep("Relay ditolak interlock saat uji");
+        logf(LOG_INFO, "Uji relay %s: ON", relayName((RelayId)st.a));
+        setDetail("Uji relay %s (menyala)", relayName((RelayId)st.a));
+        R.phase = 1;
+        R.left = secToMs(st.flag ? st.flag : 2);
+        return SR_CONTINUE;
+      }
+      relaySet((RelayId)st.a, false);
+      logf(LOG_INFO, "Uji relay %s: OFF", relayName((RelayId)st.a));
+      return SR_DONE;
   }
   return SR_DONE;
 }
@@ -719,6 +734,7 @@ static void processCmd(const MachineCmd& c) {
         logf(LOG_WARN, "Perintah ditolak: mesin sedang %s", holdFlag ? "memperbarui firmware" : "bekerja");
         break;
       }
+      relayAllOff();   // batalkan kontrol relay manual yang mungkin masih menyala
       startProgram(c.arg, c.arg2, -1);
       break;
     case MC_STOP:
@@ -755,6 +771,18 @@ static void processCmd(const MachineCmd& c) {
         stepFinished();
       }
       break;
+    case MC_RELAY:
+      if (c.arg >= R_COUNT) break;
+      if (mstate != MS_IDLE || holdFlag) {
+        logf(LOG_WARN, "Kontrol relay manual hanya saat mesin siap");
+      } else if (c.arg2) {
+        if (relaySet((RelayId)c.arg, true))
+          logf(LOG_INFO, "Relay %s ON (manual, otomatis mati %d dtk)", relayName((RelayId)c.arg), MANUAL_MAX_ON_MS / 1000);
+      } else {
+        relaySet((RelayId)c.arg, false);
+        logf(LOG_INFO, "Relay %s OFF (manual)", relayName((RelayId)c.arg));
+      }
+      break;
     case MC_CANCEL_RESUME:
       if (resumePending) {
         resumePending = false;
@@ -771,8 +799,10 @@ static void processCmd(const MachineCmd& c) {
 static uint32_t currentStepLeftMs() {
   const Step& st = prog[idx];
   switch (st.type) {
-    case ST_WAIT: case ST_AGITATE: case ST_SPIN: case ST_CHECK: case ST_TEST:
+    case ST_WAIT: case ST_AGITATE: case ST_SPIN: case ST_CHECK:
       return R.left;
+    case ST_TEST:
+      return R.left + (R.phase == 0 ? secToMs(st.flag ? st.flag : 2) : 0);
     case ST_PERFUME:
       return R.phase == 1 ? 0 : R.left;
     case ST_SOAK: {
@@ -800,6 +830,7 @@ static void publishStatus() {
   s.waterRaw = sensorRaw();
   s.waterState = sensorStable(true, stableMs()) ? 1 : sensorStable(false, stableMs()) ? 0 : 2;
   s.resumePending = resumePending;
+  s.relayFault = relayFaulted();
   strlcpy(s.resumeInfo, resumeText, sizeof(s.resumeInfo));
   for (int i = 0; i < R_COUNT; i++) s.relays[i] = relayIsOn((RelayId)i);
   if (mstate != MS_IDLE) {
@@ -838,6 +869,23 @@ static void machineLoopOnce(uint32_t& lastTick) {
   uint32_t now = millis();
   uint32_t dt = now - lastTick;
   lastTick = now;
+
+  // Failsafe relay (interlock dilanggar / motor menyala terlalu lama)
+  uint8_t guard = relayGuard();
+  if (guard && mstate != MS_IDLE) endProgram(RES_ERROR, guard == 2 ? "pelanggaran interlock relay" : "motor menyala terlalu lama");
+
+  // Relay manual otomatis mati setelah MANUAL_MAX_ON_MS (hanya saat IDLE)
+  for (int i = 0; i < R_COUNT; i++) {
+    if (mstate != MS_IDLE || !relayIsOn((RelayId)i)) {
+      manualSince[i] = 0;
+    } else if (manualSince[i] == 0) {
+      manualSince[i] = now ? now : 1;
+    } else if (now - manualSince[i] >= MANUAL_MAX_ON_MS) {
+      relaySet((RelayId)i, false);
+      manualSince[i] = 0;
+      logf(LOG_WARN, "Relay %s otomatis dimatikan (batas waktu manual)", relayName((RelayId)i));
+    }
+  }
   if (mstate == MS_RUNNING) {
     SR r = tickStep(dt);
     switch (r) {

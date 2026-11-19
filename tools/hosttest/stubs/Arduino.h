@@ -27,6 +27,7 @@ using std::min;
 template <class T, class A, class B> T constrain(T v, A lo, B hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
 unsigned long millis();
+inline uint32_t esp_random() { return (uint32_t)rand() * 2654435761u; }
 void pinMode(uint8_t, uint8_t);
 void digitalWrite(uint8_t, uint8_t);
 int digitalRead(uint8_t);
