@@ -1,0 +1,22 @@
+#!/bin/sh
+# Tolak commit yang berisi kredensial. Aktifkan: git config core.hooksPath tools/hooks
+fail=0
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+
+for f in $staged; do
+  case "$f" in
+    *secrets.h|plan.md|todo.md)
+      echo "DITOLAK: $f tidak boleh di-commit"; fail=1 ;;
+  esac
+done
+
+added=$(git diff --cached -U0 --diff-filter=ACM | grep '^+' | grep -v '^+++')
+if echo "$added" | grep -Eq '[0-9]{8,10}:[A-Za-z0-9_-]{35}'; then
+  echo "DITOLAK: ada pola token Telegram di perubahan"; fail=1
+fi
+if echo "$added" | grep -Eq '(WIFI_PASSWORD|AP_PASSWORD|WEB_PASSWORD|OTA_PASSWORD)[[:space:]]+"[^"]+"' ; then
+  if echo "$added" | grep -E '(WIFI_PASSWORD|AP_PASSWORD|WEB_PASSWORD|OTA_PASSWORD)[[:space:]]+"[^"]+"' | grep -Evq '"(PASSWORD_[A-Z_]*|ISI_[A-Z_]*|)"'; then
+    echo "DITOLAK: ada password berisi nilai (gunakan secrets.h)"; fail=1
+  fi
+fi
+exit $fail

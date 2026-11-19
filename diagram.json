@@ -35,7 +35,7 @@
     [ "relay2:VCC", "relay5:VCC", "red", [ "h0" ] ],
     [ "relay5:GND", "relay6:GND", "black", [ "h0" ] ],
     [ "relay5:VCC", "relay6:VCC", "red", [ "h0" ] ],
-    [ "esp:5", "relay4:IN", "green", [ "h0" ] ],
+    [ "esp:25", "relay4:IN", "green", [ "h0" ] ],
     [ "esp:17", "relay3:IN", "green", [ "h105.6", "v57.6" ] ],
     [ "esp:18", "relay1:IN", "green", [ "h96", "v-57.6", "h9.6" ] ],
     [ "esp:16", "relay2:IN", "green", [ "h96", "v57.6" ] ],
