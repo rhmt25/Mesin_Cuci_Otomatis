@@ -264,11 +264,12 @@ void calibReset() {
 }
 
 // ---------------------------------------------------------------- Resume ----
-void resumeSave(uint8_t program, uint8_t stepIndex) {
+void resumeSave(uint8_t program, uint8_t stepIndex, uint8_t arg) {
   Preferences p;
   p.begin("resume", false);
   p.putUChar("prog", program);
   p.putUChar("step", stepIndex);
+  p.putUChar("arg", arg);
   time_t now = time(nullptr);
   p.putUInt("ts", now > 1700000000 ? (uint32_t)now : 0);
   p.putBool("valid", true);
@@ -281,6 +282,7 @@ bool resumeLoad(ResumeInfo& out) {
   out.valid = p.getBool("valid", false);
   out.program = p.getUChar("prog", 0);
   out.stepIndex = p.getUChar("step", 0);
+  out.arg = p.getUChar("arg", 0);
   out.savedAt = p.getUInt("ts", 0);
   p.end();
   return out.valid;
@@ -346,6 +348,194 @@ static String sha256Hex(const String& text) {
   return String(hex);
 }
 
+// ----------------------------------------------------------- Custom Proses ----
+static void customKey(uint8_t slot, char* k) { snprintf(k, 8, "p%u", slot); }
+
+bool customLoad(uint8_t slot, CustomProc& out) {
+  if (slot >= CUSTOM_SLOTS) return false;
+  Preferences p;
+  p.begin("custom", true);
+  char k[8];
+  customKey(slot, k);
+  bool ok = p.isKey(k) && p.getBytesLength(k) == sizeof(CustomProc);
+  if (ok) p.getBytes(k, &out, sizeof(CustomProc));
+  p.end();
+  if (ok) {
+    out.name[sizeof(out.name) - 1] = 0;
+    if (out.count == 0 || out.count > CUSTOM_MAX_ITEMS) ok = false;
+  }
+  return ok;
+}
+
+bool customSave(uint8_t slot, const CustomProc& proc) {
+  if (slot >= CUSTOM_SLOTS) return false;
+  Preferences p;
+  p.begin("custom", false);
+  char k[8];
+  customKey(slot, k);
+  p.putBytes(k, &proc, sizeof(CustomProc));
+  p.end();
+  return true;
+}
+
+bool customDelete(uint8_t slot) {
+  if (slot >= CUSTOM_SLOTS) return false;
+  Preferences p;
+  p.begin("custom", false);
+  char k[8];
+  customKey(slot, k);
+  p.remove(k);
+  p.end();
+  return true;
+}
+
+// ------------------------------------------------------------------ Sesi ----
+struct Dev {
+  char token[33];
+  char name[32];
+  uint32_t created;
+  uint32_t lastSeen;
+  uint32_t seq;      // urutan pembuatan (yang terkecil = terlama)
+};
+static Dev devs[MAX_DEVICES];
+static uint32_t devSeq = 0;
+static bool devsLoaded = false;
+static uint32_t lastDevPersist = 0;
+static char tmpTok[4][33];
+static uint8_t tmpNext = 0;
+
+static uint32_t nowEpoch() {
+  time_t t = time(nullptr);
+  return t > 1700000000 ? (uint32_t)t : 0;
+}
+
+static void devsSave() {
+  Preferences p;
+  p.begin("dev", false);
+  p.putBytes("list", devs, sizeof(devs));
+  p.end();
+  lastDevPersist = nowEpoch();
+}
+
+static void devsLoad() {
+  if (devsLoaded) return;
+  devsLoaded = true;
+  memset(devs, 0, sizeof(devs));
+  Preferences p;
+  p.begin("dev", true);
+  if (p.isKey("list") && p.getBytesLength("list") == sizeof(devs)) p.getBytes("list", devs, sizeof(devs));
+  p.end();
+  for (auto& d : devs) {
+    d.token[32] = 0;
+    d.name[sizeof(d.name) - 1] = 0;
+    if (d.token[0] && d.seq > devSeq) devSeq = d.seq;
+  }
+}
+
+String sessionCreate(bool remember, const String& deviceName) {
+  devsLoad();
+  char buf[33];
+  for (int i = 0; i < 4; i++) snprintf(buf + i * 8, 9, "%08x", (unsigned)esp_random());
+  if (!remember) {
+    memcpy(tmpTok[tmpNext], buf, 33);
+    tmpNext = (tmpNext + 1) % 4;
+    return String(buf);
+  }
+  int slot = -1;
+  for (int i = 0; i < MAX_DEVICES && slot < 0; i++)
+    if (!devs[i].token[0]) slot = i;
+  if (slot < 0) {   // penuh: hapus yang terlama
+    slot = 0;
+    for (int i = 1; i < MAX_DEVICES; i++)
+      if (devs[i].seq < devs[slot].seq) slot = i;
+  }
+  memset(&devs[slot], 0, sizeof(Dev));
+  memcpy(devs[slot].token, buf, 33);
+  strlcpy(devs[slot].name, deviceName.c_str(), sizeof(devs[slot].name));
+  devs[slot].created = devs[slot].lastSeen = nowEpoch();
+  devs[slot].seq = ++devSeq;
+  devsSave();
+  return String(buf);
+}
+
+int sessionSlot(const String& token) {
+  devsLoad();
+  if (token.length() != 32) return -1;
+  for (int i = 0; i < MAX_DEVICES; i++)
+    if (devs[i].token[0] && token == devs[i].token) return i;
+  return -1;
+}
+
+bool sessionValid(const String& token) {
+  if (token.length() != 32) return false;
+  int slot = sessionSlot(token);
+  if (slot >= 0) {
+    uint32_t now = nowEpoch();
+    if (now) {
+      devs[slot].lastSeen = now;
+      if (now - lastDevPersist > 6 * 3600UL) devsSave();   // simpan jarang agar flash awet
+    }
+    return true;
+  }
+  for (auto& t : tmpTok)
+    if (t[0] && token == t) return true;
+  return false;
+}
+
+void sessionRevoke(const String& token) {
+  int slot = sessionSlot(token);
+  if (slot >= 0) {
+    memset(&devs[slot], 0, sizeof(Dev));
+    devsSave();
+  }
+  for (auto& t : tmpTok)
+    if (t[0] && token == t) memset(t, 0, sizeof(t));
+}
+
+void sessionRevokeAll() {
+  devsLoad();
+  memset(devs, 0, sizeof(devs));
+  memset(tmpTok, 0, sizeof(tmpTok));
+  devsSave();
+}
+
+int deviceList(DeviceInfo* out, int maxCount, const String& currentToken) {
+  devsLoad();
+  int cur = sessionSlot(currentToken);
+  int n = 0;
+  for (int i = 0; i < MAX_DEVICES && n < maxCount; i++) {
+    if (!devs[i].token[0]) continue;
+    out[n].slot = i;
+    strlcpy(out[n].name, devs[i].name, sizeof(out[n].name));
+    out[n].created = devs[i].created;
+    out[n].lastSeen = devs[i].lastSeen;
+    out[n].current = i == cur;
+    n++;
+  }
+  return n;
+}
+
+bool deviceRemove(uint8_t slot) {
+  devsLoad();
+  if (slot >= MAX_DEVICES || !devs[slot].token[0]) return false;
+  memset(&devs[slot], 0, sizeof(Dev));
+  devsSave();
+  return true;
+}
+
+int deviceRemoveOthers(const String& currentToken) {
+  devsLoad();
+  int cur = sessionSlot(currentToken);
+  int removed = 0;
+  for (int i = 0; i < MAX_DEVICES; i++) {
+    if (i == cur || !devs[i].token[0]) continue;
+    memset(&devs[i], 0, sizeof(Dev));
+    removed++;
+  }
+  if (removed) devsSave();
+  return removed;
+}
+
 bool authCheck(const String& password) {
   Preferences p;
   p.begin("auth", true);
@@ -355,67 +545,10 @@ bool authCheck(const String& password) {
   return sha256Hex(password) == stored;
 }
 
-// ---------------------------------------------------------------- Sesi ----
-static char sessions[MAX_SESSIONS][33];
-static uint8_t sessionNext = 0;
-static bool sessionsLoaded = false;
-
-static void sessionsLoad() {
-  if (sessionsLoaded) return;
-  sessionsLoaded = true;
-  memset(sessions, 0, sizeof(sessions));
-  Preferences p;
-  p.begin("sess", true);
-  if (p.isKey("tok") && p.getBytesLength("tok") == sizeof(sessions)) p.getBytes("tok", sessions, sizeof(sessions));
-  sessionNext = p.getUChar("next", 0) % MAX_SESSIONS;
-  p.end();
-  for (auto& s : sessions) s[32] = 0;
-}
-
-static void sessionsSave() {
-  Preferences p;
-  p.begin("sess", false);
-  p.putBytes("tok", sessions, sizeof(sessions));
-  p.putUChar("next", sessionNext);
-  p.end();
-}
-
-String sessionCreate() {
-  sessionsLoad();
-  char buf[33];
-  for (int i = 0; i < 4; i++) snprintf(buf + i * 8, 9, "%08x", (unsigned)esp_random());
-  memcpy(sessions[sessionNext], buf, 33);
-  sessionNext = (sessionNext + 1) % MAX_SESSIONS;
-  sessionsSave();
-  return String(buf);
-}
-
-bool sessionValid(const String& token) {
-  sessionsLoad();
-  if (token.length() != 32) return false;
-  for (auto& s : sessions)
-    if (s[0] && token == s) return true;
-  return false;
-}
-
-void sessionRevoke(const String& token) {
-  sessionsLoad();
-  bool changed = false;
-  for (auto& s : sessions)
-    if (s[0] && token == s) { memset(s, 0, sizeof(s)); changed = true; }
-  if (changed) sessionsSave();
-}
-
-void sessionRevokeAll() {
-  sessionsLoad();
-  memset(sessions, 0, sizeof(sessions));
-  sessionsSave();
-}
-
 void authSet(const String& password) {
   Preferences p;
   p.begin("auth", false);
   p.putString("hash", sha256Hex(password));
   p.end();
-  sessionRevokeAll();   // perangkat lain harus login ulang dengan password baru
+  sessionRevokeAll();   // semua perangkat harus login ulang dengan password baru
 }

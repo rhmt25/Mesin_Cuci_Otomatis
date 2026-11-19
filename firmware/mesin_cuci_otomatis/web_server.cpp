@@ -11,6 +11,7 @@
 #include "net_wifi.h"
 #include "notifier.h"
 #include "ota.h"
+#include "programs.h"
 #include "settings.h"
 #include "web_ui.h"
 
@@ -32,6 +33,33 @@ static String cookieToken(const String& cookie) {
 }
 
 static bool tokenValid(const String& t) { return sessionValid(t); }
+
+static String currentToken(AsyncWebServerRequest* r) {
+  return r->hasHeader("Cookie") ? cookieToken(r->header("Cookie")) : String("");
+}
+
+// "Chrome - Android" dari User-Agent (cukup untuk membedakan perangkat di daftar)
+static String deviceNameFromUA(const String& ua) {
+  String os = "Perangkat";
+  if (ua.indexOf("Android") >= 0) os = "Android";
+  else if (ua.indexOf("iPhone") >= 0) os = "iPhone";
+  else if (ua.indexOf("iPad") >= 0) os = "iPad";
+  else if (ua.indexOf("Windows") >= 0) os = "Windows";
+  else if (ua.indexOf("Mac OS") >= 0) os = "Mac";
+  else if (ua.indexOf("Linux") >= 0) os = "Linux";
+  String br = "Browser";
+  if (ua.indexOf("Edg/") >= 0) br = "Edge";
+  else if (ua.indexOf("OPR/") >= 0 || ua.indexOf("Opera") >= 0) br = "Opera";
+  else if (ua.indexOf("Firefox/") >= 0) br = "Firefox";
+  else if (ua.indexOf("Chrome/") >= 0 || ua.indexOf("CriOS") >= 0) br = "Chrome";
+  else if (ua.indexOf("Safari/") >= 0) br = "Safari";
+  return br + " - " + os;
+}
+
+// Cookie perangkat diingat: 400 hari (batas maksimum yang diterima browser), diperbarui tiap dipakai
+// sehingga selama perangkat dipakai ia tidak pernah kedaluwarsa. Di server tidak ada kedaluwarsa.
+#define REMEMBER_COOKIE_AGE "34560000"
+
 
 static bool authed(AsyncWebServerRequest* r) {
   if (!r->hasHeader("Cookie")) return false;
@@ -70,7 +98,7 @@ static String statusJson() {
   JsonDocument d;
   d["type"] = "status";
   d["state"] = stateName(s.state);
-  d["program"] = s.state == MS_IDLE ? "" : programName(s.program);
+  d["program"] = s.state == MS_IDLE ? "" : s.name;
   d["stage"] = s.stage;
   d["detail"] = s.detail;
   d["pause"] = s.pauseReason;
@@ -262,12 +290,13 @@ static void setupRoutes() {
       return;
     }
     loginFails = 0;
-    String token = sessionCreate();
     bool remember = json["remember"] | false;
+    String ua = r->hasHeader("User-Agent") ? r->header("User-Agent") : String("");
+    String token = sessionCreate(remember, deviceNameFromUA(ua));
     AsyncWebServerResponse* res = r->beginResponse(200, "application/json", "{\"ok\":true}");
-    // "Ingat perangkat": cookie bertahan 30 hari. Tanpa itu, cookie hilang saat browser ditutup.
+    // "Ingat perangkat": cookie bertahan terus (diperpanjang tiap dipakai). Tanpa itu, hilang saat browser ditutup.
     String cookie = "sid=" + token + "; Path=/; HttpOnly; SameSite=Lax";
-    if (remember) cookie += "; Max-Age=2592000";
+    if (remember) cookie += "; Max-Age=" REMEMBER_COOKIE_AGE;
     res->addHeader("Set-Cookie", cookie);
     r->send(res);
   }));
@@ -282,7 +311,11 @@ static void setupRoutes() {
   // ---- status & data ----
   server.on("/api/status", HTTP_GET, [](AsyncWebServerRequest* r) {
     REQUIRE_AUTH(r);
-    sendJson(r, 200, statusJson());
+    AsyncWebServerResponse* res = r->beginResponse(200, "application/json", statusJson());
+    String tok = currentToken(r);
+    if (sessionSlot(tok) >= 0)   // perangkat diingat: perpanjang cookie
+      res->addHeader("Set-Cookie", "sid=" + tok + "; Path=/; HttpOnly; SameSite=Lax; Max-Age=" REMEMBER_COOKIE_AGE);
+    r->send(res);
   });
   server.on("/api/settings", HTTP_GET, [](AsyncWebServerRequest* r) {
     REQUIRE_AUTH(r);
@@ -317,6 +350,137 @@ static void setupRoutes() {
   server.on("/api/history", HTTP_GET, [](AsyncWebServerRequest* r) {
     REQUIRE_AUTH(r);
     sendJson(r, 200, historyJson());
+  });
+
+  // ---- perangkat yang diingat ----
+  server.on("/api/devices", HTTP_GET, [](AsyncWebServerRequest* r) {
+    REQUIRE_AUTH(r);
+    DeviceInfo list[MAX_DEVICES];
+    String tok = currentToken(r);
+    int n = deviceList(list, MAX_DEVICES, tok);
+    JsonDocument d;
+    JsonArray arr = d["devices"].to<JsonArray>();
+    for (int i = 0; i < n; i++) {
+      JsonObject o = arr.add<JsonObject>();
+      o["id"] = list[i].slot;
+      o["name"] = list[i].name;
+      o["created"] = list[i].created;
+      o["lastSeen"] = list[i].lastSeen;
+      o["current"] = list[i].current;
+    }
+    d["max"] = MAX_DEVICES;
+    d["temporary"] = sessionSlot(tok) < 0;   // sesi ini tidak diingat
+    String out;
+    serializeJson(d, out);
+    sendJson(r, 200, out);
+  });
+  server.on("/api/devices", HTTP_DELETE, [](AsyncWebServerRequest* r) {
+    REQUIRE_AUTH(r);
+    String tok = currentToken(r);
+    if (r->hasParam("others")) {
+      int n = deviceRemoveOthers(tok);
+      sendJson(r, 200, String("{\"ok\":true,\"msg\":\"") + n + " perangkat lain dihapus\"}");
+      return;
+    }
+    int id = r->hasParam("id") ? r->getParam("id")->value().toInt() : -1;
+    int mine = sessionSlot(tok);
+    if (id < 0 || !deviceRemove((uint8_t)id)) {
+      sendJson(r, 404, "{\"ok\":false,\"msg\":\"Perangkat tidak ditemukan\"}");
+      return;
+    }
+    sendJson(r, 200, String("{\"ok\":true,\"self\":") + (id == mine ? "true" : "false") + ",\"msg\":\"Perangkat dihapus\"}");
+  });
+
+  // ---- Custom Proses ----
+  server.on("/api/custom", HTTP_GET, [](AsyncWebServerRequest* r) {
+    REQUIRE_AUTH(r);
+    JsonDocument d;
+    d["max"] = CUSTOM_SLOTS;
+    d["maxItems"] = CUSTOM_MAX_ITEMS;
+    JsonArray slots = d["slots"].to<JsonArray>();
+    for (int s = 0; s < CUSTOM_SLOTS; s++) {
+      CustomProc p;
+      if (!customLoad(s, p)) {
+        slots.add(nullptr);
+        continue;
+      }
+      JsonObject o = slots.add<JsonObject>();
+      o["slot"] = s + 1;
+      o["name"] = p.name;
+      o["steps"] = customStepCount(p);
+      JsonArray items = o["items"].to<JsonArray>();
+      for (int i = 0; i < p.count; i++) {
+        JsonObject it = items.add<JsonObject>();
+        it["t"] = customTypeName(p.items[i].type);
+        it["a"] = p.items[i].a;
+        it["b"] = p.items[i].b;
+        it["p"] = p.items[i].pola;
+        it["c"] = p.items[i].cups2;
+      }
+    }
+    String out;
+    serializeJson(d, out);
+    sendJson(r, 200, out);
+  });
+  server.addHandler(new AsyncCallbackJsonWebHandler("/api/custom", [](AsyncWebServerRequest* r, JsonVariant& json) {
+    REQUIRE_AUTH(r);
+    CustomProc p;
+    memset(&p, 0, sizeof(p));
+    String name = json["name"] | "";
+    name.trim();
+    strlcpy(p.name, name.c_str(), sizeof(p.name));
+    JsonArray items = json["items"].as<JsonArray>();
+    if (items.isNull() || items.size() > CUSTOM_MAX_ITEMS) {
+      sendJson(r, 400, String("{\"ok\":false,\"msg\":\"Langkah harus 1-") + CUSTOM_MAX_ITEMS + "\"}");
+      return;
+    }
+    for (JsonObject it : items) {
+      int t = customTypeFromName(String((const char*)(it["t"] | "")));
+      if (t < 0) {
+        sendJson(r, 400, "{\"ok\":false,\"msg\":\"Jenis langkah tidak dikenal\"}");
+        return;
+      }
+      CustomItem& ci = p.items[p.count++];
+      ci.type = t;
+      ci.a = it["a"] | 0;
+      ci.b = it["b"] | 0;
+      ci.pola = it["p"] | 3;
+      ci.cups2 = it["c"] | 0;
+    }
+    String err;
+    if (!customValidate(p, err)) {
+      JsonDocument d;
+      d["ok"] = false;
+      d["msg"] = err;
+      String out;
+      serializeJson(d, out);
+      sendJson(r, 400, out);
+      return;
+    }
+    int slot = json["slot"] | 0;   // 1..5, 0 = slot kosong pertama
+    if (slot < 1 || slot > CUSTOM_SLOTS) {
+      slot = 0;
+      for (int s = 0; s < CUSTOM_SLOTS && !slot; s++) {
+        CustomProc tmp;
+        if (!customLoad(s, tmp)) slot = s + 1;
+      }
+      if (!slot) {
+        sendJson(r, 400, "{\"ok\":false,\"msg\":\"Penyimpanan penuh (5 proses). Hapus satu dulu.\"}");
+        return;
+      }
+    }
+    customSave(slot - 1, p);
+    logf(LOG_INFO, "Custom proses disimpan: slot %d \"%s\" (%u langkah)", slot, p.name, (unsigned)customStepCount(p));
+    sendJson(r, 200, String("{\"ok\":true,\"slot\":") + slot + ",\"msg\":\"Tersimpan di slot " + slot + "\"}");
+  }));
+  server.on("/api/custom", HTTP_DELETE, [](AsyncWebServerRequest* r) {
+    REQUIRE_AUTH(r);
+    int slot = r->hasParam("slot") ? r->getParam("slot")->value().toInt() : 0;
+    if (slot < 1 || slot > CUSTOM_SLOTS || !customDelete(slot - 1)) {
+      sendJson(r, 400, "{\"ok\":false,\"msg\":\"Slot tidak valid\"}");
+      return;
+    }
+    sendJson(r, 200, "{\"ok\":true,\"msg\":\"Proses dihapus\"}");
   });
 
   // ---- perintah (SEMUA perintah Telegram) ----

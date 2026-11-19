@@ -18,3 +18,7 @@ graphify-out/
 # Dokumen kerja lokal (tidak di-commit)
 plan.md
 todo.md
+
+# Uji UI
+tools/uitest/node_modules/
+tools/uitest/package-lock.json

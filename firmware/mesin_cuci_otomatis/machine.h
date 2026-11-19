@@ -27,6 +27,7 @@ struct MachineStatus {
   uint8_t program;          // ProgramId (valid bila state != IDLE)
   uint8_t stepIndex;        // 1-based
   uint8_t stepCount;
+  char name[28];            // nama program (untuk Custom: nama yang diberikan pengguna)
   char stage[28];           // mis. "Bilas 2/3"
   char detail[56];          // mis. "Agitasi (kanan)"
   char pauseReason[72];

@@ -1,7 +1,7 @@
 'use strict';
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
-let ws = null, wsOk = false, last = null, settings = null;
+let ws = null, wsOk = false, last = null, settings = null, lastState = 'idle';
 let conPaused = false, conLines = [], logLines = [], lastSeq = 0;
 
 // ---------------------------------------------------------------- util ----
@@ -50,9 +50,10 @@ function onTab(t) {
   if (t === 'settings' || t === 'water') loadSettings();
   if (t === 'wifi') loadWifi();
   if (t === 'relay') renderRelays();
+  if (t === 'custom') { loadSettings().then(loadCustom); }
   if (t === 'history') loadHistory();
   if (t === 'firmware') loadFw();
-  if (t === 'system') renderSys();
+  if (t === 'system') { renderSys(); loadDevices(); }
   if (t === 'log') renderLog();
   if (t === 'console') renderCon();
 }
@@ -101,6 +102,11 @@ function renderStatus(s) {
   bp.textContent = '⏸ Dijeda: ' + (s.pause || 'oleh pengguna') + '. Tekan Lanjutkan untuk mencoba lagi.';
   $('#bannerFault').hidden = !s.fault;
   updateRelays(s);
+  const busy = s.state !== 'idle';
+  $$('.prog, .cpRun').forEach(b => { b.disabled = busy; });
+  const pl = $('#progLock'); pl.hidden = !busy;
+  pl.textContent = busy ? `Program baru hanya bisa dimulai saat mesin siap. Sekarang: ${s.program} (${s.stage}).` : '';
+  lastState = s.state;
   if ($('#tab-system').classList.contains('on')) renderSys();
   if (s.otaBusy) { $('#fwBar').style.width = s.otaProgress + '%'; }
 }
@@ -159,17 +165,38 @@ function renderRelays() {
   if (host.dataset.ready) return;
   host.dataset.ready = '1';
   host.innerHTML = RELAYS.map(([k, label, pin]) => `<div class="card relayCard">
-    <div class="info"><span class="led" id="led-${k}"></span><div><b>${label}</b><br><span class="muted">${k} · ${pin}</span></div></div>
+    <div class="info"><span class="led" id="led-${k}"></span><div><b>${label}</b><br><span class="muted">${k} · ${pin}</span><br><span class="lockhint" id="hint-${k}"></span></div></div>
     <div class="row" style="margin:0"><button class="btn primary" data-rl="${k}" data-on="1">ON</button><button class="btn" data-rl="${k}" data-on="0">OFF</button></div></div>`).join('');
   $$('[data-rl]', host).forEach(b => b.onclick = () => cmd('relay', `${b.dataset.rl} ${b.dataset.on === '1' ? 'on' : 'off'}`));
 }
 function updateRelays(s) {
   renderRelays();
-  RELAYS.forEach(([k]) => { const l = $('#led-' + k); if (l) l.classList.toggle('on', !!(s.relays && s.relays[k])); });
-  const idle = s.state === 'idle' && !s.fault;
-  $$('[data-rl]').forEach(b => { b.disabled = !idle && b.dataset.on === '1'; });
-  $('#btnSeq').disabled = !idle;
-  const seq = s.state !== 'idle' && s.program === 'Kalibrasi relay';
+  const on = s.relays || {};
+  const busy = s.state !== 'idle';
+  const seq = busy && s.program === 'Kalibrasi relay';
+  const lock = $('#relayLock');
+  if (s.fault) { lock.hidden = false; lock.textContent = '❌ Relay terkunci karena pelanggaran interlock. Restart mesin untuk membuka kunci.'; }
+  else if (busy && !seq) {
+    lock.hidden = false;
+    lock.textContent = `🔒 Kontrol manual & uji dikunci: ada proses ${s.state === 'paused' ? 'yang dijeda' : 'berjalan'} (${s.program}, ${s.stage}). Hentikan dulu di Beranda.`;
+  } else lock.hidden = true;
+  const conflict = {
+    kiri: on.kanan ? 'Motor kanan sedang aktif, matikan dulu' : on.buang ? 'Valve buang sedang aktif, matikan dulu' : '',
+    kanan: on.kiri ? 'Motor kiri sedang aktif, matikan dulu' : on.buang ? 'Valve buang sedang aktif, matikan dulu' : '',
+    isi: on.buang ? 'Valve buang sedang aktif, matikan dulu' : '',
+    buang: on.isi ? 'Valve isi sedang aktif, matikan dulu' : (on.kiri || on.kanan) ? 'Motor cuci sedang aktif, matikan dulu' : '',
+  };
+  RELAYS.forEach(([k]) => {
+    const l = $('#led-' + k); if (l) l.classList.toggle('on', !!on[k]);
+    const onBtn = $(`[data-rl="${k}"][data-on="1"]`), offBtn = $(`[data-rl="${k}"][data-on="0"]`);
+    const c = conflict[k] || '';
+    const blocked = busy || s.fault;
+    if (onBtn) { onBtn.disabled = blocked || !!c || !!on[k]; onBtn.title = c; }
+    if (offBtn) offBtn.disabled = blocked || !on[k];
+    const h = $('#hint-' + k);
+    if (h) h.textContent = !blocked && c && !on[k] ? '🔒 ' + c : '';
+  });
+  $('#btnSeq').disabled = busy || s.fault;
   const bp = $('#relayProgress');
   bp.hidden = !seq;
   if (seq) bp.textContent = `Uji berurutan: ${s.detail} (langkah ${s.step}/${s.steps})`;
@@ -198,8 +225,14 @@ $('#wifiForm').onsubmit = async e => {
 // ------------------------------------------------------------ Log & konsol ----
 const LV = ['DEBUG', 'INFO', 'STEP', 'WARN', 'ERROR', 'DONE'];
 function lineHtml(e) { return `<div class="l-${e.l}">${clock(e.t, e.e)} ${LV[e.l].padEnd(5)} ${esc(e.m)}</div>`; }
-function addEntries(list) {
-  for (const e of list) { if (e.s <= lastSeq) continue; lastSeq = e.s; logLines.push(e); conLines.push(e); }
+function addEntries(list, live) {
+  let alertEntry = null;
+  for (const e of list) {
+    if (e.s <= lastSeq) continue;
+    lastSeq = e.s; logLines.push(e); conLines.push(e);
+    if (live && e.l >= 3 && e.l <= 4) alertEntry = e;   // WARN / ERROR dari mesin
+  }
+  if (alertEntry) toast((alertEntry.l >= 4 ? '❌ ' : '⚠ ') + alertEntry.m);
   if (logLines.length > 400) logLines.splice(0, logLines.length - 400);
   if (conLines.length > 600) conLines.splice(0, conLines.length - 600);
   if ($('#tab-log').classList.contains('on')) renderLog();
@@ -275,6 +308,196 @@ function renderSys() {
 $('#btnPw').onclick = async () => { const r = await cmd('web_password', $('#newPw').value); if (r && r.ok) { $('#newPw').value = ''; toast('Password diganti. Silakan login ulang.'); setTimeout(showLogin, 800); } };
 $('#btnRestart').onclick = () => confirm('Restart mesin?') && cmd('restart');
 
+// -------------------------------------------------------------- Custom Proses ----
+const POLA = [['3', 'Ikut Pengaturan'], ['0', 'Normal'], ['1', 'Gentle'], ['2', 'Hijab']];
+const CI = {
+  wash: { label: 'Cuci', icon: '🧼', hint: 'isi air → putar → buang', f: [['a', 'Menit putar', 15]], pola: 1, g: 'blok' },
+  soakwash: { label: 'Soak + Cuci', icon: '🫧', hint: 'isi air → soak → putar → buang', f: [['a', 'Sesi soak', 2], ['b', 'Menit cuci', 15]], pola: 1, g: 'blok' },
+  rinse: { label: 'Bilas', icon: '💧', hint: 'isi air → putar → buang', f: [['a', 'Menit putar', 10]], pola: 1, g: 'blok' },
+  rinseperfume: { label: 'Bilas + Pewangi', icon: '🌸', hint: 'isi air → pewangi → putar → buang', f: [['a', 'Menit putar', 10]], pola: 1, cups: 1, g: 'blok' },
+  fill: { label: 'Isi air', icon: '🚰', f: [], g: 'dasar' },
+  agitate: { label: 'Putar', icon: '🔄', f: [['a', 'Menit', 5]], pola: 1, g: 'dasar' },
+  soak: { label: 'Soak (rendam)', icon: '🛁', hint: '1 mnt putar + 4 mnt rendam per sesi', f: [['a', 'Sesi', 2]], pola: 1, g: 'dasar' },
+  perfume: { label: 'Pewangi', icon: '🌼', f: [], cups: 1, g: 'dasar' },
+  drain: { label: 'Buang air', icon: '🚿', f: [], g: 'dasar' },
+  spin: { label: 'Spin', icon: '🌀', f: [['a', 'Menit', 10]], g: 'dasar' },
+  wait: { label: 'Tunggu', icon: '⏳', f: [['a', 'Menit', 5]], g: 'dasar' },
+};
+const PRESETS = {
+  normal: [['soakwash', 2, 15, 0], ['rinse', 10, 0, 0], ['rinseperfume', 10, 0, 0]],
+  gentle: [['soakwash', 2, 12, 1], ['rinse', 8, 0, 1], ['rinseperfume', 8, 0, 1]],
+  hijab: [['soakwash', 1, 10, 2], ['rinse', 8, 0, 2], ['rinseperfume', 8, 0, 2]],
+  cepat: [['wash', 8, 0, 0], ['rinse', 5, 0, 0], ['rinseperfume', 5, 0, 0]],
+};
+let cpUid = 1, cpSlots = [];
+const cp = { slot: 0, items: [] };
+const newItem = (t, a, b, p) => { const m = CI[t]; return { uid: cpUid++, t, a: a ?? (m.f[0] ? m.f[0][2] : 0), b: b ?? (m.f[1] ? m.f[1][2] : 0), p: p ?? 3, c: 0 }; };
+const stepsOf = it => ({ wash: 3, rinse: 3, soakwash: 4, rinseperfume: 4 }[it.t] || 1);
+function estMin(it) {
+  const c = settings && settings.calib ? settings.calib : {};
+  const fillM = c.fillSec ? c.fillSec / 60 : 10, drM = (c.drainSec ? c.drainSec / 60 : 5) + 1;
+  switch (it.t) {
+    case 'wash': case 'rinse': return fillM + it.a + drM;
+    case 'soakwash': return fillM + it.a * 5 + it.b + drM;
+    case 'rinseperfume': return fillM + it.a + drM + 0.3;
+    case 'fill': return fillM; case 'drain': return drM; case 'perfume': return 0.3;
+    case 'agitate': case 'spin': case 'wait': return it.a; case 'soak': return it.a * 5;
+  }
+  return 0;
+}
+const fmtMin = m => m >= 60 ? `${Math.floor(m / 60)} j ${Math.round(m % 60)} mnt` : `${Math.round(m)} mnt`;
+const itemText = it => { const m = CI[it.t]; const v = m.f.map(([k]) => it[k]); return m.f.length === 0 ? m.label : it.t === 'soakwash' ? `${m.label} ${v[0]}×/${v[1]}m` : it.t === 'soak' ? `${m.label} ${v[0]}×` : `${m.label} ${v[0]}m`; };
+const cpTotal = items => ({ steps: items.reduce((n, i) => n + stepsOf(i), 0), min: items.reduce((n, i) => n + estMin(i), 0) });
+
+function buildPalette() {
+  for (const g of ['blok', 'dasar']) {
+    $(g === 'blok' ? '#cpPalBlok' : '#cpPalDasar').innerHTML = Object.entries(CI).filter(([, m]) => m.g === g)
+      .map(([t, m]) => `<button class="btn" data-add="${t}" title="${esc(m.hint || '')}">${m.icon} ${m.label}</button>`).join('');
+  }
+  $$('[data-add]').forEach(b => b.onclick = () => { cp.items.push(newItem(b.dataset.add)); renderStack(); const st = $('#cpStack'); st.lastElementChild && st.lastElementChild.scrollIntoView({ block: 'nearest' }); });
+}
+function rowHtml(it, i) {
+  const m = CI[it.t];
+  const fields = m.f.map(([k, lab]) => `<label>${lab}<input type="number" min="1" max="1440" inputmode="numeric" data-uid="${it.uid}" data-k="${k}" value="${it[k]}"></label>`).join('');
+  const pola = m.pola ? `<label>Pola putar<select data-uid="${it.uid}" data-k="p">${POLA.map(([v, l]) => `<option value="${v}"${+v === it.p ? ' selected' : ''}>${l}</option>`).join('')}</select></label>` : '';
+  const cups = m.cups ? `<label>Pewangi (cup)<input type="number" step="0.5" min="0" max="20" inputmode="decimal" data-uid="${it.uid}" data-k="c" value="${it.c ? it.c / 2 : ''}" placeholder="ikut Pengaturan"></label>` : '';
+  return `<div class="crow" data-uid="${it.uid}"><span class="handle" title="Tahan &amp; geser untuk menukar urutan">☰</span>
+    <div class="cbody"><div class="ctitle"><span class="num">${i + 1}</span> ${m.icon} <b>${m.label}</b> <span class="muted">${m.hint || ''}</span></div><div class="fields">${fields}${pola}${cups}</div></div>
+    <div class="cacts"><button data-act="up" title="Naik">▲</button><button data-act="down" title="Turun">▼</button><button data-act="dup" title="Gandakan">⧉</button><button data-act="del" title="Hapus">🗑</button></div></div>`;
+}
+function renderStack() {
+  $('#cpStack').innerHTML = cp.items.map(rowHtml).join('');
+  $('#cpEmpty').hidden = cp.items.length > 0;
+  updateSummary();
+}
+function renumber() { $$('#cpStack .crow').forEach((r, i) => { $('.num', r).textContent = i + 1; }); }
+function updateSummary() {
+  const t = cpTotal(cp.items);
+  $('#cpSummary').textContent = cp.items.length ? `${cp.items.length} langkah (${t.steps} langkah mesin) · perkiraan ± ${fmtMin(t.min)}${t.steps > 99 ? ' · TERLALU PANJANG' : ''}` : '';
+}
+const findItem = uid => cp.items.find(x => x.uid === +uid);
+$('#cpStack').addEventListener('input', e => {
+  const el = e.target.closest('[data-k]'); if (!el) return;
+  const it = findItem(el.dataset.uid); if (!it) return;
+  const k = el.dataset.k;
+  if (k === 'p') it.p = +el.value;
+  else if (k === 'c') it.c = Math.max(0, Math.min(40, Math.round((parseFloat(el.value) || 0) * 2)));
+  else it[k] = parseInt(el.value, 10) || 0;
+  updateSummary();
+});
+$('#cpStack').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const uid = +b.closest('.crow').dataset.uid, i = cp.items.findIndex(x => x.uid === uid);
+  if (b.dataset.act === 'del') cp.items.splice(i, 1);
+  else if (b.dataset.act === 'up' && i > 0) [cp.items[i - 1], cp.items[i]] = [cp.items[i], cp.items[i - 1]];
+  else if (b.dataset.act === 'down' && i < cp.items.length - 1) [cp.items[i + 1], cp.items[i]] = [cp.items[i], cp.items[i + 1]];
+  else if (b.dataset.act === 'dup') cp.items.splice(i + 1, 0, { ...cp.items[i], uid: cpUid++ });
+  renderStack();
+});
+// Geser untuk menukar urutan (pointer events: jalan di mouse & layar sentuh)
+$('#cpStack').addEventListener('pointerdown', e => {
+  const h = e.target.closest('.handle'); if (!h) return;
+  const list = $('#cpStack'), row = h.closest('.crow');
+  e.preventDefault(); h.setPointerCapture(e.pointerId); row.classList.add('drag');
+  const move = ev => {
+    const others = [...list.children].filter(r => r !== row);
+    const target = others.find(r => { const b = r.getBoundingClientRect(); return ev.clientY < b.top + b.height / 2; });
+    if (target) { if (row.nextElementSibling !== target) list.insertBefore(row, target); } else list.appendChild(row);
+    if (ev.clientY < 70) window.scrollBy(0, -12); else if (ev.clientY > innerHeight - 70) window.scrollBy(0, 12);
+  };
+  const up = () => {
+    h.removeEventListener('pointermove', move); h.removeEventListener('pointerup', up); h.removeEventListener('pointercancel', up);
+    row.classList.remove('drag');
+    const ids = [...list.children].map(r => +r.dataset.uid);
+    cp.items = ids.map(id => findItem(id));
+    renumber(); updateSummary();
+  };
+  h.addEventListener('pointermove', move); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
+});
+$('#cpPreset').onchange = e => {
+  const p = PRESETS[e.target.value]; if (!p) return;
+  if (cp.items.length && !confirm('Ganti susunan sekarang dengan contoh ini?')) { e.target.value = ''; return; }
+  cp.items = p.map(([t, a, b, pola]) => newItem(t, a, b, pola));
+  if (!$('#cpName').value.trim()) $('#cpName').value = 'Salinan ' + CI_NAME(e.target.value);
+  e.target.value = ''; renderStack();
+};
+const CI_NAME = k => ({ normal: 'Normal', gentle: 'Gentle', hijab: 'Hijab', cepat: 'Cepat' }[k]);
+function cpClear(title) { cp.slot = 0; cp.items = []; $('#cpName').value = ''; $('#cpError').hidden = true; $('#cpTitle').textContent = title || 'Proses baru'; renderStack(); }
+$('#cpReset').onclick = () => { if (!cp.items.length || confirm('Kosongkan editor?')) cpClear(); };
+async function cpSave(asNew) {
+  const err = $('#cpError'); err.hidden = true;
+  const name = $('#cpName').value.trim();
+  const fail = m => { err.textContent = m; err.hidden = false; err.scrollIntoView({ block: 'nearest' }); };
+  if (!name) return fail('Nama proses wajib diisi.');
+  if (!cp.items.length) return fail('Tambahkan minimal satu langkah.');
+  for (let i = 0; i < cp.items.length; i++) {
+    const it = cp.items[i], m = CI[it.t];
+    for (const [k, lab] of m.f) if (!(it[k] >= 1 && it[k] <= 1440)) return fail(`Langkah ${i + 1} (${m.label}): "${lab}" harus 1-1440.`);
+  }
+  if (cpTotal(cp.items).steps > 99) return fail('Terlalu panjang. Kurangi langkah.');
+  const body = { slot: asNew ? 0 : cp.slot, name, items: cp.items.map(({ t, a, b, p, c }) => ({ t, a, b, p, c })) };
+  let r; try { r = await api('/api/custom', 'POST', body); } catch (e) { return; }
+  if (!r.ok) return fail(r.msg);
+  cp.slot = r.slot; toast('✅ ' + r.msg);
+  $('#cpTitle').textContent = `Mengedit: ${name} (slot ${r.slot})`;
+  loadCustom();
+}
+$('#cpSave').onclick = () => cpSave(false);
+$('#cpSaveNew').onclick = () => cpSave(true);
+function cpLoad(slotObj, asCopy) {
+  cp.slot = asCopy ? 0 : slotObj.slot;
+  cp.items = slotObj.items.map(i => ({ uid: cpUid++, t: i.t, a: i.a, b: i.b, p: i.p, c: i.c }));
+  $('#cpName').value = asCopy ? slotObj.name + ' (salinan)' : slotObj.name;
+  $('#cpTitle').textContent = asCopy ? 'Proses baru (salinan)' : `Mengedit: ${slotObj.name} (slot ${slotObj.slot})`;
+  $('#cpError').hidden = true;
+  renderStack(); $('#cpEditor').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+async function loadCustom() {
+  let r; try { r = await api('/api/custom'); } catch { return; }
+  cpSlots = r.slots.filter(Boolean);
+  const idle = !last || last.state === 'idle';
+  $('#cpList').innerHTML = cpSlots.map(s => {
+    const t = cpTotal(s.items.map(i => ({ ...i, t: i.t })));
+    return `<div class="card cpcard"><div class="info"><b>${s.slot}. ${esc(s.name)}</b><br><span class="muted">${esc(s.items.map(itemText).join(' → '))}</span><br><span class="muted">${s.items.length} langkah · ± ${fmtMin(t.min)}</span></div>
+    <div class="row"><button class="btn primary sm cpRun" data-run="${s.slot}" ${idle ? '' : 'disabled'}>▶ Jalankan</button><button class="btn sm" data-edit="${s.slot}">✎ Edit</button><button class="btn sm" data-copy="${s.slot}">⧉ Salin</button><button class="btn danger sm" data-del="${s.slot}">Hapus</button></div></div>`;
+  }).join('') || '<p class="muted">Belum ada proses tersimpan.</p>';
+  $$('#cpList [data-run]').forEach(b => b.onclick = () => cmd('custom', b.dataset.run));
+  $$('#cpList [data-edit]').forEach(b => b.onclick = () => cpLoad(cpSlots.find(s => s.slot === +b.dataset.edit), false));
+  $$('#cpList [data-copy]').forEach(b => b.onclick = () => cpLoad(cpSlots.find(s => s.slot === +b.dataset.copy), true));
+  $$('#cpList [data-del]').forEach(b => b.onclick = async () => {
+    const s = cpSlots.find(x => x.slot === +b.dataset.del);
+    if (!confirm(`Hapus proses "${s.name}"?`)) return;
+    const d = await api('/api/custom?slot=' + s.slot, 'DELETE'); toast(d.ok ? '🗑 ' + d.msg : '⚠ ' + d.msg);
+    if (cp.slot === s.slot) cpClear(); loadCustom();
+  });
+  const hc = $('#homeCustom');
+  hc.hidden = cpSlots.length === 0;
+  $('#homeCustomGrid').innerHTML = cpSlots.map(s => `<button class="card prog cpRun" data-hrun="${s.slot}" ${idle ? '' : 'disabled'}><b>🗂 ${esc(s.name)}</b><small>${s.items.length} langkah · ± ${fmtMin(cpTotal(s.items).min)}</small></button>`).join('');
+  $$('#homeCustomGrid [data-hrun]').forEach(b => b.onclick = () => cmd('custom', b.dataset.hrun));
+}
+buildPalette(); renderStack();
+
+// ---------------------------------------------------- perangkat yang diingat ----
+const fmtDate = e => e ? new Date(e * 1000).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '-';
+async function loadDevices() {
+  let r; try { r = await api('/api/devices'); } catch { return; }
+  $('#devHint').textContent = r.temporary
+    ? 'Sesi ini TIDAK diingat (login ulang saat browser ditutup). Centang "Ingat perangkat ini" saat login.'
+    : `Maksimal ${r.max} perangkat. Bila penuh, yang terlama otomatis dihapus. Perangkat tetap masuk sampai kamu menghapusnya.`;
+  $('#devList').innerHTML = r.devices.map(d => `<div class="wifirow" style="margin:8px 0"><div><b>${esc(d.name)}</b> ${d.current ? '<span class="chip run">Perangkat ini</span>' : ''}<br><span class="muted">Masuk ${fmtDate(d.created)} · terakhir aktif ${fmtDate(d.lastSeen)}</span></div>
+    <button class="btn danger" data-dev="${d.id}" data-cur="${d.current ? 1 : 0}">Hapus</button></div>`).join('') || '<p class="muted">Belum ada perangkat yang diingat.</p>';
+  $$('#devList [data-dev]').forEach(b => b.onclick = async () => {
+    if (!confirm(b.dataset.cur === '1' ? 'Hapus perangkat INI? Kamu akan keluar.' : 'Hapus perangkat ini dari daftar?')) return;
+    const d = await api('/api/devices?id=' + b.dataset.dev, 'DELETE');
+    toast(d.ok ? '✅ ' + d.msg : '⚠ ' + d.msg);
+    if (d.self) showLogin(); else loadDevices();
+  });
+}
+$('#btnDevOthers').onclick = async () => {
+  if (!confirm('Keluarkan semua perangkat lain?')) return;
+  const d = await api('/api/devices?others=1', 'DELETE'); toast(d.msg); loadDevices();
+};
+
 // ---------------------------------------------------------------- koneksi ----
 function connectWs() {
   if (ws) return;
@@ -282,7 +505,7 @@ function connectWs() {
   ws.onopen = () => { wsOk = true; };
   ws.onmessage = e => {
     const m = JSON.parse(e.data);
-    if (m.type === 'status') renderStatus(m); else if (m.type === 'log') addEntries(m.entries);
+    if (m.type === 'status') renderStatus(m); else if (m.type === 'log') addEntries(m.entries, true);
   };
   ws.onclose = () => { wsOk = false; ws = null; setTimeout(() => { if (!$('#app').hidden) connectWs(); }, 2500); };
 }
@@ -292,7 +515,7 @@ async function start() {
   } catch { return; }
   const logs = await api('/api/logs?since=0&limit=100').catch(() => ({ entries: [] }));
   addEntries(logs.entries);
-  loadSettings(); connectWs();
+  loadSettings().then(loadCustom); connectWs();
 }
 setInterval(async () => {   // cadangan bila WebSocket putus
   if ($('#app').hidden || wsOk) return;

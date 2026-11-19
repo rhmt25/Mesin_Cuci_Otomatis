@@ -6,6 +6,7 @@ enum RelayId : uint8_t { R_LEFT, R_RIGHT, R_FILL, R_DRAIN, R_SPIN, R_PERFUME, R_
 
 void relayInit();                       // panggil paling awal di setup()
 bool relaySet(RelayId id, bool on);     // false bila ditolak interlock
+const char* relayCheck(RelayId id, bool on);  // alasan penolakan bila dicoba sekarang (nullptr = boleh), tanpa mengubah apa pun
 void relayAllOff();
 bool relayIsOn(RelayId id);
 const char* relayName(RelayId id);

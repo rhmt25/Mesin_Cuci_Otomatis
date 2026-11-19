@@ -58,3 +58,23 @@ input,select{font:inherit;padding:9px 10px;border-radius:8px;border:1px solid va
 .wifirow .btn{min-height:36px;padding:4px 10px}
 .hist{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid var(--line);padding:8px 0}
 @media(max-width:480px){.hero{flex-direction:column;text-align:center}.kv{text-align:left}}
+
+.palette{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.palette .btn{min-height:38px;padding:6px 10px;font-size:14px}
+.stack{display:flex;flex-direction:column;gap:8px}
+.crow{display:flex;gap:8px;align-items:center;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px}
+.crow.drag{opacity:.55;border-color:var(--pri);box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.handle{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;padding:8px 6px;font-size:20px;color:var(--muted)}
+.cbody{flex:1;min-width:0}
+.ctitle{margin-bottom:4px}
+.num{display:inline-block;min-width:22px;text-align:center;border-radius:99px;background:var(--pri);color:var(--pri-ink);font-size:12px;padding:1px 6px;margin-right:4px}
+.fields{display:flex;flex-wrap:wrap;gap:8px}
+.fields label{flex:1 1 110px}
+.cacts{display:flex;flex-direction:column;gap:2px}
+.cacts button{border:0;background:transparent;color:var(--ink);font-size:16px;cursor:pointer;padding:2px 6px}
+.cpSummary{font-size:13px;color:var(--muted)}
+.cpcard{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.cpcard .info{flex:1 1 200px;min-width:0}
+.cpcard .row{margin:0}
+.lockhint{font-size:12px;color:var(--err)}
+.btn.sm{min-height:34px;padding:4px 10px}

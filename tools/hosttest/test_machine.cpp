@@ -374,21 +374,120 @@ static void t13_failsafe() {
   relayHostUnfault();
 }
 
-static void t14_sessions() {
-  printf("[T14] Sesi login awet (ingat perangkat)\n");
+static void t14_devices() {
+  printf("[T14] Perangkat diingat: maks 5, terlama dihapus, bisa dikelola\n");
   resetWorld();
-  String t1 = sessionCreate();
-  CHECK(sessionValid(t1), "token baru valid");
-  CHECK(!sessionValid("salah"), "token acak ditolak");
-  // simulasi restart: RAM hilang, NVS tetap -> sesi harus tetap valid
-  CHECK(sessionValid(t1), "token tetap valid (disimpan ke NVS)");
-  String ts[9];
-  for (int i = 0; i < 9; i++) ts[i] = sessionCreate();
-  CHECK(!sessionValid(t1) && sessionValid(ts[8]), "slot tertua digantikan setelah 8 sesi");
-  sessionRevoke(ts[8]);
-  CHECK(!sessionValid(ts[8]), "logout mencabut sesi");
+  String first = sessionCreate(true, "HP Android");
+  CHECK(sessionValid(first) && sessionSlot(first) >= 0, "perangkat diingat valid");
+  String tmp = sessionCreate(false, "Tamu");
+  CHECK(sessionValid(tmp) && sessionSlot(tmp) < 0, "sesi sementara valid tapi tidak masuk daftar");
+  String ts[6];
+  for (int i = 0; i < 5; i++) ts[i] = sessionCreate(true, String("Perangkat ") + (i + 2));
+  DeviceInfo list[MAX_DEVICES];
+  int n = deviceList(list, MAX_DEVICES, ts[4]);
+  CHECK(n == 5, "daftar tetap 5 (batas)");
+  CHECK(!sessionValid(first), "perangkat terlama otomatis terhapus saat ke-6 masuk");
+  CHECK(sessionValid(ts[0]) && sessionValid(ts[4]), "perangkat lain masih valid");
+  bool curOk = false;
+  for (int i = 0; i < n; i++) if (list[i].current) curOk = std::string(list[i].name) == "Perangkat 6";
+  CHECK(curOk, "perangkat saat ini ditandai");
+  int victim = -1;
+  for (int i = 0; i < n; i++) if (!list[i].current) { victim = list[i].slot; break; }
+  CHECK(victim >= 0 && deviceRemove(victim) && deviceList(list, MAX_DEVICES, ts[4]) == 4, "hapus satu perangkat");
+  int removed = deviceRemoveOthers(ts[4]);
+  CHECK(removed == 3 && sessionValid(ts[4]), "hapus semua selain perangkat ini");
+  sessionRevoke(ts[4]);
+  CHECK(!sessionValid(ts[4]), "logout mencabut sesi");
+  String again = sessionCreate(true, "X");
   authSet("passwordbaru");
-  CHECK(!sessionValid(ts[7]), "ganti password mencabut semua sesi");
+  CHECK(!sessionValid(again) && !sessionValid(tmp), "ganti password mencabut semua sesi");
+}
+
+static void t15_relayCheck() {
+  printf("[T15] relayCheck: alasan penolakan tanpa mengubah status\n");
+  resetWorld();
+  CHECK(relayCheck(R_LEFT, true) == nullptr, "kiri boleh saat semua mati");
+  relaySet(R_LEFT, true);
+  const char* why = relayCheck(R_RIGHT, true);
+  CHECK(why != nullptr && std::string(why).find("bersamaan") != std::string::npos, "kanan ditolak saat kiri aktif, dengan alasan");
+  CHECK(!relayIsOn(R_RIGHT), "relayCheck tidak menyalakan apa pun");
+  CHECK(relayCheck(R_DRAIN, true) != nullptr, "buang ditolak saat motor aktif");
+  CHECK(relayCheck(R_RIGHT, false) == nullptr, "mematikan selalu boleh");
+  relayAllOff();
+}
+
+static CustomProc makeCustom(const char* name, std::vector<CustomItem> items) {
+  CustomProc p;
+  memset(&p, 0, sizeof(p));
+  strlcpy(p.name, name, sizeof(p.name));
+  p.count = (uint8_t)items.size();
+  for (size_t i = 0; i < items.size(); i++) p.items[i] = items[i];
+  return p;
+}
+
+static void t16_custom() {
+  printf("[T16] Custom Proses: simpan, validasi, jalankan, urutan bebas\n");
+  resetWorld();
+  // rinse 10 menit lalu rinse lagi 5 menit, lalu spin 2 menit
+  CustomItem r10{CI_RINSE, 3, 10, 0, 0, 0}, r5{CI_RINSE, 3, 5, 0, 0, 0}, sp{CI_SPIN, 3, 2, 0, 0, 0};
+  CustomProc p = makeCustom("Bilas dua kali", {r10, r5, sp});
+  String err;
+  CHECK(customValidate(p, err), "proses valid");
+  CHECK(customStepCount(p) == 7, "3+3+1 = 7 langkah mesin");
+  CHECK(customSave(2, p), "tersimpan di slot 3");
+  CustomProc back;
+  CHECK(customLoad(2, back) && std::string(back.name) == "Bilas dua kali" && back.count == 3 && back.items[1].a == 5, "dibaca kembali utuh");
+  CHECK(!customLoad(0, back), "slot kosong tidak terbaca");
+
+  CustomProc bad = makeCustom("", {r10});
+  CHECK(!customValidate(bad, err), "nama kosong ditolak");
+  CustomProc bad2 = makeCustom("x", {});
+  CHECK(!customValidate(bad2, err), "tanpa langkah ditolak");
+  CustomItem zero{CI_WASH, 3, 0, 0, 0, 0};
+  CHECK(!customValidate(makeCustom("x", {zero}), err) && err.length() > 0, "menit 0 ditolak dengan pesan");
+  std::vector<CustomItem> many(24, CustomItem{CI_RINSEPERFUME, 3, 5, 0, 2, 0});
+  CHECK(customValidate(makeCustom("x", many), err) && customStepCount(makeCustom("x", many)) == 96, "24 blok terbesar (96 langkah mesin) masih muat");
+  CustomProc over = makeCustom("x", many);
+  over.count = 25;
+  CHECK(!customValidate(over, err), "lebih dari 24 langkah ditolak");
+
+  g_log.clear();
+  post(MC_RUN, PRG_CUSTOM, 2);
+  CHECK(runUntil([] { return st().state == MS_RUNNING; }, 1000), "mulai");
+  CHECK(std::string(st().name) == "Bilas dua kali", "status memakai nama custom");
+  bool done = runUntil(idle, 900000);
+  CHECK(done, "selesai");
+  CHECK(count("Mengisi air...") == 2, "dua kali bilas = dua kali isi air");
+  CHECK(count("Putaran ke") >= 1 && count("Spin") >= 0, "ada agitasi");
+  CHECK(count("Proses Bilas dua kali selesai", LOG_DONE) == 1, "DONE memakai nama custom");
+
+  // urutan bebas + pewangi per langkah + tunggu
+  CustomItem pf{CI_RINSEPERFUME, 0, 3, 0, 4, 0};   // 2 cup
+  CustomItem wt{CI_WAIT, 3, 1, 0, 0, 0};
+  CHECK(customSave(0, makeCustom("Campur", {wt, pf})), "simpan proses kedua");
+  g_log.clear();
+  post(MC_RUN, PRG_CUSTOM, 0);
+  runUntil(idle, 900000);
+  CHECK(count("Memasukkan pewangi") == 1, "pewangi dimasukkan di bilas+pewangi");
+  CHECK(count("Menunggu") >= 1, "langkah tunggu berjalan");
+
+  // slot kosong
+  g_log.clear();
+  post(MC_RUN, PRG_CUSTOM, 4);
+  tick();
+  CHECK(idle() && count("kosong atau tidak ditemukan", LOG_WARN) == 1, "slot kosong ditolak dengan pesan");
+
+  // listrik padam di tengah custom -> pulih dengan slot yang benar
+  post(MC_RUN, PRG_CUSTOM, 2);
+  runUntil([] { return st().stepIndex >= 4; }, 900000);
+  relayAllOff(); machineHostReset(); g_level = 100; g_raw = true;
+  settingsLoad(); calibLoad(); statsLoad(); machineBegin(); tick();
+  CHECK(st().resumePending, "tawaran pulih untuk custom");
+  post(MC_RESUME);
+  CHECK(runUntil([] { return st().state == MS_RUNNING; }, 2000) && std::string(st().name) == "Bilas dua kali", "lanjut custom yang sama");
+  CHECK(runUntil(idle, 900000), "custom pulih sampai selesai");
+  customDelete(2); customDelete(0);
+  CHECK(!customLoad(2, back), "hapus slot");
 }
 
 int main(int argc, char** argv) {
@@ -406,7 +505,9 @@ int main(int argc, char** argv) {
   t11_manualRelay();
   t12_relaySequence();
   t13_failsafe();
-  t14_sessions();
+  t14_devices();
+  t15_relayCheck();
+  t16_custom();
   checks++;
   if (g_violations != 0) { failures++; printf("  GAGAL: %ld tick melanggar invarian keselamatan\n", g_violations); }
   else printf("  ok: 0 pelanggaran invarian (kiri+kanan, isi+buang, buang+motor) di seluruh skenario\n");

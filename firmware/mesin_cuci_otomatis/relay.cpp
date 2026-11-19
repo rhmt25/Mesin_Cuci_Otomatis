@@ -53,35 +53,44 @@ static void updateMotorClock(bool before, bool after) {
   }
 }
 
+// Alasan penolakan (nullptr = diizinkan). Panggil di dalam critical section.
+static const char* denyReasonLocked(RelayId id, bool on) {
+  if (!on) return nullptr;
+  if (faulted) return "relay terkunci karena pelanggaran interlock, restart mesin";
+  if (state[id]) return nullptr;
+  switch (id) {
+    case R_LEFT:
+    case R_RIGHT: {
+      RelayId other = id == R_LEFT ? R_RIGHT : R_LEFT;
+      if (state[other]) return "motor kiri & kanan tidak boleh nyala bersamaan";
+      if (state[R_DRAIN]) return "motor cuci tidak boleh nyala saat valve buang aktif";
+      if (lastMotorDir >= 0 && lastMotorDir != (id == R_LEFT ? 0 : 1) && millis() - lastMotorOffMs < reverseGapMs())
+        return "jeda ganti arah motor belum cukup, coba lagi sebentar";
+      return nullptr;
+    }
+    case R_FILL:
+      return state[R_DRAIN] ? "valve isi & buang tidak boleh aktif bersamaan" : nullptr;
+    case R_DRAIN:
+      if (state[R_FILL]) return "valve isi & buang tidak boleh aktif bersamaan";
+      if (state[R_LEFT] || state[R_RIGHT]) return "valve buang ditolak saat motor cuci nyala";
+      return nullptr;
+    default: return nullptr;
+  }
+}
+
+const char* relayCheck(RelayId id, bool on) {
+  if (id >= R_COUNT) return "relay tidak dikenal";
+  portENTER_CRITICAL(&relayMux);
+  const char* r = denyReasonLocked(id, on);
+  portEXIT_CRITICAL(&relayMux);
+  return r;
+}
+
 bool relaySet(RelayId id, bool on) {
   if (id >= R_COUNT) return false;
-  const char* deny = nullptr;
   portENTER_CRITICAL(&relayMux);
   bool motorsBefore = state[R_LEFT] || state[R_RIGHT];
-  if (on && faulted) {
-    deny = "relay terkunci karena pelanggaran interlock, restart mesin";
-  } else if (on && !state[id]) {
-    switch (id) {
-      case R_LEFT:
-      case R_RIGHT: {
-        RelayId other = id == R_LEFT ? R_RIGHT : R_LEFT;
-        if (state[other]) deny = "motor kiri & kanan tidak boleh nyala bersamaan";
-        else if (state[R_DRAIN]) deny = "motor cuci tidak boleh nyala saat valve buang aktif";
-        else if (lastMotorDir >= 0 && lastMotorDir != (id == R_LEFT ? 0 : 1) &&
-                 millis() - lastMotorOffMs < reverseGapMs())
-          deny = "jeda ganti arah motor belum cukup";
-        break;
-      }
-      case R_FILL:
-        if (state[R_DRAIN]) deny = "valve isi & buang tidak boleh aktif bersamaan";
-        break;
-      case R_DRAIN:
-        if (state[R_FILL]) deny = "valve isi & buang tidak boleh aktif bersamaan";
-        else if (state[R_LEFT] || state[R_RIGHT]) deny = "valve buang ditolak saat motor cuci nyala";
-        break;
-      default: break;
-    }
-  }
+  const char* deny = denyReasonLocked(id, on);
   if (!deny) {
     if (on && (id == R_LEFT || id == R_RIGHT)) {
       // Sabuk & pengaman: paksa pin motor lawan mati secara fisik sebelum menyalakan

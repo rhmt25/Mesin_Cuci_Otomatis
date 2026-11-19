@@ -327,16 +327,28 @@ String helpText() {
          "mulai_nanti <menit>, selesai_jam <HH:MM>, notif <lengkap|ringkas|senyap>\n"
          "kalibrasi_air, reset_semua, restart, info\n"
          "relay <kiri|kanan|isi|buang|spin|pewangi> <on|off>, relay semua off, kalibrasi_relay [detik]\n"
+         "custom [nomor] (proses buatan sendiri, disusun di dashboard web)\n"
          "Konsol: heap, tasks, relay_test <nama>, log";
 }
 
 // ============================================================================
 // Eksekusi
 // ============================================================================
-static CmdResult runProgram(uint8_t id, uint8_t arg) {
+// Teks alasan mesin tidak siap (kosong bila siap)
+static String busyReason() {
   MachineStatus st;
   machineGetStatus(st);
-  if (st.state != MS_IDLE) return fail("Mesin sedang bekerja. Gunakan /stop dulu.");
+  if (otaBusy()) return "Mesin sedang memperbarui firmware.";
+  if (st.state == MS_RUNNING)
+    return String("Ada proses berjalan: ") + st.name + " (" + st.stage + "). Hentikan dulu dengan STOP.";
+  if (st.state == MS_PAUSED)
+    return String("Ada proses yang dijeda: ") + st.name + " (" + st.stage + "). Lanjutkan atau hentikan dulu.";
+  return "";
+}
+
+static CmdResult runProgram(uint8_t id, uint8_t arg) {
+  String busy = busyReason();
+  if (busy.length()) return fail("Ditolak. " + busy);
   MachineCmd c = {MC_RUN, id, arg};
   if (!machinePost(c)) return fail("Antrean perintah mesin penuh, coba lagi.");
   return ok(String("\xE2\x96\xB6 Program ") + programName(id) + " dikirim ke mesin.");
@@ -418,6 +430,27 @@ CmdResult executeCommand(const String& command, const String& argsIn, CmdSource 
     if (r < 0) return fail("Relay tidak dikenal. Pilihan: kiri, kanan, isi, buang, spin, pewangi.");
     return runProgram(PRG_TEST, r);
   }
+  if (name == "custom") {
+    String a = token(args, 0);
+    if (a.length() == 0) {
+      String t = "\xF0\x9F\x97\x82 Custom Proses (maks 5):\n";
+      int n = 0;
+      for (int i = 0; i < CUSTOM_SLOTS; i++) {
+        CustomProc p;
+        if (!customLoad(i, p)) continue;
+        t += String(i + 1) + ". " + p.name + " (" + p.count + " langkah)\n";
+        n++;
+      }
+      if (!n) t += "(belum ada, buat di dashboard web tab Custom)\n";
+      else t += "Jalankan: /custom <nomor>";
+      return ok(t);
+    }
+    int slot;
+    if (!parseInt(a, 1, CUSTOM_SLOTS, slot)) return fail("Nomor slot 1-5. Ketik /custom untuk daftar.");
+    CustomProc p;
+    if (!customLoad(slot - 1, p)) return fail("Slot " + String(slot) + " kosong.");
+    return runProgram(PRG_CUSTOM, slot - 1);
+  }
   if (name == "kalibrasi_relay") {
     int secs = 3;
     if (args.length() && !parseInt(token(args, 0), 1, 30, secs)) return fail("Lama nyala per relay: 1-30 detik.");
@@ -437,13 +470,25 @@ CmdResult executeCommand(const String& command, const String& argsIn, CmdSource 
     }
     int r = relayFromName(who);
     if (r < 0) return fail("Relay tidak dikenal. Pilihan: kiri, kanan, isi, buang, spin, pewangi, semua.");
-    MachineStatus st;
-    machineGetStatus(st);
-    if (st.state != MS_IDLE) return fail("Kontrol relay manual hanya saat mesin siap (tidak sedang bekerja).");
-    if (st.relayFault) return fail("Relay terkunci karena pelanggaran interlock. Restart mesin.");
+    String busy = busyReason();
+    if (busy.length()) return fail("Ditolak: kontrol relay manual hanya saat tidak ada proses. " + busy);
+    if (on) {
+      const char* why = relayCheck((RelayId)r, true);
+      if (why) {
+        String msg = String("Ditolak: relay ") + who + " tidak dinyalakan. ";
+        if (r == R_LEFT && relayIsOn(R_RIGHT)) msg += "Motor kanan sedang aktif; matikan motor kanan dulu.";
+        else if (r == R_RIGHT && relayIsOn(R_LEFT)) msg += "Motor kiri sedang aktif; matikan motor kiri dulu.";
+        else if (r == R_FILL && relayIsOn(R_DRAIN)) msg += "Valve buang sedang aktif; matikan dulu.";
+        else if (r == R_DRAIN && relayIsOn(R_FILL)) msg += "Valve isi sedang aktif; matikan dulu.";
+        else if (r == R_DRAIN && (relayIsOn(R_LEFT) || relayIsOn(R_RIGHT))) msg += "Motor cuci sedang aktif; matikan dulu.";
+        else msg += String(why[0] >= 'a' && why[0] <= 'z' ? (char)(why[0] - 32) : why[0]) + String(why + 1) + ".";
+        return fail(msg);
+      }
+    }
     MachineCmd c = {MC_RELAY, (uint8_t)r, (uint8_t)(on ? 1 : 0)};
     if (!machinePost(c)) return fail("Antrean perintah mesin penuh, coba lagi.");
-    return ok(String("Relay ") + who + (on ? " dinyalakan (otomatis mati 60 detik; motor kiri & kanan tidak bisa bersamaan)." : " dimatikan."));
+    if (!on) return ok(String("Relay ") + who + " dimatikan.");
+    return ok(String("Relay ") + who + " dinyalakan (otomatis mati 60 detik).");
   }
   if (name == "stop") return postSimple(MC_STOP, "\xE2\x8F\xB9 Perintah STOP dikirim. Semua relay dimatikan.");
   if (name == "jeda") return postSimple(MC_PAUSE, "\xE2\x8F\xB8 Perintah jeda dikirim.");

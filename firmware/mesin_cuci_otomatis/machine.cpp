@@ -23,6 +23,8 @@ static Settings cfg;                 // salinan pengaturan saat program dimulai
 static Step prog[MAX_STEPS];
 static uint8_t progN = 0, progGroups = 1, waitOffset = 0, idx = 0;
 static uint8_t progId = PRG_KUSTOM;
+static uint8_t progArg = 0;
+static char progNameBuf[28];
 static MState mstate = MS_IDLE;
 static uint32_t progStartMs = 0, progStartEpoch = 0, progMotorStart = 0, progTotalEst = 0;
 static char pauseReason[72];
@@ -73,8 +75,10 @@ static SR failStep(const char* msg) {
 // ============================================================================
 static void stageLabelFor(uint8_t id, const Step& st, uint8_t groups, char* out, size_t n) {
   static const char* kindNames[] = {"", "Cuci", "Bilas", "Bilas+Pewangi", "Tunggu"};
-  if (st.type == ST_WAIT) {
+  if (st.type == ST_WAIT && st.kind == KIND_TUNGGU) {
     strlcpy(out, "Menunggu mulai", n);
+  } else if (id == PRG_CUSTOM) {
+    snprintf(out, n, "Langkah %u/%u", st.grp + 1, groups);
   } else if (programIsFull(id) && st.kind > 0 && st.kind <= 3) {
     snprintf(out, n, "%s %u/%u", kindNames[st.kind], st.grp + 1, groups);
   } else {
@@ -87,7 +91,7 @@ static void stepTitle(const Step& st, char* out, size_t n) {
     case ST_AGITATE: snprintf(out, n, "Agitasi %lu mnt", (unsigned long)st.a); break;
     case ST_SOAK: snprintf(out, n, "Soak %lu sesi", (unsigned long)st.a); break;
     case ST_SPIN: snprintf(out, n, "Spin %lu mnt", (unsigned long)st.a); break;
-    case ST_WAIT: snprintf(out, n, "Menunggu %lu dtk", (unsigned long)st.a); break;
+    case ST_WAIT: snprintf(out, n, st.a >= 120 ? "Menunggu %lu mnt" : "Menunggu %lu dtk", (unsigned long)(st.a >= 120 ? st.a / 60 : st.a)); break;
     default: strlcpy(out, stepTypeName(st.type), n); break;
   }
 }
@@ -95,6 +99,10 @@ static void stepTitle(const Step& st, char* out, size_t n) {
 // ============================================================================
 // Estimasi waktu (dalam ms yang sudah diskalakan)
 // ============================================================================
+static float perfumeCups(const Step& st) {
+  return st.flag == PERFUME_FROM_SETTINGS ? cfg.parfume : st.flag / 2.0f;
+}
+
 static uint32_t estFillMs() {
   if (C.nFill > 0) return (uint32_t)(C.avgFillMs / TIME_SCALE);
   return minToMs(10);
@@ -109,7 +117,7 @@ static uint32_t estimateStepMs(const Step& st) {
     case ST_FILL: return estFillMs() + scaledMs(FILL_SETTLE_MS);
     case ST_AGITATE: return minToMs(st.a);
     case ST_SOAK: return minToMs(st.a * 5);
-    case ST_PERFUME: return cfg.parfume > 0 ? scaledMs((uint32_t)(cfg.parfume * 5000) + 3000) : 0;
+    case ST_PERFUME: return perfumeCups(st) > 0 ? scaledMs((uint32_t)(perfumeCups(st) * 5000) + 3000) : 0;
     case ST_DRAIN: return estDrainMs() + stableMs();
     case ST_SPIN: return minToMs(st.a);
     case ST_CHECK: return stableMs();
@@ -465,7 +473,7 @@ static void stepInit() {
   const Step& st = prog[idx];
   memset(&R, 0, sizeof(R));
   switch (st.type) {
-    case ST_WAIT: R.left = secToMs(st.a); setDetail("Menunggu jam mulai"); break;
+    case ST_WAIT: R.left = secToMs(st.a); setDetail(st.kind == KIND_TUNGGU ? "Menunggu jam mulai" : "Menunggu"); break;
     case ST_FILL: fillBegin(); break;
     case ST_AGITATE:
       R.left = minToMs(st.a);
@@ -477,12 +485,12 @@ static void stepInit() {
       agitateStart(st.flag);
       break;
     case ST_PERFUME:
-      if (cfg.parfume <= 0) {
+      if (perfumeCups(st) <= 0) {
         logf(LOG_INFO, "Pewangi tidak dimasukkan!");
         R.phase = 1;
       } else {
         if (relaySet(R_PERFUME, true)) logf(LOG_INFO, "Memasukkan pewangi...");
-        R.left = scaledMs((uint32_t)(cfg.parfume * 5000.0f) + 3000);
+        R.left = scaledMs((uint32_t)(perfumeCups(st) * 5000.0f) + 3000);
       }
       setDetail("Memasukkan pewangi");
       break;
@@ -510,7 +518,7 @@ static void stepBegin() {
   stageLabelFor(progId, st, progGroups, stage, sizeof(stage));
   stepTitle(st, title, sizeof(title));
   logf(LOG_STEP, "%s: %s mulai", stage, title);
-  if (idx >= waitOffset && !programIsTest(progId)) resumeSave(progId, idx - waitOffset);
+  if (idx >= waitOffset && !programIsTest(progId)) resumeSave(progId, idx - waitOffset, progArg);
   stepInit();
 }
 
@@ -548,9 +556,9 @@ static void endProgram(CycleResult res, const char* why) {
   mstate = MS_IDLE;
   detail[0] = 0;
   pauseReason[0] = 0;
-  if (res == RES_DONE) logf(LOG_DONE, "Proses %s selesai", programName(progId));
-  else if (res == RES_STOPPED) logf(LOG_WARN, "Proses %s dihentikan%s%s", programName(progId), why ? ": " : "", why ? why : "");
-  else logf(LOG_ERROR, "Proses %s dibatalkan: %s", programName(progId), why ? why : "kesalahan");
+  if (res == RES_DONE) logf(LOG_DONE, "Proses %s selesai", progNameBuf);
+  else if (res == RES_STOPPED) logf(LOG_WARN, "Proses %s dihentikan%s%s", progNameBuf, why ? ": " : "", why ? why : "");
+  else logf(LOG_ERROR, "Proses %s dibatalkan: %s", progNameBuf, why ? why : "kesalahan");
 }
 
 static void stepFinished() {
@@ -610,7 +618,8 @@ static void startProgram(uint8_t id, uint8_t arg, int resumeIdx) {
   uint8_t groups = 1;
   uint8_t n = buildProgram(id, cfg, arg, prog, groups);
   if (n == 0) {
-    logf(LOG_WARN, "%s tidak dilakukan (waktu/sesi diatur 0)", programName(id));
+    if (id == PRG_CUSTOM) logf(LOG_WARN, "Custom proses slot %u kosong atau tidak ditemukan", (unsigned)(arg + 1));
+    else logf(LOG_WARN, "%s tidak dilakukan (waktu/sesi diatur 0)", programName(id));
     return;
   }
   if (resumeIdx >= n) {
@@ -619,6 +628,13 @@ static void startProgram(uint8_t id, uint8_t arg, int resumeIdx) {
     return;
   }
   progId = id;
+  progArg = arg;
+  progNameBuf[0] = 0;
+  if (id == PRG_CUSTOM) {
+    CustomProc cp;
+    if (customLoad(arg, cp)) strlcpy(progNameBuf, cp.name, sizeof(progNameBuf));
+  }
+  if (!progNameBuf[0]) strlcpy(progNameBuf, programName(id), sizeof(progNameBuf));
   progGroups = groups;
   progN = n;
   waitOffset = 0;
@@ -644,7 +660,7 @@ static void startProgram(uint8_t id, uint8_t arg, int resumeIdx) {
   progStartEpoch = now > 1700000000 ? (uint32_t)now : 0;
   progMotorStart = relayMotorSeconds();
   pauseReason[0] = 0;
-  logf(LOG_STEP, "Program %s %s (%u langkah)", programName(id), resumeIdx >= 0 ? "dilanjutkan" : "dimulai", progN);
+  logf(LOG_STEP, "Program %s %s (%u langkah)", progNameBuf, resumeIdx >= 0 ? "dilanjutkan" : "dimulai", progN);
   stepBegin();
 }
 
@@ -755,7 +771,7 @@ static void processCmd(const MachineCmd& c) {
       if (mstate == MS_PAUSED) {
         doResume();
       } else if (mstate == MS_IDLE && resumePending && !holdFlag) {
-        startProgram(resumeInfo.program, 0, resumeInfo.stepIndex);
+        startProgram(resumeInfo.program, resumeInfo.arg, resumeInfo.stepIndex);
       } else {
         logf(LOG_WARN, "Tidak ada proses yang sedang dijeda");
       }
@@ -835,6 +851,7 @@ static void publishStatus() {
   for (int i = 0; i < R_COUNT; i++) s.relays[i] = relayIsOn((RelayId)i);
   if (mstate != MS_IDLE) {
     s.program = progId;
+    strlcpy(s.name, progNameBuf, sizeof(s.name));
     s.stepIndex = idx + 1;
     s.stepCount = progN;
     stageLabelFor(progId, prog[idx], progGroups, s.stage, sizeof(s.stage));
@@ -933,7 +950,7 @@ void machineBegin() {
   if (resumeLoad(resumeInfo)) {
     Step tmp[MAX_STEPS];
     uint8_t groups = 1;
-    uint8_t n = buildProgram(resumeInfo.program, S, 0, tmp, groups);
+    uint8_t n = buildProgram(resumeInfo.program, S, resumeInfo.arg, tmp, groups);
     if (resumeInfo.program < PRG_COUNT && resumeInfo.stepIndex < n) {
       char stage[28];
       stageLabelFor(resumeInfo.program, tmp[resumeInfo.stepIndex], groups, stage, sizeof(stage));

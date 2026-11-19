@@ -7,7 +7,7 @@
 enum ProgramId : uint8_t {
   PRG_KUSTOM, PRG_NORMAL, PRG_GENTLE, PRG_HIJAB, PRG_CEPAT,
   PRG_SOAK, PRG_WASH, PRG_SOAKWASH, PRG_RINSE, PRG_RINSEPARFUME,
-  PRG_SPIN, PRG_WATERIN, PRG_WATEROUT, PRG_PARFUME, PRG_MOTOR, PRG_TEST, PRG_RELAYSEQ,
+  PRG_SPIN, PRG_WATERIN, PRG_WATEROUT, PRG_PARFUME, PRG_MOTOR, PRG_TEST, PRG_RELAYSEQ, PRG_CUSTOM,
   PRG_COUNT
 };
 
@@ -33,7 +33,8 @@ struct Step {
   uint32_t a;
 };
 
-#define MAX_STEPS 16
+#define MAX_STEPS 100
+#define PERFUME_FROM_SETTINGS 255   // Step.flag untuk ST_PERFUME: jumlah cup ikut Pengaturan; selain itu flag = cup x 2
 
 struct Preset {
   const char* name;
@@ -50,3 +51,9 @@ bool programIsTest(uint8_t id);                      // uji relay: tanpa riwayat
 // Susun langkah program. Mengembalikan jumlah langkah; groups = jumlah tahap.
 uint8_t buildProgram(uint8_t id, const Settings& s, uint8_t arg, Step* out, uint8_t& groups);
 const char* stepTypeName(uint8_t type);
+
+// Custom Proses
+const char* customTypeName(uint8_t type);              // "wash", "rinse", ...
+int customTypeFromName(const String& name);           // -1 bila tidak dikenal
+uint8_t customStepCount(const CustomProc& p);          // jumlah langkah mesin setelah blok dipecah
+bool customValidate(const CustomProc& p, String& err); // false + pesan Indonesia bila tidak valid

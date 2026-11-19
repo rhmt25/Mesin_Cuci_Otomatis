@@ -69,9 +69,10 @@ struct ResumeInfo {
   bool valid;
   uint8_t program;
   uint8_t stepIndex;
+  uint8_t arg;        // argumen program (mis. nomor slot Custom Proses)
   uint32_t savedAt;   // epoch (0 bila tidak diketahui)
 };
-void resumeSave(uint8_t program, uint8_t stepIndex);
+void resumeSave(uint8_t program, uint8_t stepIndex, uint8_t arg = 0);
 bool resumeLoad(ResumeInfo& out);
 void resumeClear();
 
@@ -99,9 +100,48 @@ void statsAddMotorSec(uint32_t sec);
 bool authCheck(const String& password);
 void authSet(const String& password);   // juga mencabut semua sesi login
 
-// Sesi login tersimpan di NVS (bertahan saat restart / flash ulang non-erase)
-#define MAX_SESSIONS 8
-String sessionCreate();                  // buat token baru (yang tertua digantikan)
+// --- Custom Proses: urutan langkah yang disusun sendiri ---
+#define CUSTOM_SLOTS 5
+#define CUSTOM_MAX_ITEMS 24
+enum CustomType : uint8_t {
+  CI_FILL, CI_AGITATE, CI_SOAK, CI_PERFUME, CI_DRAIN, CI_SPIN, CI_WAIT,   // langkah dasar
+  CI_WASH, CI_SOAKWASH, CI_RINSE, CI_RINSEPERFUME,                          // blok siap pakai
+  CI_COUNT
+};
+struct CustomItem {
+  uint8_t type;    // CustomType
+  uint8_t pola;    // 0 normal, 1 gentle, 2 hijab, 3 ikut Pengaturan
+  uint16_t a;      // menit / sesi / (WAIT: menit)
+  uint16_t b;      // SOAKWASH: menit cuci
+  uint8_t cups2;   // pewangi dalam setengah cup (cup x 2); 0 = ikut Pengaturan
+  uint8_t pad;
+};
+struct CustomProc {
+  char name[28];
+  uint8_t count;
+  uint8_t spare[3];
+  CustomItem items[CUSTOM_MAX_ITEMS];
+};
+bool customLoad(uint8_t slot, CustomProc& out);   // slot 0..4, false bila kosong
+bool customSave(uint8_t slot, const CustomProc& p);
+bool customDelete(uint8_t slot);
+
+// --- Perangkat login yang diingat (maks 5, selamanya sampai dihapus) ---
+#define MAX_DEVICES 5
+struct DeviceInfo {
+  uint8_t slot;
+  char name[32];
+  uint32_t created;    // epoch, 0 bila jam belum sinkron
+  uint32_t lastSeen;
+  bool current;
+};
+// remember=true -> disimpan di NVS sebagai "perangkat diingat" (bila penuh, yang terlama dihapus).
+// remember=false -> sesi sementara (RAM, hilang saat restart).
+String sessionCreate(bool remember, const String& deviceName);
 bool sessionValid(const String& token);
+int sessionSlot(const String& token);            // slot perangkat diingat, -1 bila sementara/tidak ada
 void sessionRevoke(const String& token);
 void sessionRevokeAll();
+int deviceList(DeviceInfo* out, int maxCount, const String& currentToken);
+bool deviceRemove(uint8_t slot);
+int deviceRemoveOthers(const String& currentToken);   // jumlah yang dihapus

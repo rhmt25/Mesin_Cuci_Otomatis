@@ -111,3 +111,21 @@ full proses, air habis, valve macet, stop, jeda/lanjutkan, listrik padam, level 
   kiri+kanan / isi+buang / buang+motor, semua relay dimatikan dan **dikunci sampai restart**, (5) motor cuci dimatikan paksa
   bila menyala terus > 65 detik, (6) semua relay mati saat boot, error, atau STOP.
 - Login web: centang **Ingat perangkat ini** untuk cookie 30 hari; sesi tersimpan di NVS sehingga tetap berlaku setelah restart.
+
+## Custom Proses
+
+Dashboard → tab **Custom**: susun proses sendiri dari blok (*Cuci, Soak+Cuci, Bilas, Bilas+Pewangi*) dan langkah dasar
+(*Isi air, Putar, Soak, Pewangi, Buang air, Spin, Tunggu*), atur nilainya (menit, sesi, pola putar, cup pewangi), tukar urutan
+dengan menggeser **☰** (atau tombol ▲▼), gandakan/hapus langkah, lalu simpan (maks 5 proses, tiap proses maks 24 langkah).
+Contoh: *Bilas 10 menit* lalu *Bilas 5 menit* = dua blok Bilas. Jalankan dari tab Custom, dari Beranda, atau Telegram (`/custom`,
+`/custom <nomor>`). Isi air/buang tetap mengikuti pengaturan level air, coba ulang, unjam, dan pemulihan listrik padam.
+
+## Perangkat yang diingat
+
+Login dengan **Ingat perangkat ini** disimpan di NVS (maks **5 perangkat**; bila penuh, yang terlama otomatis dihapus) dan tidak
+kedaluwarsa di sisi mesin. Cookie browser berumur 400 hari (batas browser) dan diperpanjang tiap dipakai. Kelola/hapus di
+tab **Sistem → Perangkat yang diingat**. Mengganti password web mengeluarkan semua perangkat.
+
+## Uji antarmuka (opsional)
+
+`cd tools/uitest && npm install && npm test` — jsdom + server palsu: editor Custom, drag & drop, penguncian relay, pesan penolakan, daftar perangkat.

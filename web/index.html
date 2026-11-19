@@ -13,7 +13,7 @@
   <form id="loginForm" class="card login">
     <h1>🧺 Mesin Cuci</h1>
     <input id="pw" type="password" placeholder="Password" autocomplete="current-password" required>
-    <label class="chk"><input id="remember" type="checkbox" checked> Ingat perangkat ini (30 hari)</label>
+    <label class="chk"><input id="remember" type="checkbox" checked> Ingat perangkat ini (tetap masuk, bisa dihapus di tab Sistem)</label>
     <button class="btn primary" type="submit">Masuk</button>
     <p id="loginMsg" class="muted"></p>
   </form>
@@ -33,6 +33,7 @@
   <nav id="tabs">
     <button data-tab="home" class="on">Beranda</button>
     <button data-tab="manual">Manual</button>
+    <button data-tab="custom">Custom</button>
     <button data-tab="relay">Relay</button>
     <button data-tab="settings">Pengaturan</button>
     <button data-tab="water">Air</button>
@@ -85,6 +86,9 @@
         <button class="card prog" data-cmd="program" data-args="kustom"><b>🛠 Kustom</b><small>sesuai Pengaturan</small></button>
       </div>
 
+      <p class="muted" id="progLock" hidden></p>
+      <div id="homeCustom" hidden><h3>Proses custom</h3><div class="grid" id="homeCustomGrid"></div></div>
+
       <h3>Jadwalkan</h3>
       <div class="card form">
         <label>Mulai nanti (menit)<input id="inDelay" type="number" min="0" max="1439" placeholder="0"></label>
@@ -113,8 +117,30 @@
       </div>
     </section>
 
+    <!-- CUSTOM PROSES -->
+    <section id="tab-custom" class="tab">
+      <p class="muted">Susun prosesmu sendiri: pilih langkah, atur nilainya, geser <b>&#9776;</b> untuk menukar urutan. Simpan (maks 5), lalu jalankan dari sini, Beranda, atau Telegram (<code>/custom</code>).</p>
+      <h3>Tersimpan</h3>
+      <div id="cpList"></div>
+      <h3 id="cpTitle">Proses baru</h3>
+      <div class="card form" id="cpEditor">
+        <label>Nama proses<input id="cpName" maxlength="27" placeholder="mis. Cuci handuk"></label>
+        <label>Mulai dari contoh
+          <select id="cpPreset"><option value="">&mdash; pilih contoh (opsional) &mdash;</option><option value="normal">Normal</option><option value="gentle">Gentle</option><option value="hijab">Hijab</option><option value="cepat">Cepat</option></select>
+        </label>
+        <div><div class="muted">Tambah langkah &mdash; blok siap pakai</div><div class="palette" id="cpPalBlok"></div></div>
+        <div><div class="muted">Langkah dasar</div><div class="palette" id="cpPalDasar"></div></div>
+        <div id="cpStack" class="stack"></div>
+        <p id="cpEmpty" class="muted">Belum ada langkah. Pilih dari tombol di atas.</p>
+        <div class="cpSummary" id="cpSummary"></div>
+        <div id="cpError" class="banner err" hidden></div>
+        <div class="row"><button class="btn primary" id="cpSave">&#128190; Simpan</button><button class="btn" id="cpSaveNew">Simpan sebagai baru</button><button class="btn" id="cpReset">Kosongkan</button></div>
+      </div>
+    </section>
+
     <!-- RELAY -->
     <section id="tab-relay" class="tab">
+      <div id="relayLock" class="banner err" hidden></div>
       <div class="banner warn">&#9888; Lepas beban atau tutup kran air sebelum menguji. Motor kiri &amp; kanan <b>tidak pernah</b> bisa menyala bersamaan (dijaga berlapis). Kontrol manual hanya saat mesin siap dan otomatis mati setelah 60 detik.</div>
       <div id="relayProgress" class="banner warn" hidden></div>
       <div class="card form">
@@ -238,6 +264,12 @@
     <!-- SISTEM -->
     <section id="tab-system" class="tab">
       <div class="card" id="sysInfo"></div>
+      <div class="card">
+        <b>Perangkat yang diingat</b>
+        <p class="muted" id="devHint"></p>
+        <div id="devList"></div>
+        <div class="row" style="margin-top:10px"><button class="btn" id="btnDevOthers">Keluarkan semua perangkat lain</button></div>
+      </div>
       <div class="card form">
         <label>Ganti password web<input id="newPw" type="password" minlength="6" placeholder="password baru (min 6)"></label>
         <button class="btn" id="btnPw">Ganti</button>

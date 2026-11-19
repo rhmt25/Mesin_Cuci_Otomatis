@@ -63,7 +63,7 @@ static void sendMenu() {
   static const Btn btns[] = {
       {"\xE2\x96\xB6 Normal", "program normal"}, {"\xF0\x9F\x8C\xB8 Gentle", "program gentle"},
       {"\xF0\x9F\xA7\x95 Hijab", "program hijab"}, {"\xE2\x9A\xA1 Cepat", "program cepat"},
-      {"\xF0\x9F\x9B\xA0 Kustom", "program kustom"}, {"\xF0\x9F\x94\xA7 Manual", "#manual"}, {"\xF0\x9F\x94\x8C Relay", "#relay"},
+      {"\xF0\x9F\x9B\xA0 Kustom", "program kustom"}, {"\xF0\x9F\x94\xA7 Manual", "#manual"}, {"\xF0\x9F\x94\x8C Relay", "#relay"}, {"\xF0\x9F\x97\x82 Custom", "#custom"},
       {"\xF0\x9F\x93\x8A Status", "status"}, {"\xE2\x8F\xB8 Jeda", "jeda"},
       {"\xE2\x96\xB6 Lanjutkan", "lanjutkan"}, {"\xE2\x8F\xB9 STOP", "?stop"},
       {"\xE2\x9A\x99 Pengaturan", "#settings"}, {"\xF0\x9F\x92\xA7 Air", "#air"},
@@ -82,6 +82,24 @@ static void sendSubmenu(const String& name) {
         {"Motor 5 mnt", "motor_on"}, {"\xE2\xAC\x85 Menu", "#menu"},
     };
     sendWithKeyboard("\xF0\x9F\x94\xA7 Kontrol manual (butuh air untuk soak & motor)", keyboard(b, sizeof(b) / sizeof(b[0]), 3));
+  } else if (name == "custom") {
+    // Tombol dibuat dinamis dari slot yang tersimpan (maks 5)
+    static char labels[CUSTOM_SLOTS][40];
+    static char datas[CUSTOM_SLOTS][12];
+    Btn b[CUSTOM_SLOTS + 1];
+    size_t n = 0;
+    for (int i = 0; i < CUSTOM_SLOTS; i++) {
+      CustomProc p;
+      if (!customLoad(i, p)) continue;
+      snprintf(labels[n], sizeof(labels[n]), "\xE2\x96\xB6 %d. %.24s", i + 1, p.name);
+      snprintf(datas[n], sizeof(datas[n]), "custom %d", i + 1);
+      b[n] = {labels[n], datas[n]};
+      n++;
+    }
+    b[n++] = {"\xE2\xAC\x85 Menu", "#menu"};
+    sendWithKeyboard(n > 1 ? "\xF0\x9F\x97\x82 Custom Proses: pilih untuk menjalankan.\nDisusun di dashboard web tab Custom."
+                           : "Belum ada Custom Proses. Susun di dashboard web tab Custom.",
+                     keyboard(b, n, 1));
   } else if (name == "relay") {
     static const Btn b[] = {
         {"Kiri ON", "relay kiri on"}, {"Kiri OFF", "relay kiri off"},
