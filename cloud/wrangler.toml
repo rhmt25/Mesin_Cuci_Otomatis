@@ -11,7 +11,7 @@ binding = "ASSETS"
 
 [[durable_objects.bindings]]
 name = "RELAY"
-class_name = "RelayV2"
+class_name = "RelayV3"
 
 [[migrations]]
 tag = "v1"
@@ -21,6 +21,11 @@ new_sqlite_classes = ["Relay"]
 [[migrations]]
 tag = "v2"
 renamed_classes = [{ from = "Relay", to = "RelayV2" }]
+
+# v3: kode Durable Object berubah (epoch sesi, ganti password); ganti nama kelas memaksa instans lama berhenti
+[[migrations]]
+tag = "v3"
+renamed_classes = [{ from = "RelayV2", to = "RelayV3" }]
 
 [vars]
 # Menit tanpa kabar dari mesin sebelum alarm "mesin tidak terhubung" dikirim ke Telegram

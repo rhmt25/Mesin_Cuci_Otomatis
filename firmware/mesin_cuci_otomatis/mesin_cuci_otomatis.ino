@@ -24,7 +24,7 @@ static void pollSerial() {
     if (ch == '\r') continue;
     if (ch == '\n') {
       if (serialLine.length()) {
-        logf(LOG_DEBUG, "> %s", serialLine.c_str());
+        logf(LOG_DEBUG, "> %s", serialLine.startsWith("web_password") ? "web_password (disembunyikan)" : serialLine.c_str());
         String out = consoleExec(serialLine, SRC_SERIAL);
         if (out.length()) logStr(LOG_DEBUG, out);
       }

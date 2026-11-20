@@ -92,3 +92,5 @@ apicmd allow pilih
 apicmd deny wifi_tambah
 apicmd deny web_password
 apicmd deny serial
+api deny POST /api/password
+api deny GET /api/password

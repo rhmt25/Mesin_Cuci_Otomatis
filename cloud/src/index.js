@@ -2,7 +2,7 @@
 import { verifyPassword, makeSession, verifySession, parseCookie, timingSafeEqual } from "./auth.js";
 import { isAllowed } from "./allow.js";
 
-export { RelayV2 } from "./relay.js";
+export { RelayV3 } from "./relay.js";
 
 const SESSION_REMEMBER_SEC = 400 * 24 * 3600; // 400 hari (batas cookie browser), diperpanjang tiap dipakai
 const SESSION_TEMP_SEC = 24 * 3600;
@@ -24,7 +24,8 @@ function buildCookie(url, value, maxAge) {
   return `${cookieName(url)}=${value}; Path=/; HttpOnly; SameSite=Strict${secure}${age}`;
 }
 
-async function isAuthed(request, env, url) {
+// Epoch sesi (>= 0) bila tanda tangan sah, -1 bila tidak. Kecocokan dengan epoch terkini (password diganti) dicek di Durable Object.
+async function sessionEp(request, env, url) {
   return verifySession(env.SESSION_SECRET, parseCookie(request.headers.get("Cookie"), cookieName(url)));
 }
 
@@ -53,7 +54,8 @@ export default {
       return jsonResp({ ok: true }, 200, { "set-cookie": buildCookie(url, "", 0) });
     }
 
-    if (!(await isAuthed(request, env, url))) return jsonResp({ ok: false, msg: "login" }, 401);
+    const ep = await sessionEp(request, env, url);
+    if (ep < 0) return jsonResp({ ok: false, msg: "login" }, 401);
 
     let body = null;
     if (request.method === "POST") {
@@ -64,10 +66,10 @@ export default {
 
     const stub = relayStub(env);
     let resp;
-    if (path === "/api/info") resp = await stub.fetch("https://relay/info");
-    else if (path === "/api/poll") resp = await stub.fetch(`https://relay/poll?since=${encodeURIComponent(url.searchParams.get("since") || "0")}`);
+    if (path === "/api/info") resp = await stub.fetch(`https://relay/info?ep=${ep}`);
+    else if (path === "/api/poll") resp = await stub.fetch(`https://relay/poll?ep=${ep}&since=${encodeURIComponent(url.searchParams.get("since") || "0")}`);
     else {
-      resp = await stub.fetch("https://relay/rpc", {
+      resp = await stub.fetch(`https://relay/rpc?ep=${ep}`, {
         method: "POST",
         body: JSON.stringify({ m: request.method, p: path, q: Object.fromEntries(url.searchParams), b: body }),
       });
@@ -92,13 +94,15 @@ async function login(request, env, url) {
 
   let body;
   try { body = await request.json(); } catch { return jsonResp({ ok: false, msg: "JSON tidak valid" }, 400); }
-  const good = await verifyPassword(String(body.password || ""), env.REMOTE_PASSWORD_HASH);
+  // Hash terkini ada di Durable Object (bisa diganti dari dashboard lokal); secret env dipakai bila belum pernah diganti
+  const auth = await (await stub.fetch("https://relay/auth")).json();
+  const good = await verifyPassword(String(body.password || ""), auth.hash || env.REMOTE_PASSWORD_HASH);
   if (!good) {
     const r = await rl("fail");
     return jsonResp({ ok: false, msg: r.locked ? `Terlalu banyak percobaan. Dikunci ${Math.ceil((r.retryMs || 60000) / 60000)} menit.` : "Password salah" }, r.locked ? 429 : 401);
   }
   await rl("ok");
   const remember = !!body.remember;
-  const token = await makeSession(env.SESSION_SECRET, remember ? SESSION_REMEMBER_SEC : SESSION_TEMP_SEC);
+  const token = await makeSession(env.SESSION_SECRET, remember ? SESSION_REMEMBER_SEC : SESSION_TEMP_SEC, auth.epoch || 0);
   return jsonResp({ ok: true }, 200, { "set-cookie": buildCookie(url, token, remember ? SESSION_REMEMBER_SEC : null) });
 }

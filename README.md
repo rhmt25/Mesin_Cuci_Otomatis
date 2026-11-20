@@ -188,7 +188,7 @@ Web lokal (HTTP, rumah/hotspot) ─────► ESP32   (jalur utama, tetap j
 ## Keamanan login (brute-force)
 
 - **Web lokal:** tiap 5 password salah beruntun dikunci makin lama: 30 dtk, 1, 2, 5, 15 mnt, lalu 1 jam; berhasil login mereset.
-  Setiap penguncian masuk log WARN (dan notifikasi). Password web minimal 8 karakter.
+  Setiap penguncian masuk log WARN (dan notifikasi).
 - **Web jarak jauh (Worker):** kunci per IP bertingkat 5 mnt, 15 mnt, 1 jam, 6 jam, 24 jam (turun lagi setelah 24 jam tenang);
   bila >50 percobaan gagal dalam 10 menit dari banyak IP, semua login dikunci 5 menit. Sesi bertanda tangan HMAC, cookie
   `HttpOnly` + `SameSite=Strict`, pemeriksaan Origin (CSRF). Logika di `cloud/src/ratelimit.js` (diuji di `cloud/test/e2e.mjs`).
@@ -201,3 +201,15 @@ Web lokal (HTTP, rumah/hotspot) ─────► ESP32   (jalur utama, tetap j
 - Daya pancar WiFi 11 dBm (`WIFI_TX_POWER`): pada 15 dBm sambungan TLS tetap tersendat di perangkat ini.
 - Setelah `wrangler deploy` yang mengubah Durable Object, instans lama bisa tetap berjalan selama sambungan ESP32 masih terbuka;
   migrasi `renamed_classes` (Relay -> RelayV2) dipakai untuk memaksa kode baru.
+
+## Dua password, diatur dari dashboard lokal
+- Dashboard lokal → tab **Sistem**: **Password web lokal** dan **Password jarak jauh** (keduanya minimal 12 karakter, diketik dua kali).
+  Dua password sengaja berbeda: kebocoran satu tidak membuka yang lain.
+- Password jarak jauh dikirim ESP32 **sekali** lewat sambungan TLS ke Worker (pesan `setpw`); Worker menghitung hash PBKDF2 dan
+  menyimpannya di Durable Object. Tidak disimpan di ESP32 maupun log (perintah `web_password` dan konsol juga disembunyikan di log).
+  Mesin harus sedang terhubung ke server; bila tidak, penyimpanan ditolak dengan pesan jelas.
+- Semua sesi jarak jauh keluar seketika (epoch sesi naik) dan notifikasi Telegram "Password jarak jauh diganti" dikirim.
+- Browser jarak jauh **tidak** punya jalur untuk mengganti password (`/api/password` hanya lokal). Setelah diganti dari dashboard,
+  `gen-secrets`/`put-secrets` tidak lagi menentukan password (hash di Worker yang berlaku).
+- Catatan deploy: bila kode Durable Object berubah, tambahkan migrasi `renamed_classes` di `wrangler.toml`; instans lama bisa tetap
+  berjalan selama sambungan ESP32 terbuka.

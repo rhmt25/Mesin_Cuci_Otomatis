@@ -3,7 +3,7 @@ import WebSocket from "ws";
 
 export function startSim({ url, token, hbMs = 30000, statusMs = 3000, silent = false, fw = "sim-2.0" }) {
   const state = { machine: "idle", program: "", pauseReason: "", relays: { kiri: false }, cmds: [], reqs: [], viewersMsgs: 0, connected: false };
-  let ws, hbTimer, statusTimer, closed = false;
+  let ws, hbTimer, statusTimer, closed = false, pwResolve = null;
 
   const status = () => ({
     type: "status", state: state.machine, program: state.program, stage: "", detail: "", pause: state.pauseReason,
@@ -44,6 +44,8 @@ export function startSim({ url, token, hbMs = 30000, statusMs = 3000, silent = f
         clearInterval(statusTimer);
         let left = (msg.ttl || 15) * 1000;
         statusTimer = setInterval(() => { left -= statusMs; if (left <= 0) clearInterval(statusTimer); else send({ t: "status", d: status() }); }, statusMs);
+      } else if (msg.t === "setpw_res" && pwResolve) {
+        pwResolve(msg); pwResolve = null;
       } else if (msg.t === "req" && !silent) {
         const r = api(msg.m, msg.p, msg.q, msg.b);
         send({ t: "res", id: msg.id, code: r.code, body: r.body });
@@ -58,6 +60,7 @@ export function startSim({ url, token, hbMs = 30000, statusMs = 3000, silent = f
   return {
     state,
     notify: (text) => send({ t: "notif", text }),
+    setPassword: (pw) => new Promise((res) => { pwResolve = res; send({ t: "setpw", id: 1, pw }); setTimeout(() => res({ ok: false, msg: "tanpa jawaban" }), 5000); }),
     log: (entries) => send({ t: "log", entries }),
     close: () => { closed = true; clearInterval(hbTimer); clearInterval(statusTimer); if (ws) ws.close(); },
     reconnect: () => { if (!state.connected && !closed) connect(); },

@@ -166,7 +166,7 @@ static void setupRoutes() {
                         "/api/tahap/meta", "/api/proses", "/api/proses/export", "/api/wifi", "/api/console", "/api/update/info"})
     getRoute(p);
   for (const char* p : {"/api/proses", "/api/wifi"}) deleteRoute(p);
-  for (const char* p : {"/api/settings", "/api/proses", "/api/proses/import", "/api/run", "/api/decide", "/api/cmd", "/api/wifi", "/api/console"})
+  for (const char* p : {"/api/settings", "/api/proses", "/api/proses/import", "/api/password", "/api/run", "/api/decide", "/api/cmd", "/api/wifi", "/api/console"})
     postJsonRoute(p);
 
   // ---- cadangkan & pulihkan (khusus lokal) ----

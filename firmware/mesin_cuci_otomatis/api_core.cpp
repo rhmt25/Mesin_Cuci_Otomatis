@@ -84,6 +84,13 @@ String apiStatusJson() {
   d["remote"]["configured"] = remoteConfigured();
   d["remote"]["enabled"] = S.remoteOn != 0;
   d["remote"]["connected"] = remoteConnected();
+  {
+    String pwMsg;
+    RemotePwState ps = remotePasswordState(pwMsg);
+    static const char* pwNames[] = {"idle", "wait", "ok", "fail"};
+    d["remote"]["pw"] = pwNames[ps];
+    d["remote"]["pwMsg"] = pwMsg;
+  }
   d["notif"] = notifModeName(S.notif);
   d["uptime"] = s.uptimeSec;
   d["heap"] = ESP.getFreeHeap();
@@ -437,9 +444,26 @@ ApiResult apiHandle(ApiSource src, const char* method, const String& path, const
       String cmd = doc["cmd"] | "";
       String args = doc["args"] | "";
       if (cmd.length() == 0) return {400, msgJson(false, "cmd kosong")};
-      logf(LOG_DEBUG, "%s: /%s %s", src == API_REMOTE ? "Remote" : "Web", cmd.c_str(), args.c_str());
+      logf(LOG_DEBUG, "%s: /%s %s", src == API_REMOTE ? "Remote" : "Web", cmd.c_str(), cmd == "web_password" ? "(disembunyikan)" : args.c_str());
       CmdResult r = executeCommand(cmd, args, csrc);
       return {200, msgJson(r.ok, r.msg)};
+    }
+    if (path == "/api/password") {   // khusus lokal: tidak ada di allowlist jarak jauh
+      String which = doc["which"] | "";
+      String pw = doc["pw"] | "";
+      if (pw.length() < 12) return {400, msgJson(false, "Password minimal 12 karakter")};
+      if (pw.length() > 64) return {400, msgJson(false, "Password maksimal 64 karakter")};
+      if (which == "local") {
+        authSet(pw);
+        logf(LOG_WARN, "Password web lokal diganti (semua perangkat diingat keluar)");
+        return {200, msgJson(true, "Password web lokal diganti. Silakan login ulang.")};
+      }
+      if (which == "remote") {
+        String err;
+        if (!remoteSetPassword(pw, err)) return {409, msgJson(false, err)};
+        return {200, msgJson(true, "Dikirim ke server, menunggu konfirmasi...")};
+      }
+      return {400, msgJson(false, "which harus local atau remote")};
     }
     if (path == "/api/run") return runApi(doc);
     if (path == "/api/decide") {
@@ -492,7 +516,7 @@ ApiResult apiHandle(ApiSource src, const char* method, const String& path, const
       String line = doc["line"] | "";
       line.trim();
       if (line.length() == 0) return {200, "{\"ok\":true}"};
-      logf(LOG_DEBUG, "> %s", line.c_str());
+      logf(LOG_DEBUG, "> %s", line.startsWith("web_password") ? "web_password (disembunyikan)" : line.c_str());
       String out = consoleExec(line, SRC_WEB);
       int start = 0;   // keluaran dikirim baris per baris ke log agar tampil di konsol
       while (start < (int)out.length()) {

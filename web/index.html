@@ -239,8 +239,19 @@
         <div class="row"><button class="btn" data-cmd="remote" data-args="on">Aktifkan</button><button class="btn" data-cmd="remote" data-args="off">Nonaktifkan</button></div>
       </div>
       <div class="card form" data-local>
-        <label>Ganti password web<input id="newPw" type="password" minlength="8" placeholder="password baru (min 8)"></label>
-        <button class="btn" id="btnPw">Ganti</button>
+        <b>Password web lokal</b>
+        <p class="muted">Untuk dashboard di jaringan rumah. Minimal 12 karakter. Mengganti password mengeluarkan semua perangkat yang diingat.</p>
+        <label>Password baru<input id="lpw1" type="password" minlength="12" maxlength="64" autocomplete="new-password" placeholder="min 12 karakter"></label>
+        <label>Ulangi password<input id="lpw2" type="password" minlength="12" maxlength="64" autocomplete="new-password"></label>
+        <button class="btn" id="btnPwLocal">Ganti password lokal</button>
+      </div>
+      <div class="card form" data-local>
+        <b>Password jarak jauh</b>
+        <p class="muted">Untuk dashboard di internet (berbeda dari password lokal). Minimal 12 karakter. Dikirim sekali lewat sambungan terenkripsi ke server dan tidak disimpan di mesin; semua sesi jarak jauh akan keluar. Butuh mesin sedang terhubung ke server.</p>
+        <label>Password baru<input id="rpw1" type="password" minlength="12" maxlength="64" autocomplete="new-password" placeholder="min 12 karakter"></label>
+        <label>Ulangi password<input id="rpw2" type="password" minlength="12" maxlength="64" autocomplete="new-password"></label>
+        <button class="btn" id="btnPwRemote">Ganti password jarak jauh</button>
+        <p class="muted" id="pwRemoteMsg"></p>
       </div>
       <button class="btn danger" id="btnRestart">Restart mesin</button>
     </section>

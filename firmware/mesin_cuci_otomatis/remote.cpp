@@ -30,6 +30,14 @@ static bool useTls = true;
 static char authHeader[140];
 
 static uint32_t viewersUntil = 0;
+// ---- ganti password jarak jauh (diminta dari web lokal, dikirim oleh task ini) ----
+static String pwPending;               // password menunggu dikirim; dihapus segera setelah terkirim
+static volatile bool pwQueued = false;
+static volatile RemotePwState pwState = RPW_IDLE;
+static char pwMsg[96] = "";
+static uint32_t pwSentMs = 0;
+#define PW_TIMEOUT_MS 15000
+
 static uint32_t lastHb = 0, lastStatus = 0, lastLogSeq = 0, lastAck = 0;
 #define ACK_TIMEOUT_MS 100000   // hb dikirim tiap 30 dtk; tanpa ack selama ini = sambungan dianggap mati
 static bool helloPending = false, bootNotified = false, resumeNotified = false;
@@ -38,6 +46,23 @@ static const uint32_t backoffSteps[] = {5000, 15000, 30000, 60000, 120000, 30000
 
 bool remoteConfigured() { return strlen(REMOTE_URL) > 8 && strlen(REMOTE_DEVICE_TOKEN) > 0; }
 bool remoteConnected() { return connected; }
+
+bool remoteSetPassword(const String& pw, String& err) {
+  if (!remoteConfigured() || !S.remoteOn) { err = "Kontrol jarak jauh belum aktif"; return false; }
+  if (!connected) { err = "Tidak terhubung ke server jarak jauh. Coba lagi setelah tersambung."; return false; }
+  if (pwState == RPW_WAIT) { err = "Masih menunggu jawaban server"; return false; }
+  if (pw.length() < 12 || pw.length() > 64) { err = "Password harus 12-64 karakter"; return false; }
+  pwPending = pw;
+  pwMsg[0] = 0;
+  pwState = RPW_WAIT;
+  pwSentMs = millis();
+  pwQueued = true;
+  return true;
+}
+RemotePwState remotePasswordState(String& msg) {
+  msg = pwMsg;
+  return pwState;
+}
 
 // "wss://host[:port]/path" atau "ws://..." (uji lokal)
 static bool parseUrl() {
@@ -94,6 +119,12 @@ static void handleText(const uint8_t* payload, size_t length) {
   JsonDocument doc;
   if (deserializeJson(doc, payload, length) != DeserializationError::Ok) return;
   String t = doc["t"] | "";
+
+  if (t == "setpw_res") {
+    strlcpy(pwMsg, doc["msg"] | "", sizeof(pwMsg));
+    pwState = (doc["ok"] | false) ? RPW_OK : RPW_FAIL;
+    return;
+  }
 
   if (t == "ack") {
     lastAck = millis();
@@ -207,6 +238,20 @@ static void pump() {
       sendNotif(String("\xF0\x9F\xA7\xBA Mesin Cuci online (v") + FW_VERSION + ")\nWiFi: " + netSsid() + " \xE2\x80\xA2 IP " +
                 netIp() + "\nReset terakhir: " + loggerResetReason());
     }
+  }
+  if (pwQueued) {   // kirim password baru ke Worker, lalu hapus dari memori
+    pwQueued = false;
+    JsonDocument d;
+    d["t"] = "setpw";
+    d["id"] = 1;
+    d["pw"] = pwPending;
+    sendJsonDoc(d);
+    pwPending = "";
+    pwPending.reserve(0);
+  }
+  if (pwState == RPW_WAIT && now - pwSentMs > PW_TIMEOUT_MS) {
+    strlcpy(pwMsg, "Server tidak menjawab", sizeof(pwMsg));
+    pwState = RPW_FAIL;
   }
   if (now - lastHb >= HB_INTERVAL_MS) {
     lastHb = now;

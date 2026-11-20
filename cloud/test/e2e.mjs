@@ -179,6 +179,22 @@ try {
   const to = await call("POST", "/api/cmd", { cmd: "jeda" }, cookie);
   ok(to.code === 504 && Date.now() - t0 >= 1800 && Date.now() - t0 < 5000, "ESP32 tidak menjawab = 504 setelah ±2 dtk");
 
+  console.log("[W11] Ganti password jarak jauh dari mesin (setpw)");
+  const NEWPW = "password-baru-uji-1234";
+  ok((await sim.setPassword("pendek")).ok === false, "password < 12 karakter ditolak");
+  ok((await call("POST", "/api/login", { password: PASSWORD })).code === 200, "password lama masih berlaku setelah penolakan");
+  const r2 = await sim.setPassword(NEWPW);
+  ok(r2.ok === true, "password 12+ karakter diterima");
+  ok((await call("GET", "/api/info", null, cookie)).code === 401, "sesi lama langsung keluar");
+  ok((await call("POST", "/api/login", { password: PASSWORD })).code === 401, "password lama ditolak");
+  const ln = await call("POST", "/api/login", { password: NEWPW, remember: true });
+  ok(ln.code === 200 && ln.json.ok, "password baru bisa login");
+  const cookie2 = (ln.headers.get("set-cookie") || "").split(";")[0];
+  ok((await call("GET", "/api/info", null, cookie2)).code === 200, "sesi baru berlaku");
+  await sleep(2600);
+  ok(tg.some((t) => /Password jarak jauh diganti/.test(t)), "notifikasi Telegram: password jarak jauh diganti");
+  ok((await call("POST", "/api/password", { which: "remote", pw: NEWPW + "x" }, cookie2)).code === 403, "browser jarak jauh tidak bisa mengganti password (403)");
+
   console.log("[W9] Batas laju login");
   let locked = false;
   for (let i = 0; i < 7; i++) { const r = await call("POST", "/api/login", { password: "salah" }); if (r.code === 429) { locked = true; break; } }

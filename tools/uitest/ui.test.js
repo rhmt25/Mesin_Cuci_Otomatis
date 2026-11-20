@@ -20,7 +20,7 @@ const S = {
   store: Array(10).fill(null),       // isi slot Proses
   locked: new Set(),
   devices: [{ id: 0, name: 'Chrome - Android', created: 1760000000, lastSeen: 1760000500, current: false }, { id: 1, name: 'Edge - Windows', created: 1760100000, lastSeen: 1760100500, current: true }],
-  cmds: [], posts: [], runs: [], decides: [], logQueue: [], restores: [], restoreReply: { ok: true, dry: true, msg: '1 pengaturan berubah, 2 WiFi' }, info: { remote: false, online: true }, remote: null,
+  pwPosts: [], pwFail: false, cmds: [], posts: [], runs: [], decides: [], logQueue: [], restores: [], restoreReply: { ok: true, dry: true, msg: '1 pengaturan berubah, 2 WiFi' }, info: { remote: false, online: true }, remote: null,
 };
 const BASE_STATUS = JSON.parse(JSON.stringify(S.status));
 function warningsOf(p) {
@@ -40,6 +40,7 @@ function route(url, opt) {
   if (p === '/api/poll') { const e = S.logQueue.splice(0); const o = { status: S.status, log: { entries: e, last: e.length ? e[e.length - 1].s : 0 } }; if (S.remote) o.remote = S.remote; return json(o); }
   if (p === '/api/settings') return json(S.settings);
   if (p === '/api/cmd') { S.cmds.push(body); return json({ ok: !(body.cmd === 'relay' && body.args === 'kanan on'), msg: body.cmd === 'relay' ? 'Ditolak: motor kiri sedang aktif' : 'ok' }); }
+  if (p === '/api/password') { S.pwPosts.push(body); const bad = body.which === 'remote' && S.pwFail; return json(bad ? { ok: false, msg: 'Tidak terhubung ke server jarak jauh.' } : { ok: true, msg: body.which === 'remote' ? 'Dikirim ke server, menunggu konfirmasi...' : 'Password web lokal diganti. Silakan login ulang.' }, bad ? 409 : 200); }
   if (p === '/api/run') { S.runs.push(body); return json({ ok: true, msg: 'dikirim' }); }
   if (p === '/api/decide') { S.decides.push(body); return json({ ok: true, msg: 'Keputusan dikirim' }); }
   if (p === '/api/proses' && m === 'GET') {
@@ -297,6 +298,30 @@ function route(url, opt) {
   click($('#devList [data-dev="1"]')); await sleep(100);
   ok(!$('#login').hidden, 'menghapus perangkat sendiri -> kembali ke login');
   ok(wsInst === null, 'dashboard tidak memakai WebSocket');
+
+  console.log('[U13b] Dua password terpisah, diatur dari lokal');
+  d.querySelector('#login').hidden = true; d.querySelector('#app').hidden = false;
+  await tab('system');
+  ok(!!$('#lpw1') && !!$('#rpw1') && !$('#newPw'), 'dua kartu password (lokal & jarak jauh) tampil');
+  type($('#lpw1'), 'pendek'); type($('#lpw2'), 'pendek'); click($('#btnPwLocal')); await sleep(40);
+  ok(/minimal 12/.test($('#toast').textContent) && S.pwPosts.length === 0, 'password < 12 karakter ditolak di UI');
+  type($('#lpw1'), 'password-lokal-panjang'); type($('#lpw2'), 'password-lokal-beda'); click($('#btnPwLocal')); await sleep(40);
+  ok(/tidak sama/.test($('#toast').textContent) && S.pwPosts.length === 0, 'konfirmasi password tidak sama ditolak');
+  type($('#lpw2'), 'password-lokal-panjang'); confirmAnswer = false; click($('#btnPwLocal')); await sleep(40);
+  ok(S.pwPosts.length === 0, 'batal di dialog konfirmasi: tidak dikirim');
+  confirmAnswer = true; click($('#btnPwLocal')); await sleep(60);
+  ok(S.pwPosts.length === 1 && S.pwPosts[0].which === 'local' && S.pwPosts[0].pw === 'password-lokal-panjang' && $('#lpw1').value === '', 'password lokal dikirim dengan which=local, kolom dikosongkan');
+  d.querySelector('#login').hidden = true; d.querySelector('#app').hidden = false;
+  S.pwFail = true; type($('#rpw1'), 'password-remote-panjang'); type($('#rpw2'), 'password-remote-panjang'); click($('#btnPwRemote')); await sleep(60);
+  ok(/Tidak terhubung/.test($('#pwRemoteMsg').textContent) && S.pwPosts[1].which === 'remote', 'mesin tidak terhubung ke server: pesan jelas');
+  S.pwFail = false;
+  S.status = { ...S.status, remote: { configured: true, enabled: true, connected: true, pw: 'wait', pwMsg: '' } };
+  const before = S.pwPosts.length; click($('#btnPwRemote')); await sleep(300);
+  ok(S.pwPosts.length === before + 1 && /menunggu konfirmasi/.test($('#pwRemoteMsg').textContent), 'password jarak jauh dikirim, UI menunggu konfirmasi');
+  S.status = { ...S.status, remote: { configured: true, enabled: true, connected: true, pw: 'ok', pwMsg: 'Password jarak jauh diganti.' } };
+  await sleep(1300);
+  ok(/Password jarak jauh diganti/.test($('#pwRemoteMsg').textContent), 'konfirmasi dari server ditampilkan');
+  S.status = { ...BASE_STATUS };
 
   console.log('[U14] Mode jarak jauh: fitur sensitif disembunyikan, banner offline');
   d.querySelector('#login').hidden = true; d.querySelector('#app').hidden = false;

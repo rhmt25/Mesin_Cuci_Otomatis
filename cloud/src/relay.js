@@ -5,6 +5,7 @@
 // - mengirim notifikasi Telegram dan alarm "mesin tidak terhubung"
 import { DurableObject } from "cloudflare:workers";
 import { applyFail, applyGlobalFail } from "./ratelimit.js";
+import { makePasswordHash } from "./auth.js";
 import { sendTelegram, wibTime } from "./telegram.js";
 
 const MAX_LOGS = 60;
@@ -14,7 +15,7 @@ const NOTIF_BATCH_MS = 2000;
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 
-export class RelayV2 extends DurableObject {
+export class RelayV3 extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
     this.env = env;
@@ -47,9 +48,20 @@ export class RelayV2 extends DurableObject {
     return null;
   }
 
+  // Hash password & epoch sesi terkini (hash kosong = pakai secret REMOTE_PASSWORD_HASH dari env)
+  async authInfo() {
+    if (!this.auth) this.auth = { hash: (await this.ctx.storage.get("pwhash")) || "", epoch: (await this.ctx.storage.get("epoch")) || 0 };
+    return this.auth;
+  }
+
   async fetch(request) {
     const url = new URL(request.url);
+    if (["/info", "/poll", "/rpc"].includes(url.pathname)) {   // sesi dari sebelum password diganti tidak berlaku lagi
+      const auth = await this.authInfo();
+      if (Number(url.searchParams.get("ep") || 0) !== auth.epoch) return json({ ok: false, msg: "login" }, 401);
+    }
     switch (url.pathname) {
+      case "/auth": return json(await this.authInfo());
       case "/device": {
         if (request.headers.get("Upgrade") !== "websocket") return new Response("Expected websocket", { status: 426 });
         for (const old of this.ctx.getWebSockets("device")) {
@@ -170,6 +182,23 @@ export class RelayV2 extends DurableObject {
       case "notif":
         if (msg.text) this.queueNotif(String(msg.text));
         break;
+      case "setpw": {   // password jarak jauh diganti dari dashboard lokal ESP32 (hanya soket perangkat yang lolos token)
+        const pw = String(msg.pw || "");
+        let reply;
+        if (pw.length < 12 || pw.length > 128) {
+          reply = { ok: false, msg: "Password jarak jauh harus 12-128 karakter" };
+        } else {
+          const hash = await makePasswordHash(pw);
+          const epoch = (await this.authInfo()).epoch + 1;
+          await this.ctx.storage.put("pwhash", hash);
+          await this.ctx.storage.put("epoch", epoch);
+          this.auth = { hash, epoch };
+          reply = { ok: true, msg: "Password jarak jauh diganti. Semua sesi jarak jauh keluar." };
+          this.queueNotif("🔑 Password jarak jauh diganti dari dashboard lokal mesin.");
+        }
+        try { ws.send(JSON.stringify({ t: "setpw_res", id: msg.id, ...reply })); } catch { /* soket tertutup */ }
+        break;
+      }
       case "res": {
         const p = this.pending.get(msg.id);
         if (p) {

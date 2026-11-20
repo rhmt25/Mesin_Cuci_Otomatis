@@ -320,7 +320,41 @@ function renderSys() {
   const ri = $('#remoteInfo');
   if (ri) ri.textContent = !rm.configured ? 'Belum dikonfigurasi (isi REMOTE_URL dan REMOTE_DEVICE_TOKEN di secrets.h).' : !rm.enabled ? 'Dinonaktifkan.' : rm.connected ? '✅ Terhubung ke server jarak jauh.' : '⏳ Mencoba menyambung ke server…';
 }
-$('#btnPw').onclick = async () => { const r = await cmd('web_password', $('#newPw').value); if (r && r.ok) { $('#newPw').value = ''; toast('Password diganti. Silakan login ulang.'); setTimeout(showLogin, 800); } };
+// Password: lokal dan jarak jauh berbeda, keduanya diatur dari sini (minimal 12 karakter, diketik dua kali)
+function pwInputs(a, b) {
+  const p1 = $('#' + a).value, p2 = $('#' + b).value;
+  if (p1.length < 12) { toast('⚠ Password minimal 12 karakter'); return null; }
+  if (p1.length > 64) { toast('⚠ Password maksimal 64 karakter'); return null; }
+  if (p1 !== p2) { toast('⚠ Kedua password tidak sama'); return null; }
+  return p1;
+}
+$('#btnPwLocal').onclick = async () => {
+  const pw = pwInputs('lpw1', 'lpw2'); if (!pw) return;
+  if (!confirm('Ganti password web lokal? Semua perangkat yang diingat akan keluar.')) return;
+  try {
+    const r = await api('/api/password', 'POST', { which: 'local', pw });
+    toast((r.ok ? '✅ ' : '⚠ ') + r.msg);
+    if (r.ok) { $('#lpw1').value = ''; $('#lpw2').value = ''; setTimeout(showLogin, 800); }
+  } catch (e) { if (e.message !== 'login') toast('Gagal: ' + e.message); }
+};
+$('#btnPwRemote').onclick = async () => {
+  const pw = pwInputs('rpw1', 'rpw2'); if (!pw) return;
+  if (!confirm('Ganti password jarak jauh? Semua sesi jarak jauh akan keluar. Catat password baru di tempat aman.')) return;
+  const msg = $('#pwRemoteMsg');
+  let r;
+  try { r = await api('/api/password', 'POST', { which: 'remote', pw }); } catch (e) { if (e.message !== 'login') toast('Gagal: ' + e.message); return; }
+  msg.textContent = (r.ok ? '⏳ ' : '⚠ ') + r.msg;
+  if (!r.ok) return;
+  $('#rpw1').value = ''; $('#rpw2').value = '';
+  for (let i = 0; i < 20; i++) {   // tunggu konfirmasi dari server (maks ±20 dtk)
+    await new Promise(res => setTimeout(res, 1000));
+    let s; try { s = await api('/api/status'); } catch { continue; }
+    const st = s.remote && s.remote.pw;
+    if (st === 'ok') { msg.textContent = '✅ ' + s.remote.pwMsg; toast('✅ Password jarak jauh diganti'); return; }
+    if (st === 'fail') { msg.textContent = '⚠ ' + s.remote.pwMsg; toast('⚠ ' + s.remote.pwMsg); return; }
+  }
+  msg.textContent = '⚠ Tidak ada konfirmasi dari server. Coba lagi.';
+};
 $('#btnRestart').onclick = () => confirm('Restart mesin?') && cmd('restart');
 // ---- cadangkan & pulihkan (khusus lokal) ----
 $('#btnBackup').onclick = () => { location.href = '/api/backup' + ($('#bkWifi').checked ? '?wifi=1' : ''); };
