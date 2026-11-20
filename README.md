@@ -59,43 +59,61 @@ utuh di partisi cadangan; tombol **Kembali ke versi sebelumnya** tersedia.
 | Jaringan rumah | `http://mesincuci.local` atau IP yang dikirim Telegram saat online |
 | Hotspot ESP32 (darurat) | **hanya menyala bila semua WiFi tersimpan gagal**: sambung ke `MesinCuci-XXXX` (password `AP_PASSWORD`) → `http://192.168.4.1`. Mati lagi 2 menit setelah WiFi rumah pulih dan tanpa klien |
 
-Tab: Beranda, Manual, Pengaturan, Air, WiFi, Log, Konsol (serial monitor web), Riwayat, Firmware, Sistem.
+Tab: Beranda, Proses, Manual, Relay, Pengaturan, WiFi, Log, Konsol (serial monitor web), Riwayat, Firmware, Sistem.
 Sumber dashboard ada di `web/`; setelah diubah jalankan `python tools/build_web.py` (menghasilkan `web_ui.h`).
 
-## Program
+## Proses & Tahap
 
-| Program | Pola | Soak | Wash | Bilas |
-|---|---|---|---|---|
-| Normal | normal | 2 sesi | 15 mnt | 10 mnt |
-| Gentle | gentle | 2 | 12 | 8 |
-| Hijab | hijab | 1 | 10 | 8 |
-| Cepat | normal | 0 | 8 | 5 |
-| Kustom | pengaturan | pengaturan | pengaturan | pengaturan |
+**Tidak ada program bawaan.** Beranda hanya menampilkan **Proses** buatanmu (maks 10, tiap Proses maks 40 **Tahap**). Proses
+disusun di tab **Proses** dari Tahap terkecil; tiap Tahap punya variabelnya sendiri. Katalog (jenis, rentang, bawaan) ada di
+`tahap.cpp` dan dikirim ke dashboard lewat `/api/tahap/meta`, jadi dashboard dan firmware tidak bisa berbeda.
 
-Nilai preset ada di `programs.cpp`. Urutan: isi air → soak/wash → buang → bilas → buang → bilas + pewangi → buang.
+| Tahap | Variabel (bawaan) |
+|---|---|
+| **Isi air** | mode `sensor` / `persen` (25·50·75%, dari kalibrasi) / `waktu`; batas waktu `00:30:00` (sensor, persen); lama isi 30 mnt (waktu); coba ulang 3×; tunggu antar coba 15 mnt; pra-cek bila air sudah penuh: `buang` / `jeda` / `pakai` |
+| **Buang air** | lama buang 5 mnt; **Verifikasi Pengurangan Jumlah Air** 45 dtk; **Tarik Ulang Valve** 2×; batas ulang sesi 3× (cek akhir "tidak penuh" selalu dilakukan) |
+| **Putar mesin** | lama 15 mnt; pola `normal` (7 dtk nyala/4 jeda) · `gentle` (5,3/7) · `hijab` (3/9) |
+| **Soak** | ulangi 2; waktu putar 1 mnt; waktu rendam 4 mnt; pola |
+| **Rendam** | lama 4 mnt (diam, semua relay mati) |
+| **Spin** | lama 10 mnt (memeriksa sensor dulu: air harus sudah turun) |
+| **Pewangi** | 1 cup (kelipatan 0,5; **0,5 cup = 10 dtk**; failsafe pompa 240 dtk) |
+| **Tunggu** | 00:00:10 |
+| **Cek air** | harus `penuh` / `tidak penuh` |
+| **Minta tindakan** | pesan (≤ 40 karakter); mesin berhenti sampai Lanjut/Batal; notifikasi selalu terkirim |
+| **Notifikasi** | pesan (≤ 40 karakter); terkirim walau mode Senyap, lalu lanjut |
 
-**Level air:** Penuh (sensor, default) / Persen 25–75 (kalibrasi otomatis dari pengisian mode sensor) / Waktu manual.
-Pengisian yang tidak penuh dalam batas waktu → valve ditutup, tunggu, coba ulang (default 3×), lalu **dijeda**.
+Menu **Manual** menjalankan satu Tahap dengan form yang sama, ditambah **Buang manual** (valve ditarik selama waktu tertentu
+**tanpa sensor**, jalan darurat bila sensor rusak). Kontrol relay langsung dan kalibrasi relay ada di tab **Relay**.
 
-**Sensor level ada di paling atas** (hanya tahu *penuh* / *tidak penuh*), jadi pembuangan tidak mengandalkan "air habis":
-valve ditarik; air harus mulai turun dari posisi penuh dalam `drainProbeSec` (default 45 dtk, bisa diubah). Bila tidak,
-valve dilepas 3 dtk lalu ditarik lagi (unjam). Setelah tarikan terbukti berhasil, valve ditarik sampai total waktu buang
-(default 5 mnt), lalu dicek lagi: bila air masih penuh, sesi diulang; semua sesi gagal → **dijeda**.
-Opsi **pra-cek isi** (`/pra_cek_isi buang|jeda|pakai`): bila air masih penuh sebelum mengisi, buang dulu (default), jeda dan
-tunggu keputusan, atau pakai air yang ada. Saat mesin diam, firmware tidak menggerakkan relay apa pun sendiri.
-Listrik padam → saat menyala ditanya **Lanjutkan / Batalkan** (tidak pernah lanjut otomatis).
+**Mulai:** sekarang, tunda `HH:MM:SS`, atau selesai pada jam `HH:MM` (perkiraan: isi/buang berbasis sensor bisa meleset).
+Proses yang sedang dipakai (berjalan, dijeda, menunggu keputusan, menunggu mulai, atau pemulihan listrik padam tertunda)
+**tidak bisa diubah/dihapus**: tekan Stop dulu. Proses disimpan sebagai berkas JSON di LittleFS (partisi `spiffs`), ditulis
+atomik; ekspor/impor per Proses ada di tab Proses.
+
+### Keputusan menunggu
+Bila Isi/Buang/Spin/Cek gagal atau ada Tahap *Minta tindakan*, mesin **berhenti dan tidak pernah lanjut sendiri**. Dashboard
+menampilkan tombol sesuai kasus dan notifikasi dikirim (ulang tiap 10 menit):
+
+| Kasus | Pilihan |
+|---|---|
+| Isi gagal, Buang gagal, Spin masih penuh, Cek gagal | **Ulang** / **Lanjut** (dengan peringatan) / **Batal** |
+| Air sudah penuh sebelum mengisi (pra-cek `jeda`) | **Buang lalu isi** / **Pakai air yang ada** / **Batal** |
+| Minta tindakan | **Lanjut** / **Batal** |
+
+**Sensor level ada di paling atas** (hanya tahu *penuh* / *tidak penuh*): pada Tahap Buang, valve ditarik dan air harus mulai
+turun dari posisi penuh dalam waktu *Verifikasi*; bila tidak, valve dilepas 3 dtk lalu ditarik lagi (*Tarik Ulang Valve*).
+Setelah terbukti, valve ditarik sampai *lama buang*, lalu dicek: bila air masih penuh sesi diulang; semua sesi gagal → keputusan.
+Listrik padam → saat menyala ditanya **Lanjutkan / Batalkan** (tidak pernah lanjut otomatis; dibatalkan bila Proses sudah diubah).
+Catatan fitur lama yang dihapus: `Old_Vertion/proses_lama.md` (lokal).
 
 ## Perintah (Web · Serial/Konsol)
 
-`/menu` (tombol), `/status`, `/program normal|gentle|hijab|cepat|kustom`, `/stop`, `/jeda`, `/lanjutkan`, `/lewati`,
-`/batalkan`, `/cek_air`, `/pengaturan`, `/riwayat`, `/statistik`, `/info`, `/bantuan`;
-manual: `/soak /wash /soak_and_wash /rinse /rinse_parfume /spin /water_in /water_out /add_parfume /motor_on`;
-pengaturan: `/pola`, `/set_soak_session`, `/set_wash_time`, `/set_rinse_time`, `/set_jumlah_parfume`, `/set_spin_time`,
-`/set_delay`, `/mulai_nanti`, `/selesai_jam`, `/level_air penuh|25|50|75|waktu`, `/mode_buang sensor|waktu`,
-`/set_batas_waktu_pengisian_air`, `/set_coba_ulang_isi`, `/set_unjam`, `/notif lengkap|ringkas|senyap`, `/kalibrasi_air`,
-`/reset_semua`; WiFi: `/wifi_list /wifi_tambah /wifi_hapus /wifi_urutan`; `/restart`.
-Semua perintah lama (`/full_proses`, `/set_mode_gentle`, `/cek_variabel`, `/lanjutkan_proses`, dst.) tetap berfungsi sebagai alias.
-Konsol Serial/web juga punya `heap`, `tasks`, `log`, `relay_test <kiri|kanan|isi|buang|spin|pewangi>`.
+`proses` (daftar), `proses <nomor> [tunda HH:MM:SS | selesai HH:MM]`, `pilih <ulang|lanjut|batal|buang|pakai>`, `stop`, `jeda`,
+`lanjutkan`, `lewati`, `batalkan`, `cek_air`, `status`, `pengaturan`, `riwayat`, `statistik`, `info`, `bantuan`;
+`relay <kiri|kanan|isi|buang|spin|pewangi> <on|off>`, `relay semua off`, `kalibrasi_relay [detik]`, `buang_manual <menit>`;
+`notif lengkap|ringkas|senyap`, `remote [on|off]`, `kalibrasi_air`, `reset_semua`; WiFi: `wifi_list wifi_tambah wifi_hapus
+wifi_urutan`; `restart`. Konsol Serial/web juga punya `heap`, `tasks`, `log`, `relay_test <nama>`, `serial debug on|off`.
+Variabel air/putar/pewangi tidak lagi berupa perintah: diatur per Tahap di dashboard (tab Proses dan Manual).
 
 ## Wokwi
 
@@ -104,27 +122,21 @@ Sensor air disimulasikan dengan slide switch di GPIO27. Hotspot ESP32 tidak bisa
 
 ## Uji logika di PC
 
-`sh tools/hosttest/run.sh` (butuh `g++`) menjalankan state machine dengan jam palsu dan model tangki air:
-full proses, air habis, valve macet, stop, jeda/lanjutkan, listrik padam, level persen, pengaman meluap, interlock.
+`sh tools/hosttest/run.sh` (butuh `g++`) menjalankan state machine dengan jam palsu dan model tangki air (194 pemeriksaan:
+semua Tahap, semua keputusan dan pilihannya, pra-cek, soak, tunda, pemulihan listrik padam, kunci slot, failsafe pompa,
+interlock, backup) dan katalog Tahap + penyimpanan Proses (181 pemeriksaan: batas tiap variabel, JSON, peringatan, estimasi).
+Fixture uji UI `tools/uitest/meta.json` dibuat dari firmware: `test_tahap --meta > tools/uitest/meta.json`.
 
 ## Uji relay & failsafe
 
 - Dashboard → tab **Relay**: tombol ON/OFF per relay (hanya saat mesin siap, otomatis mati 60 detik) dan **Uji berurutan**
-  (kiri → kanan → isi → buang → spin → pewangi). Telegram: menu **Relay**; perintah `relay <nama> <on|off>`,
+  (kiri → kanan → isi → buang → spin → pewangi). perintah `relay <nama> <on|off>`,
   `relay semua off`, `kalibrasi_relay [detik]`.
 - Motor kiri & kanan **tidak pernah** menyala bersamaan, dijaga berlapis: (1) interlock di `relaySet`, (2) pin motor lawan
   dipaksa mati secara fisik sebelum motor dinyalakan, (3) jeda ganti arah, (4) `relayGuard()` tiap tick: bila terdeteksi
   kiri+kanan / isi+buang / buang+motor, semua relay dimatikan dan **dikunci sampai restart**, (5) motor cuci dimatikan paksa
   bila menyala terus > 65 detik, (6) semua relay mati saat boot, error, atau STOP.
-- Login web: centang **Ingat perangkat ini** untuk cookie 30 hari; sesi tersimpan di NVS sehingga tetap berlaku setelah restart.
-
-## Custom Proses
-
-Dashboard → tab **Custom**: susun proses sendiri dari blok (*Cuci, Soak+Cuci, Bilas, Bilas+Pewangi*) dan langkah dasar
-(*Isi air, Putar, Soak, Pewangi, Buang air, Spin, Tunggu*), atur nilainya (menit, sesi, pola putar, cup pewangi), tukar urutan
-dengan menggeser **☰** (atau tombol ▲▼), gandakan/hapus langkah, lalu simpan (maks 5 proses, tiap proses maks 24 langkah).
-Contoh: *Bilas 10 menit* lalu *Bilas 5 menit* = dua blok Bilas. Jalankan dari tab Custom, dari Beranda, atau Telegram (`/custom`,
-`/custom <nomor>`). Isi air/buang tetap mengikuti pengaturan level air, coba ulang, unjam, dan pemulihan listrik padam.
+- Login web: centang **Ingat perangkat ini** agar tetap masuk; sesi tersimpan di NVS sehingga tetap berlaku setelah restart.
 
 ## Perangkat yang diingat
 
@@ -134,7 +146,7 @@ tab **Sistem → Perangkat yang diingat**. Mengganti password web mengeluarkan s
 
 ## Uji antarmuka (opsional)
 
-`cd tools/uitest && npm install && npm test` — jsdom + server palsu: editor Custom, drag & drop, penguncian relay, pesan penolakan, daftar perangkat.
+`cd tools/uitest && npm install && npm test` — jsdom + server palsu: editor Proses/Tahap, kartu keputusan, Manual, drag & drop, penguncian relay, pesan penolakan, daftar perangkat.
 
 ## Ringan & andal (Tahap 2)
 
@@ -159,11 +171,11 @@ Web lokal (HTTP, rumah/hotspot) ─────► ESP32   (jalur utama, tetap j
 
 ## Cadangkan & pulihkan (tab Sistem, hanya web lokal)
 
-- **Unduh cadangan:** satu berkas JSON berisi pengaturan, Custom Proses (5 slot), dan daftar WiFi. Password WiFi hanya ikut bila
+- **Unduh cadangan:** satu berkas JSON (versi 3) berisi pengaturan dan daftar WiFi; Proses diekspor satu per satu di tab Proses. Password WiFi hanya ikut bila
   dicentang (simpan berkasnya dengan aman). Data kalibrasi dan jadwal sekali pakai tidak disertakan.
 - **Pulihkan dari berkas:** berkas diperiksa dulu (simulasi, `?dry=1`) dan ringkasannya ditampilkan untuk dikonfirmasi. Pemulihan
   **atomik**: bila satu bagian tidak valid, tidak ada yang berubah. Nilai di luar rentang disesuaikan; batas berkas 12 KB
-  (kasus terburuk ±7,5 KB). Tanpa password di berkas, WiFi yang sama mempertahankan password lamanya.
+  (kasus terburuk < 1 KB). Tanpa password di berkas, WiFi yang sama mempertahankan password lamanya.
 - Tidak tersedia dari jarak jauh. Logika ada di `backup.cpp` (murni, diuji di `tools/hosttest`).
 
 ## Catatan jaringan WiFi (hasil ukur di perangkat)
