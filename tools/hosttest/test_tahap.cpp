@@ -278,7 +278,11 @@ static void t6_store() {
   delete p; delete q; delete big;
 }
 
-int main() {
+int main(int argc, char** argv) {
+  if (argc > 1 && strcmp(argv[1], "--meta") == 0) {   // keluarkan katalog untuk fixture uji UI
+    printf("%s", tahapMetaJson().c_str());
+    return 0;
+  }
   t1_defaults();
   t2_roundtrip();
   t3_ranges();

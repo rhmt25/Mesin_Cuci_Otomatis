@@ -36,6 +36,7 @@ const clock = (ms, epoch) => {
   if (epoch) { const d = new Date(epoch * 1000); return d.toTimeString().slice(0, 8); }
   const s = Math.floor(ms / 1000); return `+${s}s`;
 };
+const fmtMin = s => s >= 3600 ? `${Math.floor(s / 3600)} j ${Math.round(s % 3600 / 60)} mnt` : `${Math.max(1, Math.round(s / 60))} mnt`;
 
 // -------------------------------------------------------------- tema/tab ----
 (function theme() {
@@ -52,10 +53,11 @@ $$('#tabs button').forEach(b => b.onclick = () => {
   onTab(b.dataset.tab);
 });
 function onTab(t) {
-  if (t === 'settings' || t === 'water') loadSettings();
+  if (t === 'settings') loadSettings();
   if (t === 'wifi') loadWifi();
   if (t === 'relay') renderRelays();
-  if (t === 'custom') { loadSettings().then(loadCustom); }
+  if (t === 'proses') loadMeta().then(() => { loadSettings(); loadProses(); renderPalette(); });
+  if (t === 'manual') loadMeta().then(renderManual);
   if (t === 'history') loadHistory();
   if (t === 'firmware') loadFw();
   if (t === 'system') { renderSys(); loadDevices(); }
@@ -78,91 +80,92 @@ document.addEventListener('click', e => {
   cmd(b.dataset.cmd, b.dataset.args || '');
 });
 $('#btnStop').onclick = () => {
-  if (last && last.state !== 'idle' && !confirm('Hentikan proses dan matikan semua relay?')) return;
+  if (last && last.state !== 'idle' && !confirm('Hentikan Proses dan matikan semua relay?')) return;
   cmd('stop');
 };
 
 // ------------------------------------------------------------- status UI ----
+const STATE_TXT = { idle: 'Siap', running: 'Berjalan', paused: 'Dijeda', decide: 'Menunggu keputusan' };
 function renderStatus(s) {
   last = s;
   $('#app').hidden = false; $('#login').hidden = true;
   const st = $('#chipState');
-  st.textContent = { idle: 'Siap', running: 'Berjalan', paused: 'Dijeda' }[s.state];
-  st.className = 'chip ' + (s.state === 'running' ? 'run' : s.state === 'paused' ? 'pause' : '');
+  st.textContent = STATE_TXT[s.state] || s.state;
+  st.className = 'chip ' + (s.state === 'running' ? 'run' : s.state === 'paused' || s.state === 'decide' ? 'pause' : '');
   const w = $('#chipWifi');
   w.textContent = s.wifi.online ? `📶 ${s.wifi.ssid}` : '📴 offline';
   w.className = 'chip' + (s.wifi.online ? '' : ' off');
-  $('#stage').textContent = s.state === 'idle' ? 'Siap' : s.stage;
-  $('#detail').textContent = s.state === 'idle' ? (s.program || 'Pilih program di bawah') : s.detail;
-  $('#stepLeft').textContent = s.state === 'idle' ? '-' : fmt(s.stepLeft);
-  $('#totalLeft').textContent = s.state === 'idle' ? '-' : '±' + fmt(s.totalLeft);
+  const idle = s.state === 'idle';
+  $('#stage').textContent = idle ? 'Siap' : s.stage;
+  $('#detail').textContent = idle ? 'Pilih Proses di bawah' : (s.proses ? s.proses + ' · ' : '') + s.detail;
+  $('#stepLeft').textContent = idle ? '-' : fmt(s.stepLeft);
+  $('#totalLeft').textContent = idle ? '-' : '±' + fmt(s.totalLeft);
   $('#water').textContent = s.water;
-  const p = s.state === 'idle' ? 0 : s.progress;
+  const p = idle ? 0 : s.progress;
   $('#ringFg').style.strokeDashoffset = 327 * (1 - p / 100);
-  $('#ringText').textContent = s.state === 'idle' ? '—' : p + '%';
+  $('#ringText').textContent = idle ? '—' : p + '%';
   $('#bannerResume').hidden = !s.resume.pending;
   $('#resumeInfo').textContent = s.resume.info;
   const bp = $('#bannerPause');
   bp.hidden = s.state !== 'paused';
-  bp.textContent = '⏸ Dijeda: ' + (s.pause || 'oleh pengguna') + '. Tekan Lanjutkan untuk mencoba lagi.';
+  bp.textContent = '⏸ Dijeda oleh pengguna. Tekan Lanjutkan untuk meneruskan.';
+  renderDecision(s);
   $('#bannerFault').hidden = !s.fault;
   updateRelays(s);
-  const busy = s.state !== 'idle';
-  $$('.prog, .cpRun').forEach(b => { b.disabled = busy; });
-  const pl = $('#progLock'); pl.hidden = !busy;
-  pl.textContent = busy ? `Program baru hanya bisa dimulai saat mesin siap. Sekarang: ${s.program} (${s.stage}).` : '';
+  $$('.prog, .cpRun').forEach(b => { b.disabled = !idle; });
+  const pl = $('#progLock'); pl.hidden = idle;
+  pl.textContent = idle ? '' : `Proses baru hanya bisa dimulai saat mesin siap. Sekarang: ${s.proses} (${s.stage}).`;
   lastState = s.state;
   if ($('#tab-system').classList.contains('on')) renderSys();
+  if ($('#tab-manual').classList.contains('on')) $('#manRun').disabled = !idle || s.fault;
   if (s.otaBusy) { $('#fwBar').style.width = s.otaProgress + '%'; }
+  const key = s.state + '|' + (s.slot || 0);
+  if (renderStatus.key !== key) { renderStatus.key = key; if (prosesList) renderHomeProses(); }
 }
 
-// ----------------------------------------------------- pengaturan dinamis ----
-const NUM = [
-  ['Soak (sesi)', 'set_soak_session', 'soak', 0, 1440], ['Wash (menit)', 'set_wash_time', 'wash', 0, 1440],
-  ['Rinse (menit)', 'set_rinse_time', 'rinse', 0, 1440], ['Pewangi (cup, kelipatan 0,5)', 'set_jumlah_parfume', 'parfume', 0, 1440, 0.5],
-  ['Spin (menit)', 'set_spin_time', 'spin', 0, 1440]];
-const WNUM = [
-  ['Coba ulang isi bila air habis (kali)', 'set_coba_ulang_isi', 'fillRetryCount', 0, 20],
-  ['Tunggu antar coba ulang (menit)', 'set_tunggu_coba_ulang', 'fillRetryWait', 0, 240],
-  ['Total waktu tarik valve buang (menit)', 'set_waktu_pembuangan_air', 'drainTime', 1, 60],
-  ['Probe tarikan valve (detik) — air harus mulai turun dalam waktu ini', 'set_probe_buang', 'drainProbeSec', 5, 600],
-  ['Batas sesi buang sebelum jeda', 'set_batas_sesi_pembuangan_air', 'drainSessionLimit', 1, 1440],
-  ['Unjam valve buang (kali)', 'set_unjam', 'unjamCount', 0, 10],
-];
-function numForms(host, defs) {
-  host.innerHTML = defs.map(([label, c, key, lo, hi, step]) => `
-    <div class="card numrow"><label>${esc(label)}<input type="number" data-key="${key}" min="${lo}" max="${hi}" step="${step || 1}"></label>
-    <button class="btn" data-set="${c}" data-key="${key}">Simpan</button></div>`).join('');
-  $$('[data-set]', host).forEach(b => b.onclick = () => cmd(b.dataset.set, $(`input[data-key=${b.dataset.key}]`, host).value));
+// Peringatan sebelum "Lanjut" (pemilik mungkin sedang di lokasi dan mengisi/membuang air sendiri)
+const LANJUT_WARN = {
+  isi_gagal: 'Air mungkin belum cukup. Motor bisa berputar dengan air sedikit. Lanjut hanya bila Anda sudah mengisi air secara manual.',
+  buang_gagal: 'Air masih ada di tabung. Tahap berikutnya (mis. Spin) dengan air berat bisa merusak mesin. Lanjut hanya bila Anda sudah membuang air secara manual.',
+  spin_penuh: 'Air masih ada di tabung. Spin dengan air berat bisa merusak mesin. Lanjut hanya bila Anda yakin tabung sudah aman.',
+  cek_gagal: 'Syarat air belum terpenuhi. Lanjut hanya bila Anda yakin kondisi air sudah aman.',
+};
+function renderDecision(s) {
+  const card = $('#decisionCard');
+  const d = s.state === 'decide' ? s.decision : null;
+  card.hidden = !d;
+  if (!d) { renderDecision.key = ''; return; }
+  const key = d.code + '|' + d.opts.join(',');
+  if (renderDecision.key === key) { $('#decMsg').textContent = d.msg; return; }
+  renderDecision.key = key;
+  $('#decMsg').textContent = d.msg;
+  $('#decTitle').textContent = `Menunggu keputusan · ${s.proses}`;
+  $('#decBtns').innerHTML = d.opts.map((o, i) => `<button class="btn ${o === 'batal' ? 'danger' : o === 'lanjut' || o === 'ulang' || o === 'buang' ? 'primary' : ''}" data-dec="${o}">${esc(d.labels[i])}</button>`).join('');
+  $$('#decBtns [data-dec]').forEach(b => b.onclick = async () => {
+    const o = b.dataset.dec;
+    if (o === 'lanjut' && LANJUT_WARN[d.code] && !confirm('⚠ ' + LANJUT_WARN[d.code] + '\n\nTetap lanjutkan?')) return;
+    if (o === 'batal' && !confirm('Batalkan Proses ini dan matikan semua relay?')) return;
+    try {
+      const r = await api('/api/decide', 'POST', { pilih: o });
+      toast((r.ok ? '' : '⚠ ') + r.msg);
+      pollOnce();
+    } catch (e) { if (e.message !== 'login') toast('Gagal: ' + e.message); }
+  });
 }
+
+// ------------------------------------------------------------- pengaturan ----
 async function loadSettings() {
   try { settings = await api('/api/settings'); } catch { return; }
   const s = settings;
-  $$('input[data-key]').forEach(i => { if (document.activeElement !== i && s[i.dataset.key] !== undefined) i.value = s[i.dataset.key]; });
-  $('#sPola').value = ['normal', 'gentle', 'hijab'][s.pola];
   $('#sNotif').value = ['lengkap', 'ringkas', 'senyap'][s.notif];
-  $('#dH').value = s.dH; $('#dM').value = s.dM; $('#dS').value = s.dS;
-  $('#fH').value = s.flH; $('#fM').value = s.flM; $('#fS').value = s.flS;
-  $('#wLevel').value = s.fillLevel === 0 ? 'penuh' : s.fillLevel === 2 ? 'waktu' : String(s.fillPercent);
-  $('#wTime').value = s.fillTime;
-  $('#wDrain').value = s.drainMode === 0 ? 'sensor' : 'waktu';
-  $('#wPrecheck').value = ['buang', 'jeda', 'pakai'][s.fillPrecheck];
-  $('#calibNote').textContent = s.calib.nFill ? `Rata-rata isi penuh ${fmt(s.calib.fillSec)} (${s.calib.nFill} sampel). Level persen memakai data ini.` : 'Belum ada data kalibrasi: level persen akan memakai sensor sampai ada 1 pengisian penuh.';
-  $('#inFinish').disabled = !s.timeSynced;
-  $('#schedNote').textContent = s.timeSynced ? (s.finishAt >= 0 ? `Terjadwal selesai jam ${String(Math.floor(s.finishAt / 60)).padStart(2, '0')}:${String(s.finishAt % 60).padStart(2, '0')}` : 'Berlaku untuk proses berikutnya.') : 'Jam belum sinkron (butuh internet): hanya "mulai nanti".';
+  $('#calibNote').textContent = s.calib.nFill ? `Rata-rata isi penuh ${fmt(s.calib.fillSec)} (${s.calib.nFill} sampel). Mode isi "persen" memakai data ini.` : 'Belum ada data kalibrasi: mode isi "persen" memakai sensor sampai ada 1 pengisian penuh dengan mode sensor.';
+  const sel = $('#startMode').querySelector('option[value=selesai]');
+  if (sel) sel.disabled = !s.timeSynced;
+  $('#startNote').textContent = s.timeSynced ? '' : 'Jam belum sinkron (butuh internet): "Selesai pada jam" belum tersedia, gunakan tunda.';
 }
-numForms($('#numSettings'), NUM); numForms($('#waterSettings'), WNUM);
-$('#btnPola').onclick = () => cmd('pola', $('#sPola').value);
 $('#btnNotif').onclick = () => cmd('notif', $('#sNotif').value);
-$('#btnDelay3').onclick = () => cmd('set_delay', `${$('#dH').value || 0} ${$('#dM').value || 0} ${$('#dS').value || 0}`);
-$('#btnLimit').onclick = () => cmd('set_batas_waktu_pengisian_air', `${$('#fH').value || 0} ${$('#fM').value || 0} ${$('#fS').value || 0}`);
-$('#btnLevel').onclick = () => { const v = $('#wLevel').value; cmd('level_air', v === 'waktu' ? 'waktu ' + $('#wTime').value : v); };
-$('#btnDrainMode').onclick = () => cmd('mode_buang', $('#wDrain').value);
-$('#btnPrecheck').onclick = () => cmd('pra_cek_isi', $('#wPrecheck').value);
-$('#btnResetAll').onclick = () => confirm('Reset semua pengaturan ke default?') && cmd('reset_semua');
-$('#btnCalib').onclick = () => confirm('Reset data kalibrasi isi/buang?') && cmd('kalibrasi_air');
-$('#btnDelay').onclick = () => cmd('mulai_nanti', $('#inDelay').value || 0);
-$('#btnFinish').onclick = () => { const v = $('#inFinish').value; v ? cmd('selesai_jam', v) : cmd('selesai_jam', 'batal'); };
+$('#btnResetAll').onclick = () => confirm('Reset pengaturan ke default?') && cmd('reset_semua');
+$('#btnCalib').onclick = () => confirm('Reset data kalibrasi waktu isi?') && cmd('kalibrasi_air');
 
 // ------------------------------------------------------------------ Relay ----
 const RELAYS = [['kiri', 'Motor putar kiri', 'GPIO25'], ['kanan', 'Motor putar kanan', 'GPIO18'], ['isi', 'Valve isi air', 'GPIO17'],
@@ -180,12 +183,12 @@ function updateRelays(s) {
   renderRelays();
   const on = s.relays || {};
   const busy = s.state !== 'idle';
-  const seq = busy && s.program === 'Kalibrasi relay';
+  const seq = busy && s.proses === 'Kalibrasi relay';
   const lock = $('#relayLock');
   if (s.fault) { lock.hidden = false; lock.textContent = '❌ Relay terkunci karena pelanggaran interlock. Restart mesin untuk membuka kunci.'; }
   else if (busy && !seq) {
     lock.hidden = false;
-    lock.textContent = `🔒 Kontrol manual & uji dikunci: ada proses ${s.state === 'paused' ? 'yang dijeda' : 'berjalan'} (${s.program}, ${s.stage}). Hentikan dulu di Beranda.`;
+    lock.textContent = `🔒 Kontrol manual & uji dikunci: ada Proses ${s.state === 'running' ? 'berjalan' : 'yang menunggu/dijeda'} (${s.proses}, ${s.stage}). Hentikan dulu di Beranda.`;
   } else lock.hidden = true;
   const conflict = {
     kiri: on.kanan ? 'Motor kanan sedang aktif, matikan dulu' : on.buang ? 'Valve buang sedang aktif, matikan dulu' : '',
@@ -230,16 +233,16 @@ $('#wifiForm').onsubmit = async e => {
 };
 
 // ------------------------------------------------------------ Log & konsol ----
-const LV = ['DEBUG', 'INFO', 'STEP', 'WARN', 'ERROR', 'DONE'];
-function lineHtml(e) { return `<div class="l-${e.l}">${clock(e.t, e.e)} ${LV[e.l].padEnd(5)} ${esc(e.m)}</div>`; }
+const LV = ['DEBUG', 'INFO', 'STEP', 'WARN', 'ERROR', 'DONE', 'NOTIF'];
+function lineHtml(e) { return `<div class="l-${e.l}">${clock(e.t, e.e)} ${(LV[e.l] || '?').padEnd(5)} ${esc(e.m)}</div>`; }
 function addEntries(list, live) {
   let alertEntry = null;
   for (const e of list) {
     if (e.s <= lastSeq) continue;
     lastSeq = e.s; logLines.push(e); conLines.push(e);
-    if (live && e.l >= 3 && e.l <= 4) alertEntry = e;   // WARN / ERROR dari mesin
+    if (live && (e.l === 3 || e.l === 4 || e.l === 6)) alertEntry = e;   // WARN / ERROR / NOTIF dari mesin
   }
-  if (alertEntry) toast((alertEntry.l >= 4 ? '❌ ' : '⚠ ') + alertEntry.m);
+  if (alertEntry) toast((alertEntry.l === 4 ? '❌ ' : alertEntry.l === 6 ? '📣 ' : '⚠ ') + alertEntry.m);
   if (logLines.length > 400) logLines.splice(0, logLines.length - 400);
   if (conLines.length > 600) conLines.splice(0, conLines.length - 600);
   if ($('#tab-log').classList.contains('on')) renderLog();
@@ -285,8 +288,8 @@ async function fetchLogsAll() { for (let i = 0; i < 6; i++) { if ((await pollLog
 async function loadHistory() {
   const r = await api('/api/history');
   const st = r.stats;
-  $('#statsBox').innerHTML = `<b>Total siklus selesai:</b> ${st.cycles}<br><b>Motor cuci menyala:</b> ${(st.motorSec / 3600).toFixed(1)} jam<br><b>Rata-rata isi penuh:</b> ${st.avgFillSec ? fmt(st.avgFillSec) : '-'}`;
-  $('#histList').innerHTML = r.history.map(h => `<div class="hist"><div><b>${esc(h.program)}</b><br><span class="muted">${h.start ? new Date(h.start * 1000).toLocaleString('id-ID') : '-'}</span></div><div style="text-align:right">${fmt(h.dur)}<br><span class="muted">${h.result}</span></div></div>`).join('') || '<p class="muted">Belum ada riwayat.</p>';
+  $('#statsBox').innerHTML = `<b>Total Proses selesai:</b> ${st.cycles}<br><b>Motor cuci menyala:</b> ${(st.motorSec / 3600).toFixed(1)} jam<br><b>Rata-rata isi penuh:</b> ${st.avgFillSec ? fmt(st.avgFillSec) : '-'}`;
+  $('#histList').innerHTML = r.history.map(h => `<div class="hist"><div><b>${esc(h.proses)}</b><br><span class="muted">${h.start ? new Date(h.start * 1000).toLocaleString('id-ID') : '-'}</span></div><div style="text-align:right">${fmt(h.dur)}<br><span class="muted">${h.result}</span></div></div>`).join('') || '<p class="muted">Belum ada riwayat.</p>';
 }
 async function loadFw() {
   const i = await api('/api/update/info');
@@ -296,7 +299,7 @@ async function loadFw() {
 $('#btnFlash').onclick = () => {
   const f = $('#fwFile').files[0];
   if (!f) return toast('Pilih file .bin dulu');
-  if (last && last.state !== 'idle') return toast('Mesin sedang bekerja. Hentikan proses dulu.');
+  if (last && last.state !== 'idle') return toast('Mesin sedang bekerja. Hentikan Proses dulu.');
   if (!confirm(`Flash ${f.name} (${(f.size / 1024).toFixed(0)} KB)? Mesin akan restart.`)) return;
   const fd = new FormData(); fd.append('firmware', f, f.name);
   const x = new XMLHttpRequest(); x.open('POST', '/api/update');
@@ -312,7 +315,7 @@ $('#btnRollback').onclick = async () => {
 function renderSys() {
   if (!last) return;
   const s = last;
-  $('#sysInfo').innerHTML = `<b>Firmware:</b> v${esc(s.fw)}<br><b>Uptime:</b> ${fmt(s.uptime)}<br><b>Heap bebas:</b> ${(s.heap / 1024).toFixed(0)} KB<br><b>Alasan reset terakhir:</b> ${esc(s.reset)}<br><b>WiFi:</b> ${s.wifi.online ? esc(s.wifi.ssid) + ' · ' + esc(s.wifi.ip) : 'offline'}<br><b>Hotspot:</b> ${s.wifi.apOn ? esc(s.wifi.ap) + ' AKTIF (' + s.wifi.apClients + ' klien)' : 'nonaktif'}<br><b>Jam:</b> ${esc(s.wifi.time)}<br><b>Notifikasi:</b> ${esc(s.notif)}`;
+  $('#sysInfo').innerHTML = `<b>Firmware:</b> v${esc(s.fw)}<br><b>Uptime:</b> ${fmt(s.uptime)}<br><b>Heap bebas:</b> ${(s.heap / 1024).toFixed(0)} KB<br><b>Alasan reset terakhir:</b> ${esc(s.reset)}<br><b>WiFi:</b> ${s.wifi.online ? esc(s.wifi.ssid) + ' · ' + esc(s.wifi.ip) : 'offline'}<br><b>Hotspot:</b> ${s.wifi.apOn ? esc(s.wifi.ap) + ' AKTIF (' + s.wifi.apClients + ' klien)' : 'nonaktif'}<br><b>Jam:</b> ${esc(s.wifi.time)}<br><b>Notifikasi:</b> ${esc(s.notif)}<br><b>Penyimpanan Proses:</b> ${s.fs ? 'siap' : '<span class="muted">tidak tersedia</span>'}`;
   const rm = s.remote || {};
   const ri = $('#remoteInfo');
   if (ri) ri.textContent = !rm.configured ? 'Belum dikonfigurasi (isi REMOTE_URL dan REMOTE_DEVICE_TOKEN di secrets.h).' : !rm.enabled ? 'Dinonaktifkan.' : rm.connected ? '✅ Terhubung ke server jarak jauh.' : '⏳ Mencoba menyambung ke server…';
@@ -334,102 +337,173 @@ $('#restoreFile').onchange = async e => {
   const dry = await api('/api/restore?dry=1', 'POST', data).catch(() => null);
   if (!dry) { msg.textContent = '⚠ Gagal memeriksa berkas.'; return; }
   if (!dry.ok) { msg.textContent = '⚠ ' + dry.msg; return; }
-  if (!confirm(`Pulihkan dari cadangan?\n${dry.msg}\n\nPengaturan, Custom Proses, dan daftar WiFi saat ini akan diganti.`)) { msg.textContent = 'Dibatalkan.'; return; }
+  if (!confirm(`Pulihkan dari cadangan?\n${dry.msg}\n\nPengaturan dan daftar WiFi saat ini akan diganti. Proses tidak ikut (ekspor/impor di tab Proses).`)) { msg.textContent = 'Dibatalkan.'; return; }
   const r = await api('/api/restore', 'POST', data).catch(() => null);
   msg.textContent = r && r.ok ? '✅ ' + r.msg : '⚠ ' + (r ? r.msg : 'Gagal memulihkan.');
-  if (r && r.ok) { loadSettings(); loadCustom(); loadWifi(); toast('Pemulihan selesai'); }
+  if (r && r.ok) { loadSettings(); loadWifi(); toast('Pemulihan selesai'); }
 };
 
-// -------------------------------------------------------------- Custom Proses ----
-const POLA = [['3', 'Ikut Pengaturan'], ['0', 'Normal'], ['1', 'Gentle'], ['2', 'Hijab']];
-const CI = {
-  wash: { label: 'Cuci', icon: '🧼', hint: 'isi air → putar → buang', f: [['a', 'Menit putar', 15]], pola: 1, g: 'blok' },
-  soakwash: { label: 'Soak + Cuci', icon: '🫧', hint: 'isi air → soak → putar → buang', f: [['a', 'Sesi soak', 2], ['b', 'Menit cuci', 15]], pola: 1, g: 'blok' },
-  rinse: { label: 'Bilas', icon: '💧', hint: 'isi air → putar → buang', f: [['a', 'Menit putar', 10]], pola: 1, g: 'blok' },
-  rinseperfume: { label: 'Bilas + Pewangi', icon: '🌸', hint: 'isi air → pewangi → putar → buang', f: [['a', 'Menit putar', 10]], pola: 1, cups: 1, g: 'blok' },
-  fill: { label: 'Isi air', icon: '🚰', f: [], g: 'dasar' },
-  agitate: { label: 'Putar', icon: '🔄', f: [['a', 'Menit', 5]], pola: 1, g: 'dasar' },
-  soak: { label: 'Soak (rendam)', icon: '🛁', hint: '1 mnt putar + 4 mnt rendam per sesi', f: [['a', 'Sesi', 2]], pola: 1, g: 'dasar' },
-  perfume: { label: 'Pewangi', icon: '🌼', f: [], cups: 1, g: 'dasar' },
-  drain: { label: 'Buang air', icon: '🚿', f: [], g: 'dasar' },
-  spin: { label: 'Spin', icon: '🌀', f: [['a', 'Menit', 10]], g: 'dasar' },
-  wait: { label: 'Tunggu', icon: '⏳', f: [['a', 'Menit', 5]], g: 'dasar' },
-};
-const PRESETS = {
-  normal: [['soakwash', 2, 15, 0], ['rinse', 10, 0, 0], ['rinseperfume', 10, 0, 0]],
-  gentle: [['soakwash', 2, 12, 1], ['rinse', 8, 0, 1], ['rinseperfume', 8, 0, 1]],
-  hijab: [['soakwash', 1, 10, 2], ['rinse', 8, 0, 2], ['rinseperfume', 8, 0, 2]],
-  cepat: [['wash', 8, 0, 0], ['rinse', 5, 0, 0], ['rinseperfume', 5, 0, 0]],
-};
-let cpUid = 1, cpSlots = [];
-const cp = { slot: 0, items: [] };
-const newItem = (t, a, b, p) => { const m = CI[t]; return { uid: cpUid++, t, a: a ?? (m.f[0] ? m.f[0][2] : 0), b: b ?? (m.f[1] ? m.f[1][2] : 0), p: p ?? 3, c: 0 }; };
-const stepsOf = it => ({ wash: 3, rinse: 3, soakwash: 4, rinseperfume: 4 }[it.t] || 1);
-function estMin(it) {
-  const c = settings && settings.calib ? settings.calib : {};
-  const fillM = c.fillSec ? c.fillSec / 60 : 10, drM = ((settings && settings.drainTime) || 5) + 0.2;
-  switch (it.t) {
-    case 'wash': case 'rinse': return fillM + it.a + drM;
-    case 'soakwash': return fillM + it.a * 5 + it.b + drM;
-    case 'rinseperfume': return fillM + it.a + drM + 0.3;
-    case 'fill': return fillM; case 'drain': return drM; case 'perfume': return 0.3;
-    case 'agitate': case 'spin': case 'wait': return it.a; case 'soak': return it.a * 5;
-  }
-  return 0;
+// =========================================================== Tahap & Proses ====
+// Katalog Tahap datang dari firmware (/api/tahap/meta): UI tidak menyimpan rentang/bawaan sendiri.
+let META = [];
+const ICON = { isi: '🚰', buang: '🚿', putar: '🔄', soak: '🛁', rendam: '💧', spin: '🌀', pewangi: '🌼', tunggu: '⏳', cek: '🔎', tindakan: '✋', notif: '📣', buang_manual: '🚿' };
+async function loadMeta() {
+  if (META.length) return;
+  try { const r = await api('/api/tahap/meta'); META = r.types || []; } catch { /* diulang saat tab dibuka lagi */ }
 }
-const fmtMin = m => m >= 60 ? `${Math.floor(m / 60)} j ${Math.round(m % 60)} mnt` : `${Math.round(m)} mnt`;
-const itemText = it => { const m = CI[it.t]; const v = m.f.map(([k]) => it[k]); return m.f.length === 0 ? m.label : it.t === 'soakwash' ? `${m.label} ${v[0]}×/${v[1]}m` : it.t === 'soak' ? `${m.label} ${v[0]}×` : `${m.label} ${v[0]}m`; };
-const cpTotal = items => ({ steps: items.reduce((n, i) => n + stepsOf(i), 0), min: items.reduce((n, i) => n + estMin(i), 0) });
+const typeMeta = t => META.find(x => x.t === t);
+let uidSeq = 1;
+function newItem(t, vals) {
+  const m = typeMeta(t), v = {};
+  m.fields.forEach(f => { v[f.k] = f.def; });
+  return { uid: uidSeq++, t, v: { ...v, ...(vals || {}) } };
+}
+const applies = (f, v) => !f.when || f.when.includes(v.mode);
+const hms = s => `${String(Math.floor(s / 3600)).padStart(2, '0')}:${String(Math.floor(s % 3600 / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 
-function buildPalette() {
-  for (const g of ['blok', 'dasar']) {
-    $(g === 'blok' ? '#cpPalBlok' : '#cpPalDasar').innerHTML = Object.entries(CI).filter(([, m]) => m.g === g)
-      .map(([t, m]) => `<button class="btn" data-add="${t}" title="${esc(m.hint || '')}">${m.icon} ${m.label}</button>`).join('');
+function fieldHtml(f, it) {
+  const val = it.v[f.k], base = `data-uid="${it.uid}" data-k="${f.k}"`;
+  let ctl, unit = '';
+  if (f.kind === 'enum') ctl = `<select ${base}>${f.opts.map((o, i) => `<option value="${o}"${o === val ? ' selected' : ''}>${esc(f.optLabels[i])}</option>`).join('')}</select>`;
+  else if (f.kind === 'choice') ctl = `<select ${base}>${f.opts.map(o => `<option value="${o}"${+o === +val ? ' selected' : ''}>${o}${f.unit || ''}</option>`).join('')}</select>`;
+  else if (f.kind === 'cup') { ctl = `<input type="number" ${base} min="0.5" max="10" step="0.5" inputmode="decimal" value="${val}">`; unit = ' (cup)'; }
+  else if (f.kind === 'text') ctl = `<input type="text" ${base} maxlength="${f.max}" value="${esc(val)}">`;
+  else if (f.fmt === 'hms') {
+    ctl = '<span class="tri">' + [['h', Math.floor(val / 3600), 23], ['m', Math.floor(val % 3600 / 60), 59], ['s', val % 60, 59]]
+      .map(([p, x, mx]) => `<input type="number" ${base} data-hms="${p}" min="0" max="${mx}" inputmode="numeric" value="${x}" aria-label="${p === 'h' ? 'jam' : p === 'm' ? 'menit' : 'detik'}">`).join('') + '</span>';
+    unit = ' (jam : menit : detik)';
+  } else { ctl = `<input type="number" ${base} min="${f.min}" max="${f.max}" inputmode="numeric" value="${val}">`; unit = f.unit ? ` (${f.unit})` : ''; }
+  return `<label data-f="${f.k}"${applies(f, it.v) ? '' : ' hidden'}>${esc(f.label)}${unit}${ctl}</label>`;
+}
+const fieldsHtml = it => typeMeta(it.t).fields.map(f => fieldHtml(f, it)).join('');
+
+// Mengambil nilai dari kontrol ke item. Mengembalikan true bila event ini milik form Tahap.
+function handleField(e, items) {
+  const el = e.target.closest('[data-k]'); if (!el) return false;
+  const it = items.find(x => x.uid === +el.dataset.uid); if (!it) return false;
+  const f = typeMeta(it.t).fields.find(x => x.k === el.dataset.k);
+  if (f.kind === 'enum' || f.kind === 'text') it.v[f.k] = el.value;
+  else if (f.kind === 'choice' || f.kind === 'cup') it.v[f.k] = parseFloat(el.value);
+  else if (el.dataset.hms) {
+    const [h, m, s] = $$('[data-hms]', el.closest('label')).map(i => parseInt(i.value, 10) || 0);
+    it.v[f.k] = h * 3600 + m * 60 + s;
+  } else it.v[f.k] = parseInt(el.value, 10);
+  const body = el.closest('.fields');
+  typeMeta(it.t).fields.forEach(g => { const lab = $(`[data-f="${g.k}"]`, body); if (lab) lab.hidden = !applies(g, it.v); });
+  return true;
+}
+// Pesan galat bahasa Indonesia, atau '' bila valid (firmware tetap memvalidasi ulang)
+function validateItem(it) {
+  const m = typeMeta(it.t);
+  for (const f of m.fields) {
+    if (!applies(f, it.v)) continue;
+    const v = it.v[f.k], pre = `${m.label}: ${f.label} harus `;
+    if (f.kind === 'text') { if (!String(v).trim() || String(v).length > f.max) return pre + `diisi (1-${f.max} karakter)`; }
+    else if (f.kind === 'enum') { if (!f.opts.includes(v)) return pre + 'salah satu pilihan'; }
+    else if (f.kind === 'choice') { if (!f.opts.includes(+v)) return pre + 'salah satu dari ' + f.opts.join('/'); }
+    else if (f.kind === 'cup') { if (!(v >= 0.5 && v <= 10 && Math.abs(v * 2 - Math.round(v * 2)) < 1e-6)) return pre + '0,5 - 10 cup (kelipatan 0,5)'; }
+    else if (!(Number.isInteger(v) && v >= f.min && v <= f.max)) return pre + (f.fmt === 'hms' ? `${hms(f.min)} - ${hms(f.max)}` : `${f.min} - ${f.max}${f.unit ? ' ' + f.unit : ''}`);
   }
-  $$('[data-add]').forEach(b => b.onclick = () => { cp.items.push(newItem(b.dataset.add)); renderStack(); const st = $('#cpStack'); st.lastElementChild && st.lastElementChild.scrollIntoView({ block: 'nearest' }); });
+  return '';
+}
+const itemToApi = it => { const o = { t: it.t }; typeMeta(it.t).fields.forEach(f => { if (applies(f, it.v)) o[f.k] = it.v[f.k]; }); return o; };
+const itemFromApi = o => newItem(o.t, Object.fromEntries(Object.entries(o).filter(([k]) => k !== 't')));
+
+// ------------------------------------------------------------------ Manual ----
+const man = { t: 'isi', item: null };
+function renderManual() {
+  if (!META.length) { $('#manForm').innerHTML = '<p class="muted">Memuat daftar Tahap…</p>'; return; }
+  const sel = $('#manType');
+  if (!sel.options.length) sel.innerHTML = META.map(m => `<option value="${m.t}">${ICON[m.t] || ''} ${esc(m.label)}${m.manual ? ' (hanya Manual)' : ''}</option>`).join('');
+  if (!man.item || man.item.t !== sel.value) { man.item = newItem(sel.value); }
+  $('#manForm').innerHTML = `<div class="fields">${fieldsHtml(man.item)}</div>`;
+  $('#manHint').hidden = sel.value !== 'buang_manual';
+  $('#manRun').disabled = !(last && last.state === 'idle') || !!(last && last.fault);
+}
+$('#manType').onchange = () => { man.item = null; renderManual(); };
+$('#manForm').addEventListener('input', e => { handleField(e, [man.item]); });
+$('#manForm').addEventListener('change', e => { handleField(e, [man.item]); });
+$('#manRun').onclick = async () => {
+  if (!man.item) return;
+  const err = validateItem(man.item);
+  if (err) return toast('⚠ ' + err);
+  if (man.item.t === 'buang_manual' && !confirm('Buang manual menarik valve selama waktu yang diatur TANPA membaca sensor. Pastikan Anda memantau. Lanjut?')) return;
+  try {
+    const r = await api('/api/run', 'POST', { manual: itemToApi(man.item) });
+    toast((r.ok ? '' : '⚠ ') + r.msg);
+    pollOnce();
+  } catch (e) { if (e.message !== 'login') toast('Gagal: ' + e.message); }
+};
+
+// ------------------------------------------------------------------ Proses ----
+let prosesList = null;
+const ed = { slot: 0, items: [], locked: false, warnings: [], est: 0 };
+function renderPalette() {
+  const host = $('#pcPalette');
+  if (!META.length || host.dataset.ready) return;
+  host.dataset.ready = '1';
+  host.innerHTML = META.filter(m => !m.manual).map(m => `<button class="btn" data-add="${m.t}">${ICON[m.t] || ''} ${esc(m.label)}</button>`).join('');
+  $$('[data-add]', host).forEach(b => b.onclick = () => {
+    if (ed.locked) return;
+    if (ed.items.length >= (prosesList ? prosesList.maxTahap : 40)) return toast('⚠ Maksimal 40 Tahap per Proses');
+    ed.items.push(newItem(b.dataset.add)); renderStack(); scheduleDry();
+    const st = $('#pcStack'); st.lastElementChild && st.lastElementChild.scrollIntoView({ block: 'nearest' });
+  });
 }
 function rowHtml(it, i) {
-  const m = CI[it.t];
-  const fields = m.f.map(([k, lab]) => `<label>${lab}<input type="number" min="1" max="1440" inputmode="numeric" data-uid="${it.uid}" data-k="${k}" value="${it[k]}"></label>`).join('');
-  const pola = m.pola ? `<label>Pola putar<select data-uid="${it.uid}" data-k="p">${POLA.map(([v, l]) => `<option value="${v}"${+v === it.p ? ' selected' : ''}>${l}</option>`).join('')}</select></label>` : '';
-  const cups = m.cups ? `<label>Pewangi (cup)<input type="number" step="0.5" min="0" max="20" inputmode="decimal" data-uid="${it.uid}" data-k="c" value="${it.c ? it.c / 2 : ''}" placeholder="ikut Pengaturan"></label>` : '';
+  const m = typeMeta(it.t);
   return `<div class="crow" data-uid="${it.uid}"><span class="handle" title="Tahan &amp; geser untuk menukar urutan">☰</span>
-    <div class="cbody"><div class="ctitle"><span class="num">${i + 1}</span> ${m.icon} <b>${m.label}</b> <span class="muted">${m.hint || ''}</span></div><div class="fields">${fields}${pola}${cups}</div></div>
+    <div class="cbody"><div class="ctitle"><span class="num">${i + 1}</span> ${ICON[it.t] || ''} <b>${esc(m.label)}</b></div><div class="fields">${fieldsHtml(it)}</div></div>
     <div class="cacts"><button data-act="up" title="Naik">▲</button><button data-act="down" title="Turun">▼</button><button data-act="dup" title="Gandakan">⧉</button><button data-act="del" title="Hapus">🗑</button></div></div>`;
 }
 function renderStack() {
-  $('#cpStack').innerHTML = cp.items.map(rowHtml).join('');
-  $('#cpEmpty').hidden = cp.items.length > 0;
-  updateSummary();
+  $('#pcStack').innerHTML = ed.items.map(rowHtml).join('');
+  $('#pcEmpty').hidden = ed.items.length > 0;
+  renderEditorState();
 }
-function renumber() { $$('#cpStack .crow').forEach((r, i) => { $('.num', r).textContent = i + 1; }); }
-function updateSummary() {
-  const t = cpTotal(cp.items);
-  $('#cpSummary').textContent = cp.items.length ? `${cp.items.length} langkah (${t.steps} langkah mesin) · perkiraan ± ${fmtMin(t.min)}${t.steps > 99 ? ' · TERLALU PANJANG' : ''}` : '';
+function renumber() { $$('#pcStack .crow').forEach((r, i) => { $('.num', r).textContent = i + 1; }); }
+function renderEditorState() {
+  $('#pcLock').hidden = !ed.locked;
+  $('#pcLock').textContent = ed.locked ? '🔒 Proses ini sedang dipakai (berjalan, dijeda, menunggu keputusan, atau pemulihan tertunda). Tekan Stop di Beranda dulu untuk mengubah atau menghapusnya.' : '';
+  ['pcSave', 'pcName'].forEach(id => { $('#' + id).disabled = ed.locked; });
+  $$('#pcStack input, #pcStack select, #pcStack button, #pcPalette button').forEach(x => { x.disabled = ed.locked; });
+  $('#pcSummary').textContent = ed.items.length ? `${ed.items.length} Tahap${ed.est ? ' · perkiraan ± ' + fmtMin(ed.est) : ''}` : '';
+  const w = $('#pcWarn');
+  w.hidden = !ed.warnings.length;
+  w.innerHTML = ed.warnings.length ? '⚠ <b>Peringatan</b> (boleh disimpan setelah konfirmasi):<ul>' + ed.warnings.map(x => `<li>${esc(x)}</li>`).join('') + '</ul>' : '';
 }
-const findItem = uid => cp.items.find(x => x.uid === +uid);
-$('#cpStack').addEventListener('input', e => {
-  const el = e.target.closest('[data-k]'); if (!el) return;
-  const it = findItem(el.dataset.uid); if (!it) return;
-  const k = el.dataset.k;
-  if (k === 'p') it.p = +el.value;
-  else if (k === 'c') it.c = Math.max(0, Math.min(40, Math.round((parseFloat(el.value) || 0) * 2)));
-  else it[k] = parseInt(el.value, 10) || 0;
-  updateSummary();
-});
-$('#cpStack').addEventListener('click', e => {
-  const b = e.target.closest('[data-act]'); if (!b) return;
-  const uid = +b.closest('.crow').dataset.uid, i = cp.items.findIndex(x => x.uid === uid);
-  if (b.dataset.act === 'del') cp.items.splice(i, 1);
-  else if (b.dataset.act === 'up' && i > 0) [cp.items[i - 1], cp.items[i]] = [cp.items[i], cp.items[i - 1]];
-  else if (b.dataset.act === 'down' && i < cp.items.length - 1) [cp.items[i + 1], cp.items[i]] = [cp.items[i], cp.items[i + 1]];
-  else if (b.dataset.act === 'dup') cp.items.splice(i + 1, 0, { ...cp.items[i], uid: cpUid++ });
-  renderStack();
+function bodyOf() { return { name: $('#pcName').value.trim(), tahap: ed.items.map(itemToApi) }; }
+function localError() {
+  if (!$('#pcName').value.trim()) return 'Nama Proses wajib diisi.';
+  if (!ed.items.length) return 'Tambahkan minimal satu Tahap.';
+  for (let i = 0; i < ed.items.length; i++) { const e = validateItem(ed.items[i]); if (e) return `Tahap ${i + 1}: ${e}`; }
+  return '';
+}
+// Uji coba ke firmware (tanpa menyimpan): peringatan urutan + perkiraan durasi
+let dryTimer = null;
+function scheduleDry() {
+  clearTimeout(dryTimer);
+  dryTimer = setTimeout(async () => {
+    if (localError() || ed.locked) { ed.warnings = []; ed.est = 0; renderEditorState(); return; }
+    try { const r = await api('/api/proses', 'POST', { ...bodyOf(), slot: ed.slot, dry: true }); if (r.ok) { ed.warnings = r.warnings || []; ed.est = r.est || 0; renderEditorState(); } } catch { /* tidak penting */ }
+  }, 500);
+}
+$('#pcStack').addEventListener('input', e => { if (handleField(e, ed.items)) scheduleDry(); });
+$('#pcStack').addEventListener('change', e => { if (handleField(e, ed.items)) scheduleDry(); });
+$('#pcName').addEventListener('input', scheduleDry);
+$('#pcStack').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b || ed.locked) return;
+  const uid = +b.closest('.crow').dataset.uid, i = ed.items.findIndex(x => x.uid === uid);
+  if (b.dataset.act === 'del') ed.items.splice(i, 1);
+  else if (b.dataset.act === 'up' && i > 0) [ed.items[i - 1], ed.items[i]] = [ed.items[i], ed.items[i - 1]];
+  else if (b.dataset.act === 'down' && i < ed.items.length - 1) [ed.items[i + 1], ed.items[i]] = [ed.items[i], ed.items[i + 1]];
+  else if (b.dataset.act === 'dup') { if (ed.items.length >= 40) return toast('⚠ Maksimal 40 Tahap per Proses'); ed.items.splice(i + 1, 0, { uid: uidSeq++, t: ed.items[i].t, v: { ...ed.items[i].v } }); }
+  renderStack(); scheduleDry();
 });
 // Geser untuk menukar urutan (pointer events: jalan di mouse & layar sentuh)
-$('#cpStack').addEventListener('pointerdown', e => {
-  const h = e.target.closest('.handle'); if (!h) return;
-  const list = $('#cpStack'), row = h.closest('.crow');
+$('#pcStack').addEventListener('pointerdown', e => {
+  const h = e.target.closest('.handle'); if (!h || ed.locked) return;
+  const list = $('#pcStack'), row = h.closest('.crow');
   e.preventDefault(); h.setPointerCapture(e.pointerId); row.classList.add('drag');
   const move = ev => {
     const others = [...list.children].filter(r => r !== row);
@@ -441,73 +515,125 @@ $('#cpStack').addEventListener('pointerdown', e => {
     h.removeEventListener('pointermove', move); h.removeEventListener('pointerup', up); h.removeEventListener('pointercancel', up);
     row.classList.remove('drag');
     const ids = [...list.children].map(r => +r.dataset.uid);
-    cp.items = ids.map(id => findItem(id));
-    renumber(); updateSummary();
+    ed.items = ids.map(id => ed.items.find(x => x.uid === id));
+    renumber(); scheduleDry();
   };
   h.addEventListener('pointermove', move); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
 });
-$('#cpPreset').onchange = e => {
-  const p = PRESETS[e.target.value]; if (!p) return;
-  if (cp.items.length && !confirm('Ganti susunan sekarang dengan contoh ini?')) { e.target.value = ''; return; }
-  cp.items = p.map(([t, a, b, pola]) => newItem(t, a, b, pola));
-  if (!$('#cpName').value.trim()) $('#cpName').value = 'Salinan ' + CI_NAME(e.target.value);
-  e.target.value = ''; renderStack();
-};
-const CI_NAME = k => ({ normal: 'Normal', gentle: 'Gentle', hijab: 'Hijab', cepat: 'Cepat' }[k]);
-function cpClear(title) { cp.slot = 0; cp.items = []; $('#cpName').value = ''; $('#cpError').hidden = true; $('#cpTitle').textContent = title || 'Proses baru'; renderStack(); }
-$('#cpReset').onclick = () => { if (!cp.items.length || confirm('Kosongkan editor?')) cpClear(); };
-async function cpSave(asNew) {
-  const err = $('#cpError'); err.hidden = true;
-  const name = $('#cpName').value.trim();
+function edClear(title) {
+  ed.slot = 0; ed.items = []; ed.locked = false; ed.warnings = []; ed.est = 0;
+  $('#pcName').value = ''; $('#pcError').hidden = true; $('#pcTitle').textContent = title || 'Proses baru';
+  renderStack();
+}
+$('#pcReset').onclick = () => { if (!ed.items.length || confirm('Kosongkan editor?')) edClear(); };
+async function pcSave(asNew) {
+  const err = $('#pcError'); err.hidden = true;
   const fail = m => { err.textContent = m; err.hidden = false; err.scrollIntoView({ block: 'nearest' }); };
-  if (!name) return fail('Nama proses wajib diisi.');
-  if (!cp.items.length) return fail('Tambahkan minimal satu langkah.');
-  for (let i = 0; i < cp.items.length; i++) {
-    const it = cp.items[i], m = CI[it.t];
-    for (const [k, lab] of m.f) if (!(it[k] >= 1 && it[k] <= 1440)) return fail(`Langkah ${i + 1} (${m.label}): "${lab}" harus 1-1440.`);
-  }
-  if (cpTotal(cp.items).steps > 99) return fail('Terlalu panjang. Kurangi langkah.');
-  const body = { slot: asNew ? 0 : cp.slot, name, items: cp.items.map(({ t, a, b, p, c }) => ({ t, a, b, p, c })) };
-  let r; try { r = await api('/api/custom', 'POST', body); } catch (e) { return; }
+  const le = localError();
+  if (le) return fail(le);
+  const slot = asNew ? 0 : ed.slot;
+  let dry;
+  try { dry = await api('/api/proses', 'POST', { ...bodyOf(), slot, dry: true }); } catch (e) { return; }
+  if (!dry.ok) return fail(dry.msg);
+  if (dry.warnings && dry.warnings.length && !confirm('Peringatan:\n- ' + dry.warnings.join('\n- ') + '\n\nTetap simpan?')) return;
+  let r; try { r = await api('/api/proses', 'POST', { ...bodyOf(), slot }); } catch (e) { return; }
   if (!r.ok) return fail(r.msg);
-  cp.slot = r.slot; toast('✅ ' + r.msg);
-  $('#cpTitle').textContent = `Mengedit: ${name} (slot ${r.slot})`;
-  loadCustom();
+  ed.slot = r.slot; toast('✅ ' + r.msg);
+  $('#pcTitle').textContent = `Mengedit: ${$('#pcName').value.trim()} (slot ${r.slot})`;
+  loadProses();
 }
-$('#cpSave').onclick = () => cpSave(false);
-$('#cpSaveNew').onclick = () => cpSave(true);
-function cpLoad(slotObj, asCopy) {
-  cp.slot = asCopy ? 0 : slotObj.slot;
-  cp.items = slotObj.items.map(i => ({ uid: cpUid++, t: i.t, a: i.a, b: i.b, p: i.p, c: i.c }));
-  $('#cpName').value = asCopy ? slotObj.name + ' (salinan)' : slotObj.name;
-  $('#cpTitle').textContent = asCopy ? 'Proses baru (salinan)' : `Mengedit: ${slotObj.name} (slot ${slotObj.slot})`;
-  $('#cpError').hidden = true;
-  renderStack(); $('#cpEditor').scrollIntoView({ behavior: 'smooth', block: 'start' });
+$('#pcSave').onclick = () => pcSave(false);
+$('#pcSaveNew').onclick = () => pcSave(true);
+
+async function pcLoad(slot, asCopy) {
+  let r; try { r = await api('/api/proses?slot=' + slot); } catch { return; }
+  if (!r.proses) return toast('⚠ ' + (r.msg || 'Proses tidak bisa dimuat'));
+  await loadMeta();
+  ed.slot = asCopy ? 0 : slot;
+  ed.locked = asCopy ? false : !!r.locked;
+  ed.items = r.proses.tahap.map(itemFromApi);
+  ed.warnings = r.warnings || []; ed.est = r.est || 0;
+  $('#pcName').value = asCopy ? r.proses.name + ' (salinan)' : r.proses.name;
+  $('#pcTitle').textContent = asCopy ? 'Proses baru (salinan)' : `Mengedit: ${r.proses.name} (slot ${slot})`;
+  $('#pcError').hidden = true;
+  renderStack(); $('#pcEditor').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
-async function loadCustom() {
-  let r; try { r = await api('/api/custom'); } catch { return; }
-  cpSlots = r.slots.filter(Boolean);
+async function pcExport(slot) {
+  let r; try { r = await api('/api/proses/export?slot=' + slot); } catch { return; }
+  if (!r.tahap) return toast('⚠ ' + (r.msg || 'Gagal mengekspor'));
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(r, null, 1)], { type: 'application/json' }));
+  a.download = 'proses-' + String(r.name).replace(/[^\w\-]+/g, '_') + '.json'; a.click();
+}
+$('#pcImportFile').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  if (f.size > 8192) return toast('⚠ Berkas terlalu besar (maks 8 KB)');
+  let data; try { data = JSON.parse(await readFileText(f)); } catch { return toast('⚠ Berkas bukan JSON yang valid'); }
+  const empty = prosesList ? prosesList.slots.findIndex(s => !s) + 1 : 0;
+  if (!empty) return toast('⚠ Penyimpanan penuh. Hapus satu Proses dulu.');
+  const r = await api('/api/proses/import?slot=' + empty, 'POST', data).catch(() => null);
+  toast(r && r.ok ? '✅ Diimpor ke slot ' + r.slot : '⚠ ' + (r ? r.msg : 'Gagal mengimpor'));
+  loadProses();
+};
+async function pcDelete(slot, name) {
+  if (!confirm(`Hapus Proses "${name}"?`)) return;
+  const d = await api('/api/proses?slot=' + slot, 'DELETE').catch(() => null);
+  if (!d) return;
+  toast(d.ok ? '🗑 ' + d.msg : '⚠ ' + d.msg);
+  if (d.ok && ed.slot === slot) edClear();
+  loadProses();
+}
+async function loadProses() {
+  let r; try { r = await api('/api/proses'); } catch { return; }
+  prosesList = r;
+  const slots = r.slots.map((s, i) => s ? { ...s, slot: i + 1 } : null).filter(Boolean);
+  $('#pcList').innerHTML = slots.map(s => s.bad
+    ? `<div class="card cpcard"><div class="info"><b>${s.slot}. (berkas rusak)</b></div><div class="row"><button class="btn danger sm" data-pdel="${s.slot}" data-name="berkas rusak">Hapus</button></div></div>`
+    : `<div class="card cpcard"><div class="info"><b>${s.slot}. ${esc(s.name)}</b>${s.locked ? ' <span class="chip run">dipakai</span>' : ''}<br><span class="muted">${s.count} Tahap · ± ${fmtMin(s.est)}</span></div>
+      <div class="row"><button class="btn sm" data-pedit="${s.slot}">✎ ${s.locked ? 'Lihat' : 'Edit'}</button><button class="btn sm" data-pcopy="${s.slot}">⧉ Salin</button><button class="btn sm" data-pexp="${s.slot}">⬇ Ekspor</button><button class="btn danger sm" data-pdel="${s.slot}" data-name="${esc(s.name)}" ${s.locked ? 'disabled title="Sedang dipakai"' : ''}>Hapus</button></div></div>`
+  ).join('') || '<p class="muted">Belum ada Proses. Susun di editor di bawah.</p>';
+  $('#pcCount').textContent = `${slots.length}/${r.max}`;
+  $$('#pcList [data-pedit]').forEach(b => b.onclick = () => pcLoad(+b.dataset.pedit, false));
+  $$('#pcList [data-pcopy]').forEach(b => b.onclick = () => pcLoad(+b.dataset.pcopy, true));
+  $$('#pcList [data-pexp]').forEach(b => b.onclick = () => pcExport(+b.dataset.pexp));
+  $$('#pcList [data-pdel]').forEach(b => b.onclick = () => pcDelete(+b.dataset.pdel, b.dataset.name));
+  renderHomeProses();
+  if (ed.slot) { const cur = slots.find(s => s.slot === ed.slot); if (cur && ed.locked !== !!cur.locked) { ed.locked = !!cur.locked; renderEditorState(); } }
+}
+
+// ---------------------------------------------------------- Beranda: mulai ----
+function startBody(slot) {
+  const mode = $('#startMode').value, body = { slot };
+  if (mode === 'tunda') {
+    const v = $('#startTunda').value || '00:30:00';
+    body.tunda = v.length === 5 ? v + ':00' : v;
+  } else if (mode === 'selesai') {
+    const v = $('#startSelesai').value;
+    if (!v) { toast('⚠ Isi jam selesai dulu'); return null; }
+    body.selesai = v;
+  }
+  return body;
+}
+function renderHomeProses() {
+  if (!prosesList) return;
   const idle = !last || last.state === 'idle';
-  $('#cpList').innerHTML = cpSlots.map(s => {
-    const t = cpTotal(s.items.map(i => ({ ...i, t: i.t })));
-    return `<div class="card cpcard"><div class="info"><b>${s.slot}. ${esc(s.name)}</b><br><span class="muted">${esc(s.items.map(itemText).join(' → '))}</span><br><span class="muted">${s.items.length} langkah · ± ${fmtMin(t.min)}</span></div>
-    <div class="row"><button class="btn primary sm cpRun" data-run="${s.slot}" ${idle ? '' : 'disabled'}>▶ Jalankan</button><button class="btn sm" data-edit="${s.slot}">✎ Edit</button><button class="btn sm" data-copy="${s.slot}">⧉ Salin</button><button class="btn danger sm" data-del="${s.slot}">Hapus</button></div></div>`;
-  }).join('') || '<p class="muted">Belum ada proses tersimpan.</p>';
-  $$('#cpList [data-run]').forEach(b => b.onclick = () => cmd('custom', b.dataset.run));
-  $$('#cpList [data-edit]').forEach(b => b.onclick = () => cpLoad(cpSlots.find(s => s.slot === +b.dataset.edit), false));
-  $$('#cpList [data-copy]').forEach(b => b.onclick = () => cpLoad(cpSlots.find(s => s.slot === +b.dataset.copy), true));
-  $$('#cpList [data-del]').forEach(b => b.onclick = async () => {
-    const s = cpSlots.find(x => x.slot === +b.dataset.del);
-    if (!confirm(`Hapus proses "${s.name}"?`)) return;
-    const d = await api('/api/custom?slot=' + s.slot, 'DELETE'); toast(d.ok ? '🗑 ' + d.msg : '⚠ ' + d.msg);
-    if (cp.slot === s.slot) cpClear(); loadCustom();
+  const slots = prosesList.slots.map((s, i) => s ? { ...s, slot: i + 1 } : null).filter(Boolean);
+  $('#homeEmpty').hidden = slots.length > 0;
+  $('#startOpts').hidden = slots.length === 0;
+  $('#prosesGrid').innerHTML = slots.map(s => s.bad
+    ? `<div class="card prog" aria-disabled="true"><b>⚠ Slot ${s.slot}</b><small>berkas rusak (hapus di tab Proses)</small></div>`
+    : `<button class="card prog cpRun" data-run="${s.slot}" ${idle ? '' : 'disabled'}><b>▶ ${esc(s.name)}</b><small>${s.count} Tahap · ± ${fmtMin(s.est)}</small></button>`).join('');
+  $$('#prosesGrid [data-run]').forEach(b => b.onclick = async () => {
+    const body = startBody(+b.dataset.run); if (!body) return;
+    try { const r = await api('/api/run', 'POST', body); toast((r.ok ? '' : '⚠ ') + r.msg); pollOnce(); } catch (e) { if (e.message !== 'login') toast('Gagal: ' + e.message); }
   });
-  const hc = $('#homeCustom');
-  hc.hidden = cpSlots.length === 0;
-  $('#homeCustomGrid').innerHTML = cpSlots.map(s => `<button class="card prog cpRun" data-hrun="${s.slot}" ${idle ? '' : 'disabled'}><b>🗂 ${esc(s.name)}</b><small>${s.items.length} langkah · ± ${fmtMin(cpTotal(s.items).min)}</small></button>`).join('');
-  $$('#homeCustomGrid [data-hrun]').forEach(b => b.onclick = () => cmd('custom', b.dataset.hrun));
 }
-buildPalette(); renderStack();
+$('#startMode').onchange = () => {
+  const m = $('#startMode').value;
+  $('#startTunda').hidden = m !== 'tunda'; $('#startSelesai').hidden = m !== 'selesai';
+};
+$('#goProses').onclick = () => $('#tabs [data-tab=proses]').click();
 
 // ---------------------------------------------------- perangkat yang diingat ----
 const fmtDate = e => e ? new Date(e * 1000).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '-';
@@ -569,6 +695,6 @@ async function start() {
   updateRemoteBanner(r.remote);
   addEntries(r.log.entries, false);
   if (r.log.entries.length >= 30) await fetchLogsAll();
-  loadSettings().then(loadCustom); schedulePoll();
+  loadSettings(); loadMeta().then(() => { renderPalette(); return loadProses(); }); schedulePoll();
 }
 start();

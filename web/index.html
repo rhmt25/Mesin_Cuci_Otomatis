@@ -32,11 +32,10 @@
 
   <nav id="tabs">
     <button data-tab="home" class="on">Beranda</button>
+    <button data-tab="proses">Proses</button>
     <button data-tab="manual">Manual</button>
-    <button data-tab="custom">Custom</button>
     <button data-tab="relay">Relay</button>
     <button data-tab="settings">Pengaturan</button>
-    <button data-tab="water">Air</button>
     <button data-tab="wifi" data-local>WiFi</button>
     <button data-tab="log">Log</button>
     <button data-tab="console" data-local>Konsol</button>
@@ -55,6 +54,12 @@
       </div>
       <div id="bannerPause" class="banner err" hidden></div>
       <div id="bannerFault" class="banner err" hidden>&#10060; <b>Relay terkunci</b>: pengaman mendeteksi pelanggaran interlock (mis. motor kiri &amp; kanan nyala bersamaan). Semua relay dimatikan. Restart mesin untuk membuka kunci.</div>
+      <div id="decisionCard" class="banner err dcard" hidden>
+        <b id="decTitle">Menunggu keputusan</b>
+        <p id="decMsg"></p>
+        <div class="row" id="decBtns"></div>
+        <p class="muted">Mesin tidak pernah melanjutkan sendiri. Pengingat dikirim tiap 10 menit.</p>
+      </div>
 
       <div class="card hero">
         <svg id="ring" viewBox="0 0 120 120" width="150" height="150">
@@ -78,64 +83,52 @@
         <button class="btn" data-cmd="lewati">⏭ Lewati</button>
       </div>
 
-      <h3>Mulai program</h3>
-      <div class="grid">
-        <button class="card prog" data-cmd="program" data-args="normal"><b>▶ Normal</b><small>2 soak · wash 15 · bilas 10</small></button>
-        <button class="card prog" data-cmd="program" data-args="gentle"><b>🌸 Gentle</b><small>2 soak · wash 12 · bilas 8</small></button>
-        <button class="card prog" data-cmd="program" data-args="hijab"><b>🧕 Hijab</b><small>1 soak · wash 10 · bilas 8</small></button>
-        <button class="card prog" data-cmd="program" data-args="cepat"><b>⚡ Cepat</b><small>wash 8 · bilas 5</small></button>
-        <button class="card prog" data-cmd="program" data-args="kustom"><b>🛠 Kustom</b><small>sesuai Pengaturan</small></button>
+      <h3>Mulai Proses</h3>
+      <div id="homeEmpty" class="card" hidden>
+        <p>Belum ada Proses. Proses disusun dari Tahap (isi air, putar, buang, spin, dan lain-lain).</p>
+        <button class="btn primary" id="goProses">Buat Proses</button>
       </div>
-
+      <div class="grid" id="prosesGrid"></div>
       <p class="muted" id="progLock" hidden></p>
-      <div id="homeCustom" hidden><h3>Proses custom</h3><div class="grid" id="homeCustomGrid"></div></div>
-
-      <h3>Jadwalkan</h3>
-      <div class="card form">
-        <label>Mulai nanti (menit)<input id="inDelay" type="number" min="0" max="1439" placeholder="0"></label>
-        <button class="btn" id="btnDelay">Atur</button>
-        <label>Selesai jam<input id="inFinish" type="time"></label>
-        <button class="btn" id="btnFinish">Atur</button>
-        <p class="muted" id="schedNote">Berlaku untuk proses berikutnya.</p>
+      <div class="card form" id="startOpts" hidden>
+        <label>Mulai
+          <select id="startMode"><option value="now">Sekarang</option><option value="tunda">Tunda</option><option value="selesai">Selesai pada jam (perkiraan)</option></select>
+        </label>
+        <input id="startTunda" type="time" step="1" value="00:30:00" hidden aria-label="Lama tunda (jam:menit:detik)">
+        <input id="startSelesai" type="time" hidden aria-label="Selesai pada jam">
+        <p class="muted" id="startNote"></p>
+        <p class="muted">Berlaku untuk tombol Proses di atas. "Selesai pada jam" memakai perkiraan durasi, jadi bisa meleset karena isi/buang berbasis sensor.</p>
       </div>
     </section>
 
     <!-- MANUAL -->
     <section id="tab-manual" class="tab">
-      <p class="muted">Soak &amp; Motor membutuhkan air terisi. Hanya bisa dijalankan saat mesin siap.</p>
-      <div class="grid">
-        <button class="btn" data-cmd="soak">Soak</button>
-        <button class="btn" data-cmd="wash">Wash</button>
-        <button class="btn" data-cmd="soak_and_wash">Soak + Wash</button>
-        <button class="btn" data-cmd="rinse">Rinse</button>
-        <button class="btn" data-cmd="rinse_parfume">Rinse + Pewangi</button>
-        <button class="btn" data-cmd="spin">Spin</button>
-        <button class="btn" data-cmd="water_in">Isi air</button>
-        <button class="btn" data-cmd="water_out">Buang air</button>
-        <button class="btn" data-cmd="add_parfume">Pewangi</button>
-        <button class="btn" data-cmd="motor_on">Motor 5 mnt</button>
-        <button class="btn" data-cmd="cek_air">Cek air</button>
+      <p class="muted">Jalankan satu Tahap dengan variabelnya sendiri. Hanya bisa saat mesin siap. Untuk kontrol relay langsung dan uji relay, buka tab Relay.</p>
+      <div class="card form">
+        <label>Tahap<select id="manType"></select></label>
+        <div id="manForm"></div>
+        <p class="muted" id="manHint" hidden>Buang manual menarik valve buang selama waktu yang diatur <b>tanpa membaca sensor</b>. Jalan darurat bila sensor rusak.</p>
+        <div class="row"><button class="btn primary" id="manRun">&#9654; Jalankan</button><button class="btn" data-cmd="cek_air">Cek air</button></div>
       </div>
     </section>
 
-    <!-- CUSTOM PROSES -->
-    <section id="tab-custom" class="tab">
-      <p class="muted">Susun prosesmu sendiri: pilih langkah, atur nilainya, geser <b>&#9776;</b> untuk menukar urutan. Simpan (maks 5), lalu jalankan dari sini atau dari Beranda.</p>
-      <h3>Tersimpan</h3>
-      <div id="cpList"></div>
-      <h3 id="cpTitle">Proses baru</h3>
-      <div class="card form" id="cpEditor">
-        <label>Nama proses<input id="cpName" maxlength="27" placeholder="mis. Cuci handuk"></label>
-        <label>Mulai dari contoh
-          <select id="cpPreset"><option value="">&mdash; pilih contoh (opsional) &mdash;</option><option value="normal">Normal</option><option value="gentle">Gentle</option><option value="hijab">Hijab</option><option value="cepat">Cepat</option></select>
-        </label>
-        <div><div class="muted">Tambah langkah &mdash; blok siap pakai</div><div class="palette" id="cpPalBlok"></div></div>
-        <div><div class="muted">Langkah dasar</div><div class="palette" id="cpPalDasar"></div></div>
-        <div id="cpStack" class="stack"></div>
-        <p id="cpEmpty" class="muted">Belum ada langkah. Pilih dari tombol di atas.</p>
-        <div class="cpSummary" id="cpSummary"></div>
-        <div id="cpError" class="banner err" hidden></div>
-        <div class="row"><button class="btn primary" id="cpSave">&#128190; Simpan</button><button class="btn" id="cpSaveNew">Simpan sebagai baru</button><button class="btn" id="cpReset">Kosongkan</button></div>
+    <!-- PROSES -->
+    <section id="tab-proses" class="tab">
+      <p class="muted">Proses disusun dari Tahap. Atur variabel tiap Tahap, geser <b>&#9776;</b> untuk menukar urutan. Maksimal 10 Proses, 40 Tahap per Proses. Proses yang sedang dipakai tidak bisa diubah atau dihapus.</p>
+      <h3>Tersimpan <span class="muted" id="pcCount"></span></h3>
+      <div id="pcList"></div>
+      <div class="row"><label class="btn" for="pcImportFile" data-local>&#11014; Impor dari berkas&hellip;</label><input id="pcImportFile" type="file" accept=".json,application/json" hidden></div>
+      <h3 id="pcTitle">Proses baru</h3>
+      <div class="card form" id="pcEditor">
+        <div id="pcLock" class="banner warn" hidden></div>
+        <label>Nama Proses<input id="pcName" maxlength="27" placeholder="mis. Cuci harian"></label>
+        <div><div class="muted">Tambah Tahap</div><div class="palette" id="pcPalette"></div></div>
+        <div id="pcStack" class="stack"></div>
+        <p id="pcEmpty" class="muted">Belum ada Tahap. Pilih dari tombol di atas.</p>
+        <div class="cpSummary" id="pcSummary"></div>
+        <div id="pcWarn" class="banner warn" hidden></div>
+        <div id="pcError" class="banner err" hidden></div>
+        <div class="row"><button class="btn primary" id="pcSave">&#128190; Simpan</button><button class="btn" id="pcSaveNew">Simpan sebagai baru</button><button class="btn" id="pcReset">Kosongkan</button></div>
       </div>
     </section>
 
@@ -158,64 +151,19 @@
     <!-- PENGATURAN -->
     <section id="tab-settings" class="tab">
       <div class="card form">
-        <label>Pola putaran
-          <select id="sPola"><option value="normal">Normal</option><option value="gentle">Gentle</option><option value="hijab">Hijab</option></select>
-        </label>
-        <button class="btn" id="btnPola">Simpan</button>
-      </div>
-      <div id="numSettings"></div>
-      <div class="card form">
-        <label>Delay mulai (jam / menit / detik)
-          <span class="tri"><input id="dH" type="number" min="0" max="23"><input id="dM" type="number" min="0" max="59"><input id="dS" type="number" min="0" max="59"></span>
-        </label>
-        <button class="btn" id="btnDelay3">Simpan</button>
-        <button class="btn" data-cmd="reset_delay">Reset</button>
-      </div>
-      <div class="card form">
         <label>Notifikasi (dikirim ke Telegram lewat server)
           <select id="sNotif"><option value="lengkap">Lengkap</option><option value="ringkas">Ringkas</option><option value="senyap">Senyap</option></select>
         </label>
         <button class="btn" id="btnNotif">Simpan</button>
-        <p class="muted">Log di web selalu lengkap.</p>
+        <p class="muted">Log di web selalu lengkap. Pesan dari Tahap Notifikasi dan Minta tindakan selalu terkirim, termasuk mode Senyap.</p>
       </div>
-      <button class="btn danger" id="btnResetAll">Reset semua pengaturan</button>
-    </section>
-
-    <!-- AIR -->
-    <section id="tab-water" class="tab">
       <div class="card form">
-        <label>Level air
-          <select id="wLevel"><option value="penuh">Penuh (sensor)</option><option value="25">25%</option><option value="50">50%</option><option value="75">75%</option><option value="waktu">Waktu manual</option></select>
-        </label>
-        <label>Waktu isi (menit, untuk mode waktu)<input id="wTime" type="number" min="1" max="1440"></label>
-        <button class="btn" id="btnLevel">Simpan</button>
+        <b>Kalibrasi isi air</b>
         <p class="muted" id="calibNote"></p>
+        <div class="row"><button class="btn" data-cmd="cek_air">Cek air</button><button class="btn danger" id="btnCalib">Reset kalibrasi</button></div>
       </div>
-      <div class="card form">
-        <label>Batas waktu isi (jam / menit / detik)
-          <span class="tri"><input id="fH" type="number" min="0" max="23"><input id="fM" type="number" min="0" max="59"><input id="fS" type="number" min="0" max="59"></span>
-        </label>
-        <button class="btn" id="btnLimit">Simpan</button>
-        <button class="btn" data-cmd="reset_batas_waktu_pengisian_air">Reset</button>
-      </div>
-      <div id="waterSettings"></div>
-      <div class="card form">
-        <label>Mode pembuangan
-          <select id="wDrain"><option value="sensor">Sensor: buktikan valve menarik (probe), lalu tarik sampai total waktu</option><option value="waktu">Waktu saja (tanpa probe)</option></select>
-        </label>
-        <button class="btn" id="btnDrainMode">Simpan</button>
-        <p class="muted">Sensor level hanya ada di paling atas (tahu <b>penuh</b> atau <b>tidak penuh</b>). Setelah valve ditarik, air harus turun dari posisi penuh dalam waktu probe. Bila tidak, valve dilepas lalu ditarik lagi (unjam). Setelah total waktu tarik habis, air tidak boleh masih penuh; bila masih penuh, sesi diulang.</p>
-      </div>
-      <div class="card form">
-        <label>Bila air masih penuh sebelum mengisi
-          <select id="wPrecheck"><option value="buang">Buang dulu, lalu isi</option><option value="jeda">Jeda dan tunggu keputusan saya</option><option value="pakai">Pakai air yang ada (lewati pengisian)</option></select>
-        </label>
-        <button class="btn" id="btnPrecheck">Simpan</button>
-      </div>
-      <div class="row">
-        <button class="btn" data-cmd="cek_air">Cek air</button>
-        <button class="btn danger" id="btnCalib">Reset kalibrasi</button>
-      </div>
+      <p class="muted">Variabel air, putar, dan pewangi diatur per Tahap di tab Proses dan Manual.</p>
+      <button class="btn danger" id="btnResetAll">Reset pengaturan</button>
     </section>
 
     <!-- WIFI -->
@@ -280,7 +228,7 @@
       </div>
       <div class="card" data-local>
         <b>Cadangkan &amp; pulihkan</b>
-        <p class="muted">Pengaturan, Custom Proses, dan daftar WiFi disimpan ke satu berkas JSON. Password WiFi hanya ikut bila dicentang: simpan berkasnya dengan aman.</p>
+        <p class="muted">Pengaturan dan daftar WiFi disimpan ke satu berkas JSON (Proses diekspor satu per satu di tab Proses). Password WiFi hanya ikut bila dicentang: simpan berkasnya dengan aman.</p>
         <label class="chk"><input type="checkbox" id="bkWifi"> Sertakan password WiFi</label>
         <div class="row"><button class="btn" id="btnBackup">&#11015; Unduh cadangan</button><label class="btn" for="restoreFile">&#11014; Pulihkan dari berkas&hellip;</label><input id="restoreFile" type="file" accept=".json,application/json" hidden></div>
         <p class="muted" id="restoreMsg"></p>
