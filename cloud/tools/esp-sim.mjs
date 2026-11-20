@@ -21,10 +21,10 @@ export function startSim({ url, token, hbMs = 30000, statusMs = 3000, silent = f
       state.cmds.push(b);
       const c = String(b.cmd || "").replace(/^\//, "");
       if (c === "stop") { state.machine = "idle"; state.program = ""; return { code: 200, body: { ok: true, msg: "Perintah STOP dikirim." } }; }
-      if (c === "program") { state.machine = "running"; state.program = b.args; return { code: 200, body: { ok: true, msg: "Program dikirim" } }; }
+      if (c === "proses") { state.machine = "running"; state.program = b.args; return { code: 200, body: { ok: true, msg: "Proses dikirim" } }; }
       return { code: 200, body: { ok: true, msg: "ok:" + c } };
     }
-    if (m === "GET" && p === "/api/custom") return { code: 200, body: { max: 5, maxItems: 24, slots: [null, null, null, null, null] } };
+    if (m === "GET" && p === "/api/proses") return { code: 200, body: { max: 10, maxTahap: 40, slots: [null, null, null, null, null, null, null, null, null, null] } };
     return { code: 404, body: { ok: false, msg: "sim: tidak ada" } };
   }
 

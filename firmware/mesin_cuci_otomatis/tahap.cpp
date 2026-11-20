@@ -435,6 +435,12 @@ String tahapRingkas(const Tahap& t) {
   return s;
 }
 
+String tahapParams(const Tahap& t) {
+  String r = tahapRingkas(t);
+  const char* sep = strstr(r.c_str(), " Â· ");   // " · "
+  return sep ? String(sep + 4) : String("");
+}
+
 String tahapMetaJson() {
   JsonDocument d;
   JsonArray types = d["types"].to<JsonArray>();

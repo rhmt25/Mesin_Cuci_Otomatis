@@ -1,16 +1,13 @@
-// Allowlist jarak jauh. Kontrol penuh, kecuali aksi berisiko (flash firmware, WiFi, password, perangkat, konsol, restore).
-// ESP32 menegakkan aturan yang sama (pertahanan berlapis).
+// Allowlist jarak jauh. Kontrol penuh, kecuali aksi berisiko (flash firmware, WiFi, password, perangkat, konsol, restore,
+// impor Proses). ESP32 menegakkan aturan yang sama (pertahanan berlapis).
 
 const CMD_NAMES = new Set([
-  "program", "full_proses", "soak", "wash", "soak_and_wash", "rinse", "rinse_parfume", "spin", "water_in", "water_out",
-  "add_parfume", "motor_on", "custom", "kalibrasi_relay", "relay", "relay_test",
-  "stop", "jeda", "lanjutkan", "lanjutkan_proses", "lewati", "batalkan",
-  "cek_air", "status", "pengaturan", "cek_variabel", "riwayat", "statistik", "info", "bantuan", "menu",
-  "pola", "level_air", "mode_buang", "notif", "pra_cek_isi", "mulai_nanti", "selesai_jam", "kalibrasi_air",
-  "reset_semua", "reset_variabel", "restart", "remote",
+  "proses", "pilih", "stop", "jeda", "lanjutkan", "lewati", "batalkan",
+  "relay", "relay_test", "kalibrasi_relay", "buang_manual",
+  "cek_air", "status", "menu", "pengaturan", "riwayat", "statistik", "info", "bantuan",
+  "notif", "kalibrasi_air", "reset_semua", "restart", "remote",
 ]);
-const CMD_PATTERNS = [/^set_[a-z_]+$/, /^reset_[a-z_]+$/, /^mode_[a-z_]+$/];
-// Selalu ditolak, apa pun pola di atas
+// Selalu ditolak, apa pun yang lain
 const CMD_DENY = new Set(["web_password", "set_ssid", "set_password", "hapus_ssid", "hapus_password", "serial", "heap", "tasks", "log", "reboot"]);
 
 export function normalizeCmd(raw) {
@@ -24,12 +21,13 @@ export function normalizeCmd(raw) {
 export function cmdAllowed(raw) {
   const c = normalizeCmd(raw);
   if (!c || CMD_DENY.has(c) || c.startsWith("wifi")) return false;
-  return CMD_NAMES.has(c) || CMD_PATTERNS.some((re) => re.test(c));
+  return CMD_NAMES.has(c);
 }
 
-const GET_OK = new Set(["/api/status", "/api/poll", "/api/info", "/api/settings", "/api/logs", "/api/history", "/api/custom"]);
-const POST_OK = new Set(["/api/cmd", "/api/settings", "/api/custom"]);
-const DELETE_OK = new Set(["/api/custom"]);
+const GET_OK = new Set(["/api/status", "/api/poll", "/api/info", "/api/settings", "/api/logs", "/api/history",
+  "/api/tahap/meta", "/api/proses", "/api/proses/export"]);
+const POST_OK = new Set(["/api/cmd", "/api/settings", "/api/proses", "/api/run", "/api/decide"]);
+const DELETE_OK = new Set(["/api/proses"]);
 
 // body = objek JSON (untuk /api/cmd). Mengembalikan {ok, reason}.
 export function isAllowed(method, path, body) {

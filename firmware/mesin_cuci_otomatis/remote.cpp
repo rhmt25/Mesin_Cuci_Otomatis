@@ -18,7 +18,7 @@ extern const uint8_t x509_crt_bundle_start[] asm("_binary_x509_crt_bundle_start"
 //   Worker->ESP: req {id,m,p,q,b}, viewers {n,ttl}
 #define HB_INTERVAL_MS      30000
 #define STATUS_INTERVAL_MS  3000
-#define MAX_INCOMING        6000
+#define MAX_INCOMING        8192
 #define MAX_VIEWER_TTL_SEC  60
 
 static WebSocketsClient ws;

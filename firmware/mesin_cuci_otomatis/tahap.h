@@ -69,5 +69,6 @@ int prosesWarnings(const Proses& p, String* out, int maxOut);   // peringatan (b
 uint32_t tahapEstimateSec(const Tahap& t);
 uint32_t prosesEstimateSec(const Proses& p);
 
-String tahapRingkas(const Tahap& t);                 // mis. "Isi air · sensor, batas 30 mnt"
+String tahapRingkas(const Tahap& t);                 // mis. "Isi air · sensor, batas 00:30:00"
+String tahapParams(const Tahap& t);                  // bagian setelah nama: "sensor, batas 00:30:00" ("" bila tidak ada)
 String tahapMetaJson();                              // katalog untuk UI

@@ -1,10 +1,10 @@
 #pragma once
-// Cadangkan & pulihkan pengaturan, Custom Proses, dan daftar WiFi (JSON). Khusus web lokal.
+// Cadangkan & pulihkan pengaturan dan daftar WiFi (Proses diekspor satu per satu) (JSON). Khusus web lokal.
 // Logika murni (std::string + ArduinoJson) agar bisa diuji di PC.
 #include <stddef.h>
 #include <string>
 
-#define BACKUP_VERSION 1
+#define BACKUP_VERSION 3
 #define RESTORE_MAX_BYTES 12288
 
 // includeWifi: sertakan password WiFi (default tidak: hanya nama jaringan)
@@ -14,7 +14,7 @@ struct RestoreReport {
   bool ok;
   std::string msg;        // ringkasan / alasan penolakan (Indonesia)
   int settingsChanged;    // jumlah pengaturan yang berubah nilainya
-  int customSlots;        // jumlah slot Custom Proses di cadangan
+  int oldIgnored;         // jumlah data versi lama yang diabaikan (variabel global, Custom Proses)
   int wifiNetworks;       // jumlah WiFi di cadangan
   int wifiNoPassword;     // WiFi baru tanpa password (perlu diisi manual)
   int clamped;            // nilai di luar rentang yang disesuaikan

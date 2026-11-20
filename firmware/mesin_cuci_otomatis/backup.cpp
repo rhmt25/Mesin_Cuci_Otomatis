@@ -2,15 +2,14 @@
 #include <ArduinoJson.h>
 #include <stddef.h>
 #include <string.h>
-#include "programs.h"
 #include "settings.h"
 
 #ifndef FW_VERSION
 #include "config.h"
 #endif
 
-// Tabel bidang pengaturan (tanpa finishAt: sekali pakai). Satu sumber untuk ekspor & impor.
-enum FieldType : uint8_t { F_INT, F_U8, F_FLOAT };
+// Pengaturan global yang tersisa. Satu sumber untuk ekspor & impor.
+enum FieldType : uint8_t { F_U8 };
 struct Field {
   const char* key;
   FieldType type;
@@ -18,34 +17,13 @@ struct Field {
 };
 #define FIELD(k, t, member) {k, t, offsetof(Settings, member)}
 static const Field fields[] = {
-    FIELD("pola", F_U8, pola), FIELD("soak", F_INT, soak), FIELD("wash", F_INT, wash), FIELD("rinse", F_INT, rinse),
-    FIELD("parfume", F_FLOAT, parfume), FIELD("spin", F_INT, spin), FIELD("fillLevel", F_U8, fillLevel),
-    FIELD("fillPercent", F_U8, fillPercent), FIELD("fillTime", F_INT, fillTime), FIELD("flH", F_INT, flH),
-    FIELD("flM", F_INT, flM), FIELD("flS", F_INT, flS), FIELD("fillRetryCount", F_INT, fillRetryCount),
-    FIELD("fillRetryWait", F_INT, fillRetryWait), FIELD("drainMode", F_U8, drainMode),
-    FIELD("drainTime", F_INT, drainTime), FIELD("drainSessionLimit", F_INT, drainSessionLimit),
-    FIELD("drainProbeSec", F_INT, drainProbeSec), FIELD("fillPrecheck", F_U8, fillPrecheck),
-    FIELD("unjamCount", F_INT, unjamCount), FIELD("dH", F_INT, dH), FIELD("dM", F_INT, dM), FIELD("dS", F_INT, dS),
-    FIELD("notif", F_U8, notif), FIELD("remoteOn", F_U8, remoteOn),
+    FIELD("notif", F_U8, notif),
+    FIELD("remoteOn", F_U8, remoteOn),
 };
 static const size_t nFields = sizeof(fields) / sizeof(fields[0]);
 
-static double getField(const Settings& s, const Field& f) {
-  const char* base = reinterpret_cast<const char*>(&s) + f.offset;
-  switch (f.type) {
-    case F_INT: return *reinterpret_cast<const int*>(base);
-    case F_U8: return *reinterpret_cast<const uint8_t*>(base);
-    default: return *reinterpret_cast<const float*>(base);
-  }
-}
-static void setField(Settings& s, const Field& f, double v) {
-  char* base = reinterpret_cast<char*>(&s) + f.offset;
-  switch (f.type) {
-    case F_INT: *reinterpret_cast<int*>(base) = (int)v; break;
-    case F_U8: *reinterpret_cast<uint8_t*>(base) = (uint8_t)v; break;
-    default: *reinterpret_cast<float*>(base) = (float)v; break;
-  }
-}
+static double getField(const Settings& s, const Field& f) { return *(reinterpret_cast<const uint8_t*>(&s) + f.offset); }
+static void setField(Settings& s, const Field& f, double v) { *(reinterpret_cast<uint8_t*>(&s) + f.offset) = (uint8_t)v; }
 
 // ---------------------------------------------------------------- ekspor ----
 std::string backupBuild(bool includeWifi) {
@@ -54,27 +32,7 @@ std::string backupBuild(bool includeWifi) {
   d["version"] = BACKUP_VERSION;
   d["fw"] = FW_VERSION;
   JsonObject st = d["settings"].to<JsonObject>();
-  for (size_t i = 0; i < nFields; i++) {
-    if (fields[i].type == F_FLOAT) st[fields[i].key] = (float)getField(S, fields[i]);
-    else st[fields[i].key] = (int)getField(S, fields[i]);
-  }
-  JsonArray custom = d["custom"].to<JsonArray>();
-  for (int slot = 0; slot < CUSTOM_SLOTS; slot++) {
-    CustomProc p;
-    if (!customLoad(slot, p)) continue;
-    JsonObject o = custom.add<JsonObject>();
-    o["slot"] = slot + 1;
-    o["name"] = p.name;
-    JsonArray items = o["items"].to<JsonArray>();
-    for (int i = 0; i < p.count; i++) {
-      JsonObject it = items.add<JsonObject>();
-      it["t"] = customTypeName(p.items[i].type);
-      it["a"] = p.items[i].a;
-      it["b"] = p.items[i].b;
-      it["p"] = p.items[i].pola;
-      it["c"] = p.items[i].cups2;
-    }
-  }
+  for (size_t i = 0; i < nFields; i++) st[fields[i].key] = (int)getField(S, fields[i]);
   JsonArray wifi = d["wifi"].to<JsonArray>();
   for (int i = 0; i < wifiCount(); i++) {
     WifiCred c;
@@ -95,7 +53,7 @@ static RestoreReport reject(const std::string& why) {
   RestoreReport r;
   r.ok = false;
   r.msg = why;
-  r.settingsChanged = r.customSlots = r.wifiNetworks = r.wifiNoPassword = r.clamped = 0;
+  r.settingsChanged = r.oldIgnored = r.wifiNetworks = r.wifiNoPassword = r.clamped = 0;
   return r;
 }
 
@@ -105,11 +63,12 @@ RestoreReport backupApply(const char* json, size_t len, bool dry) {
   JsonDocument d;
   if (deserializeJson(d, json, len) != DeserializationError::Ok) return reject("Berkas bukan JSON yang valid.");
   if (strcmp(d["app"] | "", "mesin-cuci") != 0) return reject("Bukan berkas cadangan Mesin Cuci.");
-  if ((d["version"] | 0) != BACKUP_VERSION) return reject("Versi cadangan tidak didukung.");
+  int ver = d["version"] | 0;
+  if (ver != BACKUP_VERSION && ver != 1) return reject("Versi cadangan tidak didukung.");
 
   RestoreReport rep;
   rep.ok = true;
-  rep.settingsChanged = rep.customSlots = rep.wifiNetworks = rep.wifiNoPassword = rep.clamped = 0;
+  rep.settingsChanged = rep.oldIgnored = rep.wifiNetworks = rep.wifiNoPassword = rep.clamped = 0;
 
   // ---- pengaturan ----
   Settings next = S;
@@ -121,44 +80,22 @@ RestoreReport backupApply(const char* json, size_t len, bool dry) {
       if (!v.is<double>() && !v.is<int>()) return reject(std::string("Nilai pengaturan tidak valid: ") + fields[i].key);
       setField(next, fields[i], v.as<double>());
     }
+    // variabel global versi lama (air, putar, pewangi, ...) kini ada di tiap Tahap: diabaikan
+    for (JsonPairConst kv : st) {
+      bool known = false;
+      for (size_t i = 0; i < nFields; i++)
+        if (strcmp(kv.key().c_str(), fields[i].key) == 0) known = true;
+      if (!known) rep.oldIgnored++;
+    }
   }
+  JsonArrayConst oldCustom = d["custom"];   // Custom Proses lama (format blok) tidak dikonversi
+  if (!oldCustom.isNull()) rep.oldIgnored += (int)oldCustom.size();
   Settings clampedNext = next;
   settingsSanitize(clampedNext);
   for (size_t i = 0; i < nFields; i++) {
     double before = getField(next, fields[i]), after = getField(clampedNext, fields[i]);
     if (before != after) rep.clamped++;
     if (after != getField(S, fields[i])) rep.settingsChanged++;
-  }
-
-  // ---- custom proses (semua divalidasi dulu) ----
-  CustomProc procs[CUSTOM_SLOTS];
-  bool has[CUSTOM_SLOTS] = {false};
-  JsonArrayConst custom = d["custom"];
-  if (!custom.isNull()) {
-    for (JsonObjectConst o : custom) {
-      int slot = (o["slot"] | 0) - 1;
-      if (slot < 0 || slot >= CUSTOM_SLOTS) return reject("Nomor slot Custom Proses tidak valid.");
-      if (has[slot]) return reject("Slot Custom Proses ganda di berkas.");
-      CustomProc& p = procs[slot];
-      memset(&p, 0, sizeof(p));
-      strlcpy(p.name, (const char*)(o["name"] | ""), sizeof(p.name));
-      JsonArrayConst items = o["items"];
-      if (items.isNull() || items.size() > CUSTOM_MAX_ITEMS) return reject("Langkah Custom Proses tidak valid.");
-      for (JsonObjectConst it : items) {
-        int t = customTypeFromName(String((const char*)(it["t"] | "")));
-        if (t < 0) return reject("Jenis langkah Custom Proses tidak dikenal.");
-        CustomItem& ci = p.items[p.count++];
-        ci.type = (uint8_t)t;
-        ci.a = it["a"] | 0;
-        ci.b = it["b"] | 0;
-        ci.pola = it["p"] | 3;
-        ci.cups2 = it["c"] | 0;
-      }
-      String err;
-      if (!customValidate(p, err)) return reject(std::string("Custom Proses slot ") + std::to_string(slot + 1) + ": " + err.c_str());
-      has[slot] = true;
-      rep.customSlots++;
-    }
   }
 
   // ---- WiFi ----
@@ -189,22 +126,17 @@ RestoreReport backupApply(const char* json, size_t len, bool dry) {
     }
   }
 
-  char buf[200];
-  snprintf(buf, sizeof(buf), "%d pengaturan berubah, %d Custom Proses, %d WiFi%s%s", rep.settingsChanged, rep.customSlots,
-           rep.wifiNetworks, rep.wifiNoPassword ? " (ada yang perlu password diisi manual)" : "",
-           rep.clamped ? ", beberapa nilai disesuaikan ke rentang yang valid" : "");
+  char buf[220];
+  snprintf(buf, sizeof(buf), "%d pengaturan berubah, %d WiFi%s%s%s", rep.settingsChanged, rep.wifiNetworks,
+           rep.wifiNoPassword ? " (ada yang perlu password diisi manual)" : "",
+           rep.clamped ? ", beberapa nilai disesuaikan ke rentang yang valid" : "",
+           rep.oldIgnored ? "; variabel global dan Custom Proses versi lama diabaikan (kini per Tahap, buat ulang di tab Proses)" : "");
   rep.msg = buf;
   if (dry) return rep;
 
   // ---- terapkan (semua sudah valid) ----
   S = clampedNext;
   settingsSave();
-  if (!custom.isNull()) {
-    for (int slot = 0; slot < CUSTOM_SLOTS; slot++) {
-      if (has[slot]) customSave(slot, procs[slot]);
-      else customDelete(slot);
-    }
-  }
   if (!wifi.isNull()) {
     while (wifiCount() > 0) wifiRemove(0);
     for (int i = 0; i < nNets; i++) wifiAdd(nets[i].ssid, nets[i].pass);

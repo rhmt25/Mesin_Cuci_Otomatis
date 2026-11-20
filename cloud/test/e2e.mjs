@@ -133,8 +133,8 @@ try {
   console.log("[W5] Perintah diteruskan");
   const stop = await call("POST", "/api/cmd", { cmd: "stop", args: "" }, cookie);
   ok(stop.code === 200 && stop.json.ok && /STOP/.test(stop.json.msg), "stop diteruskan ke ESP32 dan balasannya kembali");
-  const prog = await call("POST", "/api/cmd", { cmd: "program", args: "normal" }, cookie);
-  ok(prog.code === 200 && sim.state.machine === "running", "program normal mengubah status mesin");
+  const prog = await call("POST", "/api/cmd", { cmd: "proses", args: "1" }, cookie);
+  ok(prog.code === 200 && sim.state.machine === "running", "proses 1 mengubah status mesin");
   await sleep(1200);
   const poll2 = await call("GET", "/api/poll?since=0", null, cookie);
   ok(poll2.json.status.state === "running", "poll berikutnya menampilkan status terbaru");

@@ -6,6 +6,7 @@
 #include "net_wifi.h"
 #include "notifier.h"
 #include "ota.h"
+#include "proses_store.h"
 #include "remote.h"
 #include "remote_policy.h"
 #include "relay.h"
@@ -53,8 +54,6 @@ static bool parseInt(const String& t, int lo, int hi, int& out) {
 static CmdResult ok(const String& m) { return {true, m}; }
 static CmdResult fail(const String& m) { return {false, m}; }
 
-static String hms(int h, int m, int s) { return String(h) + " jam " + m + " menit " + s + " detik"; }
-
 static String fmtDuration(uint32_t sec) {
   if (sec >= 3600) return String(sec / 3600) + "j " + String((sec % 3600) / 60) + "m";
   if (sec >= 60) return String(sec / 60) + "m " + String(sec % 60) + "d";
@@ -71,120 +70,15 @@ static void scheduleRestart(uint32_t delayMs) {
 }
 
 // ============================================================================
-// Alias & definisi prompt
-// ============================================================================
-struct Alias {
-  const char* from;
-  const char* to;
-  const char* args;
-};
-static const Alias aliases[] = {
-    {"start", "menu", ""},
-    {"cek_variabel", "pengaturan", ""},
-    {"set_ssid", "wifi_tambah", ""},
-    {"set_password", "wifi_tambah", ""},
-    {"hapus_ssid", "wifi_hapus", ""},
-    {"hapus_password", "wifi_hapus", ""},
-    {"reset_variabel", "reset_semua", ""},
-    {"full_proses", "program", "kustom"},
-    {"lanjutkan_proses", "lanjutkan", ""},
-    {"set_mode_normal", "pola", "normal"},
-    {"set_mode_gentle", "pola", "gentle"},
-    {"set_mode_hijab", "pola", "hijab"},
-    {"set_batas_sesi_pembungan_air", "set_batas_sesi_pembuangan_air", ""},
-    {"reset_batas_sesi_pembungan_air", "reset_batas_sesi_pembuangan_air", ""},
-    {"mode_waktu_pengisian_air", "level_air", "waktu"},
-    {"mode_sensor_pengisian_air", "level_air", "penuh"},
-    {"mode_waktu_pembuangan_air", "mode_buang", "waktu"},
-    {"mode_sensor_pembuangan_air", "mode_buang", "sensor"},
-    {"mulai", "program", "kustom"},
-};
-
-// ---- pengaturan bilangan bulat (tabel) --------------------------------------
-struct IntSetting {
-  const char* setCmd;
-  const char* resetCmd;
-  int* ptr;
-  int lo, hi;
-  const char* label;
-  const char* unit;
-};
-static const IntSetting intSettings[] = {
-    {"set_soak_session", "reset_soak_session", &S.soak, 0, 1440, "Soak", "sesi"},
-    {"set_wash_time", "reset_wash_time", &S.wash, 0, 1440, "Wash", "menit"},
-    {"set_rinse_time", "reset_rinse_time", &S.rinse, 0, 1440, "Rinse", "menit"},
-    {"set_spin_time", "reset_spin_time", &S.spin, 0, 1440, "Spin", "menit"},
-    {"set_waktu_pengisian_air", "reset_waktu_pengisian_air", &S.fillTime, 1, 1440, "Waktu pengisian air", "menit"},
-    {"set_waktu_pembuangan_air", "reset_waktu_pembuangan_air", &S.drainTime, 1, 1440, "Waktu pembuangan air", "menit"},
-    {"set_batas_sesi_pembuangan_air", "reset_batas_sesi_pembuangan_air", &S.drainSessionLimit, 1, 1440,
-     "Batas sesi pembuangan air", "sesi"},
-    {"set_coba_ulang_isi", "reset_coba_ulang_isi", &S.fillRetryCount, 0, 20, "Coba ulang pengisian", "kali"},
-    {"set_tunggu_coba_ulang", "reset_tunggu_coba_ulang", &S.fillRetryWait, 0, 240, "Tunggu sebelum coba ulang", "menit"},
-    {"set_unjam", "reset_unjam", &S.unjamCount, 0, 10, "Unjam valve buang", "kali"},
-    {"set_probe_buang", "reset_probe_buang", &S.drainProbeSec, 5, 600, "Probe tarikan valve buang", "detik"},
-};
-static const size_t nIntSettings = sizeof(intSettings) / sizeof(intSettings[0]);
-
-static String resolveAlias(const String& c, String& fixedArgs) {
-  fixedArgs = "";
-  for (const Alias& a : aliases) {
-    if (c == a.from) {
-      fixedArgs = a.args;
-      return a.to;
-    }
-  }
-  return c;
-}
-
-// ============================================================================
 // Teks laporan
 // ============================================================================
-static String fillLevelText() {
-  switch (S.fillLevel) {
-    case FILL_PERCENT: return "Persen " + String(S.fillPercent) + "%" + (C.nFill == 0 ? " (belum terkalibrasi, memakai sensor)" : "");
-    case FILL_TIME: return "Waktu " + String(S.fillTime) + " menit";
-    default: return "Penuh (sensor)";
-  }
-}
-
-static String polaText() {
-  static const char* n[] = {"normal", "gentle", "hijab"};
-  return S.pola < 3 ? n[S.pola] : "?";
-}
-
-String airText() {
-  String t = "\xF0\x9F\x92\xA7 Pengaturan air\n";
-  t += "Level isi: " + fillLevelText() + "\n";
-  t += "Batas waktu isi: " + hms(S.flH, S.flM, S.flS) + "\n";
-  t += "Coba ulang isi: " + String(S.fillRetryCount) + "x, tunggu " + S.fillRetryWait + " menit\n";
-  if (S.drainMode == DRAIN_SENSOR)
-    t += "Mode buang: sensor (probe " + String(S.drainProbeSec) + " dtk, tarik total " + S.drainTime + " menit)\n";
-  else
-    t += "Mode buang: waktu " + String(S.drainTime) + " menit (tanpa probe)\n";
-  static const char* pre[] = {"buang dulu", "jeda", "pakai air yang ada"};
-  t += String("Bila air penuh sebelum mengisi: ") + pre[S.fillPrecheck < 3 ? S.fillPrecheck : 0] + "\n";
-  t += "Batas sesi buang: " + String(S.drainSessionLimit) + " \xE2\x80\xA2 Unjam: " + S.unjamCount + "x\n";
-  if (C.nFill > 0) t += "Rata-rata isi penuh: " + fmtDuration((uint32_t)(C.avgFillMs / 1000)) + " (" + C.nFill + " sampel)\n";
-  t.trim();
-  return t;
-}
-
 String settingsText() {
   String t = "\xE2\x9A\x99 Pengaturan\n";
-  t += "Pola: " + polaText() + "\n";
-  t += "Soak: " + String(S.soak) + " sesi\n";
-  t += "Wash: " + String(S.wash) + " menit\n";
-  t += "Rinse: " + String(S.rinse) + " menit\n";
-  t += "Pewangi: " + String(S.parfume, 1) + " cup\n";
-  t += "Spin: " + String(S.spin) + " menit\n";
-  t += "Delay mulai: " + hms(S.dH, S.dM, S.dS) + "\n";
-  if (S.finishAt >= 0) {
-    char b[8];
-    snprintf(b, sizeof(b), "%02d:%02d", S.finishAt / 60, S.finishAt % 60);
-    t += String("Selesai jam: ") + b + " (sekali pakai)\n";
-  }
-  t += "Notifikasi: " + String(notifModeName(S.notif)) + "\n\n";
-  t += airText();
+  t += "Notifikasi: " + String(notifModeName(S.notif)) + "\n";
+  t += String("Kontrol jarak jauh: ") + (!remoteConfigured() ? "belum dikonfigurasi" : S.remoteOn ? "aktif" : "nonaktif") + "\n";
+  if (C.nFill > 0) t += "Rata-rata isi penuh: " + fmtDuration((uint32_t)(C.avgFillMs / 1000)) + " (" + C.nFill + " sampel)\n";
+  else t += "Kalibrasi isi: belum ada (mode persen memakai sensor)\n";
+  t += "Variabel air, putar, dan pewangi diatur per Tahap di tab Proses.";
   return t;
 }
 
@@ -204,6 +98,28 @@ String wifiListText() {
   return t;
 }
 
+String prosesListText() {
+  String t = "\xF0\x9F\x97\x82 Proses (maks " + String(PROSES_SLOTS) + "):\n";
+  int n = 0;
+  Proses* p = new Proses;
+  if (!p) return "Memori rendah.";
+  for (uint8_t i = 0; i < PROSES_SLOTS; i++) {
+    SlotState st = prosesSlotState(i);
+    if (st == SLOT_EMPTY) continue;
+    n++;
+    if (st == SLOT_BAD) {
+      t += String(i + 1) + ". (berkas rusak)\n";
+    } else if (prosesLoad(i, *p)) {
+      t += String(i + 1) + ". " + p->name + " (" + String((int)p->count) + " Tahap, \xC2\xB1" + fmtDuration(prosesEstimateSec(*p)) + ")\n";
+    }
+  }
+  delete p;
+  if (!n) t += "(belum ada, buat di dashboard web tab Proses)\n";
+  else t += "Jalankan: proses <nomor>";
+  t.trim();
+  return t;
+}
+
 String statusText() {
   MachineStatus s;
   machineGetStatus(s);
@@ -213,14 +129,15 @@ String statusText() {
     t += "Siap";
     if (s.resumePending) t += " \xE2\x80\xA2 \xE2\x9A\xA1 menunggu keputusan pemulihan (" + String(s.resumeInfo) + ")";
   } else if (s.state == MS_PAUSED) {
-    t += String("\xE2\x8F\xB8 DIJEDA \xE2\x80\xA2 ") + s.stage + " \xE2\x80\xA2 " + (s.pauseReason[0] ? s.pauseReason : "oleh pengguna");
+    t += String("\xE2\x8F\xB8 DIJEDA \xE2\x80\xA2 ") + s.name + " \xE2\x80\xA2 " + s.stage;
+  } else if (s.state == MS_DECIDE) {
+    t += String("\xE2\x9D\x93 MENUNGGU KEPUTUSAN \xE2\x80\xA2 ") + s.name + " \xE2\x80\xA2 " + s.pauseReason;
   } else {
-    t += String(s.stage) + " \xE2\x80\xA2 " + s.detail;
-    t += " \xE2\x80\xA2 sisa tahap " + fmtDuration(s.stepLeftSec);
+    t += String(s.name) + " \xE2\x80\xA2 " + s.stage + " \xE2\x80\xA2 " + s.detail;
+    t += " \xE2\x80\xA2 sisa Tahap " + fmtDuration(s.stepLeftSec);
     t += " \xE2\x80\xA2 total sisa \xC2\xB1 " + fmtDuration(s.totalLeftSec) + " (" + s.progressPct + "%)";
   }
-  t += "\n\xF0\x9F\x92\xA7 Air: " + String(waterTxt[s.waterState]) + " \xE2\x80\xA2 Level: " + fillLevelText() + " \xE2\x80\xA2 Pola: " + polaText();
-  t += "\n";
+  t += "\n\xF0\x9F\x92\xA7 Air: " + String(waterTxt[s.waterState]) + "\n";
   if (netOnline()) t += "\xF0\x9F\x93\xB6 " + netSsid() + " (" + netRssi() + " dBm)";
   else t += "\xF0\x9F\x93\xB4 WiFi offline";
   if (s.relayFault) t += "\n\xE2\x9D\x8C RELAY TERKUNCI (pelanggaran interlock). Restart mesin.";
@@ -229,7 +146,7 @@ String statusText() {
 }
 
 String historyText() {
-  String t = "\xF0\x9F\x93\x9C Riwayat siklus terakhir\n";
+  String t = "\xF0\x9F\x93\x9C Riwayat terakhir\n";
   static const char* res[] = {"selesai", "dihentikan", "error"};
   if (ST.histCount == 0) return t + "(belum ada)";
   for (int i = 0; i < ST.histCount; i++) {
@@ -244,8 +161,8 @@ String historyText() {
       strftime(b, sizeof(b), "%d/%m %H:%M", &lt);
       when = b;
     }
-    t += "\xE2\x80\xA2 " + String(programName(e.program)) + " \xE2\x80\x94 " + when + " \xE2\x80\x94 " + fmtDuration(e.durSec) +
-         " \xE2\x80\x94 " + res[e.result < 3 ? e.result : 2] + "\n";
+    t += "\xE2\x80\xA2 " + String(e.name) + " \xE2\x80\x94 " + when + " \xE2\x80\x94 " + fmtDuration(e.durSec) + " \xE2\x80\x94 " +
+         res[e.result < 3 ? e.result : 2] + "\n";
   }
   t.trim();
   return t;
@@ -253,7 +170,7 @@ String historyText() {
 
 String statsText() {
   String t = "\xF0\x9F\x93\x88 Statistik\n";
-  t += "Total siklus selesai: " + String(ST.totalCycles) + "\n";
+  t += "Total Proses selesai: " + String(ST.totalCycles) + "\n";
   t += "Total motor cuci menyala: " + String((ST.motorSec + relayMotorSeconds()) / 3600.0f, 1) + " jam\n";
   t += "Rata-rata isi penuh: " + (C.nFill ? fmtDuration((uint32_t)(C.avgFillMs / 1000)) : String("-"));
   return t;
@@ -261,18 +178,14 @@ String statsText() {
 
 String helpText() {
   return "Perintah utama:\n"
-         "program normal|gentle|hijab|cepat|kustom\n"
-         "soak, wash, soak_and_wash, rinse, rinse_parfume, spin\n"
-         "water_in, water_out, add_parfume, motor_on\n"
+         "proses [nomor] [tunda HH:MM:SS | selesai HH:MM]  (tanpa nomor: daftar Proses)\n"
+         "pilih <ulang|lanjut|batal|buang|pakai>  (jawab keputusan menunggu)\n"
          "stop, jeda, lanjutkan, lewati, batalkan, status, cek_air\n"
          "pengaturan, riwayat, statistik, wifi_list, wifi_tambah, wifi_hapus, wifi_urutan\n"
-         "pola <normal|gentle|hijab>, level_air <penuh|25|50|75|waktu [menit]>, mode_buang <sensor|waktu>\n"
-         "set_soak_session, set_wash_time, set_rinse_time, set_jumlah_parfume, set_spin_time, set_delay\n"
-         "mulai_nanti <menit>, selesai_jam <HH:MM>, notif <lengkap|ringkas|senyap>\n"
-         "kalibrasi_air, reset_semua, restart, info\n"
+         "notif <lengkap|ringkas|senyap>, remote [on|off], kalibrasi_air, reset_semua, restart, info\n"
          "relay <kiri|kanan|isi|buang|spin|pewangi> <on|off>, relay semua off, kalibrasi_relay [detik]\n"
-         "set_probe_buang <detik>, pra_cek_isi <buang|jeda|pakai>, remote [on|off]\n"
-         "custom [nomor] (proses buatan sendiri, disusun di dashboard web)\n"
+         "buang_manual <menit>  (buang air hanya dengan waktu, tanpa sensor)\n"
+         "Tahap dan variabelnya diatur di dashboard web (tab Proses dan Manual).\n"
          "Konsol: heap, tasks, relay_test <nama>, log, serial debug on|off";
 }
 
@@ -285,67 +198,91 @@ static String busyReason() {
   machineGetStatus(st);
   if (otaBusy()) return "Mesin sedang memperbarui firmware.";
   if (st.state == MS_RUNNING)
-    return String("Ada proses berjalan: ") + st.name + " (" + st.stage + "). Hentikan dulu dengan STOP.";
+    return String("Ada Proses berjalan: ") + st.name + " (" + st.stage + "). Hentikan dulu dengan STOP.";
   if (st.state == MS_PAUSED)
-    return String("Ada proses yang dijeda: ") + st.name + " (" + st.stage + "). Lanjutkan atau hentikan dulu.";
+    return String("Ada Proses yang dijeda: ") + st.name + " (" + st.stage + "). Lanjutkan atau hentikan dulu.";
+  if (st.state == MS_DECIDE)
+    return String("Mesin menunggu keputusan: ") + st.name + " (" + st.pauseReason + "). Jawab atau hentikan dulu.";
   return "";
 }
 
-static CmdResult runProgram(uint8_t id, uint8_t arg) {
-  String busy = busyReason();
-  if (busy.length()) return fail("Ditolak. " + busy);
-  MachineCmd c = {MC_RUN, id, arg};
-  if (!machinePost(c)) return fail("Antrean perintah mesin penuh, coba lagi.");
-  return ok(String("\xE2\x96\xB6 Program ") + programName(id) + " dikirim ke mesin.");
-}
-
 static CmdResult postSimple(uint8_t type, const char* okMsg) {
-  MachineCmd c = {type, 0, 0};
+  MachineCmd c;
+  memset(&c, 0, sizeof(c));
+  c.type = type;
+  c.finishAt = -1;
   if (!machinePost(c)) return fail("Antrean perintah mesin penuh, coba lagi.");
   return ok(okMsg);
 }
 
-static CmdResult setTriple(const String& args, int& a, int& b, int& c, bool nonZero) {
-  int h, m, s;
-  if (!parseInt(token(args, 0), 0, 23, h) || !parseInt(token(args, 1), 0, 59, m) || !parseInt(token(args, 2), 0, 59, s))
-    return fail("Nilai tidak valid. Jam harus 0-23, menit dan detik 0-59.");
-  if (nonZero && h == 0 && m == 0 && s == 0) return fail("Nilai tidak boleh 0.");
-  a = h; b = m; c = s;
-  settingsSave();
-  return ok("Tersimpan: " + hms(h, m, s));
+CmdResult commandRunProses(int slot, uint32_t waitSec, int finishAtMin) {
+  if (slot < 1 || slot > PROSES_SLOTS) return fail(String("Nomor Proses 1-") + PROSES_SLOTS + ". Ketik proses untuk daftar.");
+  String busy = busyReason();
+  if (busy.length()) return fail("Ditolak. " + busy);
+  if (finishAtMin >= 0 && !netTimeSynced()) return fail("Jam belum tersinkron (butuh internet). Gunakan tunda.");
+  SlotState st = prosesSlotState(slot - 1);
+  if (st == SLOT_EMPTY) return fail("Proses " + String(slot) + " kosong.");
+  if (st == SLOT_BAD) return fail("Proses " + String(slot) + " rusak. Hapus atau impor ulang.");
+  if (!machineStartProses(slot - 1, waitSec, finishAtMin)) return fail("Antrean perintah mesin penuh, coba lagi.");
+  return ok("\xE2\x96\xB6 Proses " + String(slot) + " dikirim ke mesin.");
 }
 
-static bool parseHalf(const String& text, float& out) {
-  String t = text;
-  t.replace(',', '.');
-  if (t.length() == 0) return false;
-  int dots = 0;
-  for (unsigned i = 0; i < t.length(); i++) {
-    if (t[i] == '.') dots++;
-    else if (!isDigit(t[i])) return false;
+CmdResult commandRunManual(const Tahap& t) {
+  String busy = busyReason();
+  if (busy.length()) return fail("Ditolak. " + busy);
+  String err;
+  if (!tahapValidate(t, err, true)) return fail(err);
+  if (!machineRunManual(t)) return fail("Antrean perintah mesin penuh, coba lagi.");
+  return ok(String("\xE2\x96\xB6 Manual: ") + tahapLabel(t.type) + " dikirim ke mesin.");
+}
+
+CmdResult commandDecide(const String& choice) {
+  MachineStatus s;
+  machineGetStatus(s);
+  if (s.state != MS_DECIDE) return fail("Tidak ada keputusan yang menunggu.");
+  uint8_t opt = decisionOptFromName(choice);
+  if (!opt) return fail("Pilihan tidak dikenal. Gunakan: ulang, lanjut, batal, buang, pakai.");
+  if (!(s.decisionOpts & opt)) {
+    String have;
+    for (uint8_t b = 1; b <= OP_PAKAI; b <<= 1)
+      if (s.decisionOpts & b) have += String(have.length() ? ", " : "") + decisionOptName(b);
+    return fail(String("Pilihan tidak tersedia. Yang ada: ") + have + ".");
   }
-  if (dots > 1) return false;
-  float v = t.toFloat();
-  if (v < 0 || v > 1440 || (int)(v * 2) != v * 2) return false;
-  out = v;
-  return true;
+  MachineCmd c;
+  memset(&c, 0, sizeof(c));
+  c.type = MC_DECIDE;
+  c.arg = opt;
+  c.finishAt = -1;
+  if (!machinePost(c)) return fail("Antrean perintah mesin penuh, coba lagi.");
+  return ok(String("Keputusan dikirim: ") + decisionOptLabel(opt) + ".");
+}
+
+// "HH:MM:SS" atau "HH:MM" atau menit saja -> detik
+static bool parseDuration(const String& a, uint32_t& sec) {
+  int p1 = a.indexOf(':');
+  if (p1 < 0) {
+    int m;
+    if (!parseInt(a, 1, 1439, m)) return false;
+    sec = (uint32_t)m * 60;
+    return true;
+  }
+  int p2 = a.indexOf(':', p1 + 1);
+  int h, m, s = 0;
+  if (!parseInt(a.substring(0, p1), 0, 23, h)) return false;
+  if (!parseInt(p2 < 0 ? a.substring(p1 + 1) : a.substring(p1 + 1, p2), 0, 59, m)) return false;
+  if (p2 >= 0 && !parseInt(a.substring(p2 + 1), 0, 59, s)) return false;
+  sec = (uint32_t)h * 3600 + (uint32_t)m * 60 + (uint32_t)s;
+  return sec > 0;
 }
 
 CmdResult executeCommand(const String& command, const String& argsIn, CmdSource src) {
-  String c = normalizeCommand(command);
-  String fixed;
-  String name = resolveAlias(c, fixed);
+  String name = normalizeCommand(command);
   String args = argsIn;
   args.trim();
-  if (args.length() == 0) args = fixed;
 
-  // Permintaan dari jarak jauh: hanya perintah yang diizinkan (juga setelah alias diselesaikan)
-  if (src == SRC_REMOTE && (!remoteCmdAllowed(c.c_str()) || !remoteCmdAllowed(name.c_str())))
-    return fail("Perintah ini hanya bisa dari web lokal (demi keamanan).");
+  // Permintaan dari jarak jauh: hanya perintah yang diizinkan
+  if (src == SRC_REMOTE && !remoteCmdAllowed(name.c_str())) return fail("Perintah ini hanya bisa dari web lokal (demi keamanan).");
 
-  if (name == "set_tambahan_buang" || name == "reset_tambahan_buang" || name == "set_maks_buang" || name == "reset_maks_buang")
-    return fail("Pengaturan ini tidak dipakai lagi: sensor hanya di atas, jadi pembuangan memakai probe tarikan "
-                "(set_probe_buang) dan total waktu tarik (set_waktu_pembuangan_air).");
   if (name == "remote") {
     String a = token(args, 0);
     a.toLowerCase();
@@ -361,78 +298,65 @@ CmdResult executeCommand(const String& command, const String& argsIn, CmdSource 
     else t += remoteConnected() ? "terhubung ke server" : "mencoba menyambung";
     return ok(t);
   }
-  if (name == "pra_cek_isi") {
+
+  // ---- Proses & kontrol mesin ----
+  if (name == "proses") {
     String a = token(args, 0);
-    a.toLowerCase();
-    if (a == "buang" || a == "0") S.fillPrecheck = PRECHECK_DRAIN;
-    else if (a == "jeda" || a == "1") S.fillPrecheck = PRECHECK_PAUSE;
-    else if (a == "pakai" || a == "2") S.fillPrecheck = PRECHECK_USE;
-    else return fail("Pilihan: buang (buang dulu), jeda (tunggu keputusan), pakai (lewati pengisian).");
-    settingsSave();
-    return ok(String("Bila air penuh sebelum mengisi: ") + (S.fillPrecheck == PRECHECK_DRAIN ? "buang dulu" : S.fillPrecheck == PRECHECK_PAUSE ? "jeda" : "pakai air yang ada") + ".");
-  }
-
-  // ---- tabel pengaturan bilangan bulat ----
-  for (size_t i = 0; i < nIntSettings; i++) {
-    const IntSetting& d = intSettings[i];
-    if (name == d.setCmd) {
-      int v;
-      if (!parseInt(token(args, 0), d.lo, d.hi, v))
-        return fail(String("Nilai tidak valid. Masukkan bilangan bulat ") + d.lo + "-" + d.hi + ".");
-      *d.ptr = v;
-      settingsSave();
-      return ok(String(d.label) + " disimpan: " + v + " " + d.unit);
+    if (a.length() == 0) return ok(prosesListText());
+    int slot;
+    if (!parseInt(a, 1, PROSES_SLOTS, slot)) return fail(String("Nomor Proses 1-") + PROSES_SLOTS + ". Ketik proses untuk daftar.");
+    String mode = token(args, 1);
+    mode.toLowerCase();
+    uint32_t wait = 0;
+    int finishAt = -1;
+    if (mode == "tunda") {
+      if (!parseDuration(token(args, 2), wait)) return fail("Format tunda: tunda HH:MM:SS (atau menit saja, 1-1439).");
+    } else if (mode == "selesai") {
+      String hm = token(args, 2);
+      int colon = hm.indexOf(':');
+      int h, m;
+      if (colon < 0 || !parseInt(hm.substring(0, colon), 0, 23, h) || !parseInt(hm.substring(colon + 1), 0, 59, m))
+        return fail("Format: selesai HH:MM, contoh selesai 07:30");
+      finishAt = h * 60 + m;
+    } else if (mode.length()) {
+      return fail("Format: proses <nomor> [tunda HH:MM:SS | selesai HH:MM]");
     }
-    if (name == d.resetCmd) {
-      Settings def;
-      settingsDefaults(def);
-      int offset = (int)((char*)d.ptr - (char*)&S);
-      *d.ptr = *(int*)((char*)&def + offset);
-      settingsSave();
-      return ok(String(d.label) + " direset: " + *d.ptr + " " + d.unit);
-    }
+    return commandRunProses(slot, wait, finishAt);
   }
-
-  // ---- program & kontrol mesin ----
-  if (name == "program") {
-    int id = programFromCmdName(token(args, 0));
-    if (id < 0 || id > PRG_CEPAT) return fail("Program tidak dikenal. Pilihan: kustom, normal, gentle, hijab, cepat.");
-    return runProgram(id, 0);
-  }
-  if (name == "soak" || name == "wash" || name == "soak_and_wash" || name == "rinse" || name == "rinse_parfume" ||
-      name == "spin" || name == "water_in" || name == "water_out" || name == "add_parfume" || name == "motor_on") {
-    return runProgram(programFromCmdName(name), 0);
+  if (name == "pilih") return commandDecide(token(args, 0));
+  if (name == "buang_manual") {
+    int m;
+    if (!parseInt(token(args, 0), 1, 60, m)) return fail("Format: buang_manual <menit 1-60>");
+    Tahap t;
+    tahapDefault(TH_BUANG_MANUAL, t);
+    t.lama = (uint16_t)m;
+    return commandRunManual(t);
   }
   if (name == "relay_test") {
     int r = relayFromName(token(args, 0));
     if (r < 0) return fail("Relay tidak dikenal. Pilihan: kiri, kanan, isi, buang, spin, pewangi.");
-    return runProgram(PRG_TEST, r);
-  }
-  if (name == "custom") {
-    String a = token(args, 0);
-    if (a.length() == 0) {
-      String t = "\xF0\x9F\x97\x82 Custom Proses (maks 5):\n";
-      int n = 0;
-      for (int i = 0; i < CUSTOM_SLOTS; i++) {
-        CustomProc p;
-        if (!customLoad(i, p)) continue;
-        t += String(i + 1) + ". " + p.name + " (" + p.count + " langkah)\n";
-        n++;
-      }
-      if (!n) t += "(belum ada, buat di dashboard web tab Custom)\n";
-      else t += "Jalankan: /custom <nomor>";
-      return ok(t);
-    }
-    int slot;
-    if (!parseInt(a, 1, CUSTOM_SLOTS, slot)) return fail("Nomor slot 1-5. Ketik /custom untuk daftar.");
-    CustomProc p;
-    if (!customLoad(slot - 1, p)) return fail("Slot " + String(slot) + " kosong.");
-    return runProgram(PRG_CUSTOM, slot - 1);
+    String busy = busyReason();
+    if (busy.length()) return fail("Ditolak. " + busy);
+    MachineCmd c;
+    memset(&c, 0, sizeof(c));
+    c.type = MC_RUN_RELAYTEST;
+    c.arg = (uint8_t)r;
+    c.finishAt = -1;
+    if (!machinePost(c)) return fail("Antrean perintah mesin penuh, coba lagi.");
+    return ok(String("Uji relay ") + relayName((RelayId)r) + " dikirim.");
   }
   if (name == "kalibrasi_relay") {
     int secs = 3;
     if (args.length() && !parseInt(token(args, 0), 1, 30, secs)) return fail("Lama nyala per relay: 1-30 detik.");
-    return runProgram(PRG_RELAYSEQ, secs);
+    String busy = busyReason();
+    if (busy.length()) return fail("Ditolak. " + busy);
+    MachineCmd c;
+    memset(&c, 0, sizeof(c));
+    c.type = MC_RUN_RELAYSEQ;
+    c.arg = (uint8_t)secs;
+    c.finishAt = -1;
+    if (!machinePost(c)) return fail("Antrean perintah mesin penuh, coba lagi.");
+    return ok("Kalibrasi relay dimulai.");
   }
   if (name == "relay") {
     String who = token(args, 0);
@@ -449,7 +373,7 @@ CmdResult executeCommand(const String& command, const String& argsIn, CmdSource 
     int r = relayFromName(who);
     if (r < 0) return fail("Relay tidak dikenal. Pilihan: kiri, kanan, isi, buang, spin, pewangi, semua.");
     String busy = busyReason();
-    if (busy.length()) return fail("Ditolak: kontrol relay manual hanya saat tidak ada proses. " + busy);
+    if (busy.length()) return fail("Ditolak: kontrol relay manual hanya saat tidak ada Proses. " + busy);
     if (on) {
       const char* why = relayCheck((RelayId)r, true);
       if (why) {
@@ -463,7 +387,12 @@ CmdResult executeCommand(const String& command, const String& argsIn, CmdSource 
         return fail(msg);
       }
     }
-    MachineCmd c = {MC_RELAY, (uint8_t)r, (uint8_t)(on ? 1 : 0)};
+    MachineCmd c;
+    memset(&c, 0, sizeof(c));
+    c.type = MC_RELAY;
+    c.arg = (uint8_t)r;
+    c.arg2 = on ? 1 : 0;
+    c.finishAt = -1;
     if (!machinePost(c)) return fail("Antrean perintah mesin penuh, coba lagi.");
     if (!on) return ok(String("Relay ") + who + " dimatikan.");
     return ok(String("Relay ") + who + " dinyalakan (otomatis mati 60 detik).");
@@ -472,7 +401,7 @@ CmdResult executeCommand(const String& command, const String& argsIn, CmdSource 
   if (name == "jeda") return postSimple(MC_PAUSE, "\xE2\x8F\xB8 Perintah jeda dikirim.");
   if (name == "lanjutkan") return postSimple(MC_RESUME, "\xE2\x96\xB6 Perintah lanjutkan dikirim.");
   if (name == "lewati") return postSimple(MC_SKIP, "\xE2\x8F\xAD Tahap dilewati.");
-  if (name == "batalkan") return postSimple(MC_CANCEL_RESUME, "Pemulihan proses dibatalkan.");
+  if (name == "batalkan") return postSimple(MC_CANCEL_RESUME, "Pemulihan Proses dibatalkan.");
 
   if (name == "cek_air") {
     MachineStatus s;
@@ -483,12 +412,11 @@ CmdResult executeCommand(const String& command, const String& argsIn, CmdSource 
   }
 
   // ---- laporan ----
-  if (name == "status") return ok(statusText());
+  if (name == "status" || name == "menu") return ok(statusText());
   if (name == "pengaturan") return ok(settingsText());
   if (name == "riwayat") return ok(historyText());
   if (name == "statistik") return ok(statsText());
   if (name == "wifi_list") return ok(wifiListText());
-  if (name == "menu") return ok(statusText());
   if (name == "bantuan" || name == "help") return ok(helpText());
   if (name == "info") {
     String t = String("Firmware v") + FW_VERSION + " (" + __DATE__ + ")\n";
@@ -500,104 +428,7 @@ CmdResult executeCommand(const String& command, const String& argsIn, CmdSource 
     return ok(t);
   }
 
-  // ---- pengaturan khusus ----
-  if (name == "pola") {
-    String p = token(args, 0);
-    p.toLowerCase();
-    if (p == "normal") S.pola = POLA_NORMAL;
-    else if (p == "gentle") S.pola = POLA_GENTLE;
-    else if (p == "hijab") S.pola = POLA_HIJAB;
-    else return fail("Pola tidak dikenal. Pilihan: normal, gentle, hijab.");
-    settingsSave();
-    return ok("Pola " + p + " digunakan.");
-  }
-  if (name == "set_jumlah_parfume") {
-    float v;
-    if (!parseHalf(token(args, 0), v)) return fail("Nilai tidak valid. Gunakan kelipatan 0,5 (mis. 0,5 atau 1).");
-    S.parfume = v;
-    settingsSave();
-    return ok("Jumlah parfum disimpan. Pompa: " + String(v, 1) + " cup x 5 detik + 3 detik awal.");
-  }
-  if (name == "reset_jumlah_parfume") {
-    S.parfume = 1.0f;
-    settingsSave();
-    return ok("Jumlah parfum direset menjadi 1 cup.");
-  }
-  if (name == "set_delay") {
-    CmdResult r = setTriple(args, S.dH, S.dM, S.dS, false);
-    return r;
-  }
-  if (name == "reset_delay") {
-    S.dH = S.dM = S.dS = 0;
-    S.finishAt = -1;
-    settingsSave();
-    return ok("Delay direset menjadi 0.");
-  }
-  if (name == "set_batas_waktu_pengisian_air") return setTriple(args, S.flH, S.flM, S.flS, true);
-  if (name == "reset_batas_waktu_pengisian_air") {
-    S.flH = 0; S.flM = 30; S.flS = 0;
-    settingsSave();
-    return ok("Batas waktu pengisian direset menjadi 0 jam 30 menit 0 detik.");
-  }
-  if (name == "mulai_nanti") {
-    int m;
-    if (!parseInt(token(args, 0), 0, 1439, m)) return fail("Masukkan lama tunda dalam menit (0-1439).");
-    S.dH = m / 60; S.dM = m % 60; S.dS = 0;
-    S.finishAt = -1;
-    settingsSave();
-    return ok(m == 0 ? "Proses akan dimulai langsung." : "Proses berikutnya ditunda " + hms(S.dH, S.dM, 0) + ".");
-  }
-  if (name == "selesai_jam") {
-    String a = token(args, 0);
-    if (a == "batal" || a == "-") {
-      S.finishAt = -1;
-      settingsSave();
-      return ok("Jadwal selesai jam dibatalkan.");
-    }
-    if (!netTimeSynced()) return fail("Jam belum tersinkron (butuh internet). Gunakan /mulai_nanti.");
-    int h, m;
-    String hh = a, mm = token(args, 1);
-    int colon = a.indexOf(':');
-    if (colon > 0) { hh = a.substring(0, colon); mm = a.substring(colon + 1); }
-    if (!parseInt(hh, 0, 23, h) || !parseInt(mm.length() ? mm : "0", 0, 59, m)) return fail("Format jam tidak valid. Contoh: 07:30");
-    S.finishAt = h * 60 + m;
-    S.dH = S.dM = S.dS = 0;
-    settingsSave();
-    char b[8];
-    snprintf(b, sizeof(b), "%02d:%02d", h, m);
-    return ok(String("Proses berikutnya akan dijadwalkan selesai jam ") + b + ".");
-  }
-  if (name == "level_air") {
-    String a = token(args, 0);
-    a.toLowerCase();
-    if (a == "penuh" || a == "sensor") {
-      S.fillLevel = FILL_SENSOR;
-    } else if (a == "25" || a == "50" || a == "75") {
-      S.fillLevel = FILL_PERCENT;
-      S.fillPercent = a.toInt();
-    } else if (a == "waktu" || a == "menit") {
-      String n = token(args, 1);
-      if (n.length()) {
-        int v;
-        if (!parseInt(n, 1, 1440, v)) return fail("Waktu isi tidak valid (1-1440 menit).");
-        S.fillTime = v;
-      }
-      S.fillLevel = FILL_TIME;
-    } else {
-      return fail("Level tidak dikenal. Pilihan: penuh, 25, 50, 75, waktu [menit].");
-    }
-    settingsSave();
-    return ok("Level air: " + fillLevelText());
-  }
-  if (name == "mode_buang") {
-    String a = token(args, 0);
-    a.toLowerCase();
-    if (a == "sensor") S.drainMode = DRAIN_SENSOR;
-    else if (a == "waktu") S.drainMode = DRAIN_TIME;
-    else return fail("Pilihan: sensor atau waktu.");
-    settingsSave();
-    return ok(S.drainMode == DRAIN_SENSOR ? "Pembuangan air memakai sensor." : "Pembuangan air memakai waktu.");
-  }
+  // ---- pengaturan ----
   if (name == "notif") {
     String a = token(args, 0);
     a.toLowerCase();
@@ -606,15 +437,15 @@ CmdResult executeCommand(const String& command, const String& argsIn, CmdSource 
     else if (a == "senyap") S.notif = NOTIF_SENYAP;
     else return fail("Pilihan: lengkap, ringkas, senyap.");
     settingsSave();
-    return ok(String("Mode notifikasi: ") + notifModeName(S.notif) + ". (Log web tetap lengkap.)");
+    return ok(String("Mode notifikasi: ") + notifModeName(S.notif) + ". (Log web tetap lengkap; pesan Tahap Notifikasi selalu terkirim.)");
   }
   if (name == "reset_semua") {
     settingsReset();
-    return ok("Semua pengaturan direset ke default (daftar WiFi & notifikasi dipertahankan).");
+    return ok("Pengaturan direset ke default (daftar WiFi, Proses, dan kalibrasi dipertahankan).");
   }
   if (name == "kalibrasi_air") {
     calibReset();
-    return ok("Data kalibrasi waktu isi/buang direset.");
+    return ok("Data kalibrasi waktu isi direset.");
   }
 
   // ---- WiFi ----
@@ -632,7 +463,7 @@ CmdResult executeCommand(const String& command, const String& argsIn, CmdSource 
   }
   if (name == "wifi_hapus") {
     int n;
-    if (!parseInt(token(args, 0), 1, MAX_WIFI_NETWORKS, n) || !wifiRemove(n - 1)) return fail("Nomor WiFi tidak valid (lihat /wifi_list).");
+    if (!parseInt(token(args, 0), 1, MAX_WIFI_NETWORKS, n) || !wifiRemove(n - 1)) return fail("Nomor WiFi tidak valid (lihat wifi_list).");
     netReconnectNow();
     return ok("WiFi nomor " + String(n) + " dihapus.");
   }
@@ -640,7 +471,7 @@ CmdResult executeCommand(const String& command, const String& argsIn, CmdSource 
     int a, b;
     if (!parseInt(token(args, 0), 1, MAX_WIFI_NETWORKS, a) || !parseInt(token(args, 1), 1, MAX_WIFI_NETWORKS, b) ||
         !wifiMove(a - 1, b - 1))
-      return fail("Nomor tidak valid (lihat /wifi_list).");
+      return fail("Nomor tidak valid (lihat wifi_list).");
     return ok(wifiListText());
   }
 
@@ -648,7 +479,7 @@ CmdResult executeCommand(const String& command, const String& argsIn, CmdSource 
   if (name == "restart") {
     MachineStatus s;
     machineGetStatus(s);
-    if (s.state != MS_IDLE) return fail("Mesin sedang bekerja. Hentikan proses dulu.");
+    if (s.state != MS_IDLE) return fail("Mesin sedang bekerja. Hentikan Proses dulu.");
     scheduleRestart(1000);
     return ok("Restart dalam 1 detik...");
   }
@@ -659,7 +490,7 @@ CmdResult executeCommand(const String& command, const String& argsIn, CmdSource 
     return ok("Password web diganti.");
   }
 
-  return fail("Perintah tidak dikenal: /" + c + ". Ketik /bantuan.");
+  return fail("Perintah tidak dikenal: " + name + ". Ketik bantuan.");
 }
 
 // ============================================================================

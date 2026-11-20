@@ -3,6 +3,7 @@
 #include <time.h>
 #include "config.h"
 #include "logger.h"
+#include "proses_store.h"
 #include "settings.h"
 #include "water_sensor.h"
 
@@ -11,31 +12,42 @@
 // Tidak pernah memanggil fungsi jaringan: hanya menulis log & snapshot status.
 // ============================================================================
 
-enum SR : uint8_t { SR_CONTINUE, SR_DONE, SR_PAUSE, SR_FAIL };
+enum SR : uint8_t { SR_CONTINUE, SR_DONE, SR_DECIDE, SR_FAIL };
 
 static QueueHandle_t cmdQueue = nullptr;
 static SemaphoreHandle_t statusMutex = nullptr;
 static MachineStatus snap;
 static volatile bool holdFlag = false;
 
-// ---- program yang sedang berjalan -------------------------------------------
-static Settings cfg;                 // salinan pengaturan saat program dimulai
-static Step prog[MAX_STEPS];
-static uint8_t progN = 0, progGroups = 1, waitOffset = 0, idx = 0;
-static uint8_t progId = PRG_KUSTOM;
-static uint8_t progArg = 0;
-static char progNameBuf[28];
+// ---- Proses yang sedang berjalan -----------------------------------------------
+static Proses job;                   // salinan Proses (atau satu Tahap untuk Manual/uji)
+static uint8_t jobSlot = NO_SLOT;
+static uint16_t jobRev = 0;
+static bool jobManual = false, jobTest = false;
+static uint8_t idx = 0;
 static MState mstate = MS_IDLE;
+static bool waitingStart = false;    // menunggu jam mulai (tunda / selesai pada jam)
+static uint32_t waitLeft = 0;
 static uint32_t progStartMs = 0, progStartEpoch = 0, progMotorStart = 0, progTotalEst = 0;
 static char pauseReason[72];
 static char failMsg[72];
-static char detail[56];
+static char detailTxt[56];
 static bool resumePending = false;
 static ResumeInfo resumeInfo;
 static char resumeText[56];
 static uint32_t manualSince[R_COUNT];   // kapan relay manual dinyalakan (0 = tidak)
 
-// ---- konteks langkah ----------------------------------------------------------
+// ---- keputusan menunggu ----------------------------------------------------------
+struct Decision {
+  uint8_t code;
+  uint8_t opts;
+  char msg[72];
+  uint32_t remindMs;   // kapan terakhir mengingatkan
+};
+static Decision dec;
+#define DECISION_REMIND_MIN 10
+
+// ---- konteks Tahap ---------------------------------------------------------------
 struct Run {
   uint8_t phase, sub, attempt;
   uint16_t cnt;
@@ -43,18 +55,22 @@ struct Run {
 };
 static Run R;
 
+struct DrainParam {
+  uint16_t lama, probe;
+  uint8_t tarik, sesi;
+};
+static DrainParam dp;
+
 enum { D_PULL, D_CHECK, D_UNJAM_WAIT, D_FAILED };
 struct DrainCtx {
   uint8_t phase, session, unjam;
-  bool soft;          // manual (water_out): gagal tidak menjeda
-  bool probeDone;     // tarikan terbukti berhasil (sensor sudah tidak penuh)
+  bool probeDone;         // tarikan terbukti berhasil (sensor sudah tidak penuh)
   uint32_t pullElapsed;   // lama valve ditarik pada percobaan ini
   uint32_t left;
 };
 static DrainCtx D;
 
 enum { F_SETTLE, F_PRECHECK, F_DRAINING, F_FILLING, F_RETRYWAIT };
-
 enum { AG_LEFT_ON, AG_LEFT_OFF, AG_RIGHT_ON, AG_RIGHT_OFF, AG_GAP };
 
 static inline uint32_t stableMs() { return scaledMs(WATER_STABLE_MS); }
@@ -63,7 +79,7 @@ static void setDetail(const char* fmt, ...) __attribute__((format(printf, 1, 2))
 static void setDetail(const char* fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
-  vsnprintf(detail, sizeof(detail), fmt, ap);
+  vsnprintf(detailTxt, sizeof(detailTxt), fmt, ap);
   va_end(ap);
 }
 
@@ -73,56 +89,88 @@ static SR failStep(const char* msg) {
 }
 
 // ============================================================================
+// Keputusan menunggu
+// ============================================================================
+const char* decisionCodeName(uint8_t code) {
+  static const char* n[] = {"", "isi_gagal", "pra_penuh", "buang_gagal", "spin_penuh", "cek_gagal", "tindakan"};
+  return code < 7 ? n[code] : "";
+}
+const char* decisionOptName(uint8_t opt) {
+  switch (opt) {
+    case OP_ULANG: return "ulang";
+    case OP_LANJUT: return "lanjut";
+    case OP_BATAL: return "batal";
+    case OP_BUANG: return "buang";
+    case OP_PAKAI: return "pakai";
+  }
+  return "";
+}
+const char* decisionOptLabel(uint8_t opt) {
+  switch (opt) {
+    case OP_ULANG: return "Ulang";
+    case OP_LANJUT: return "Lanjut";
+    case OP_BATAL: return "Batal";
+    case OP_BUANG: return "Buang lalu isi";
+    case OP_PAKAI: return "Pakai air yang ada";
+  }
+  return "";
+}
+uint8_t decisionOptFromName(const String& name) {
+  for (uint8_t b = 1; b <= OP_PAKAI; b <<= 1)
+    if (name == decisionOptName(b)) return b;
+  return 0;
+}
+
+static String optsText(uint8_t opts) {
+  String t;
+  for (uint8_t b = 1; b <= OP_PAKAI; b <<= 1) {
+    if (!(opts & b)) continue;
+    if (t.length()) t += " / ";
+    t += decisionOptLabel(b);
+  }
+  return t;
+}
+
+static SR decide(uint8_t code, uint8_t opts, const char* msg) {
+  dec.code = code;
+  dec.opts = opts;
+  strlcpy(dec.msg, msg, sizeof(dec.msg));
+  return SR_DECIDE;
+}
+
+// ============================================================================
 // Teks
 // ============================================================================
-static void stageLabelFor(uint8_t id, const Step& st, uint8_t groups, char* out, size_t n) {
-  static const char* kindNames[] = {"", "Cuci", "Bilas", "Bilas+Pewangi", "Tunggu"};
-  if (st.type == ST_WAIT && st.kind == KIND_TUNGGU) {
+static void stageLabel(char* out, size_t n) {
+  if (waitingStart) {
     strlcpy(out, "Menunggu mulai", n);
-  } else if (id == PRG_CUSTOM) {
-    snprintf(out, n, "Langkah %u/%u", st.grp + 1, groups);
-  } else if (programIsFull(id) && st.kind > 0 && st.kind <= 3) {
-    snprintf(out, n, "%s %u/%u", kindNames[st.kind], st.grp + 1, groups);
+    return;
+  }
+  const Tahap& t = job.t[idx];
+  if (jobTest) {
+    strlcpy(out, jobManual ? "Uji relay" : "Kalibrasi relay", n);
+  } else if (jobManual) {
+    snprintf(out, n, "Manual: %s", tahapLabel(t.type));
   } else {
-    strlcpy(out, programName(id), n);
+    snprintf(out, n, "Tahap %u/%u: %s", (unsigned)idx + 1, (unsigned)job.count, tahapLabel(t.type));
   }
 }
 
-static void stepTitle(const Step& st, char* out, size_t n) {
-  switch (st.type) {
-    case ST_AGITATE: snprintf(out, n, "Agitasi %lu mnt", (unsigned long)st.a); break;
-    case ST_SOAK: snprintf(out, n, "Soak %lu sesi", (unsigned long)st.a); break;
-    case ST_SPIN: snprintf(out, n, "Spin %lu mnt", (unsigned long)st.a); break;
-    case ST_WAIT: snprintf(out, n, st.a >= 120 ? "Menunggu %lu mnt" : "Menunggu %lu dtk", (unsigned long)(st.a >= 120 ? st.a / 60 : st.a)); break;
-    default: strlcpy(out, stepTypeName(st.type), n); break;
-  }
+static String stepTitle(const Tahap& t) {
+  if (t.type == TH_UJI_RELAY) return String("Uji relay ") + relayName((RelayId)t.mode);
+  return tahapRingkas(t);
+}
+static String stepParams(const Tahap& t) {
+  if (t.type == TH_UJI_RELAY) return String(relayName((RelayId)t.mode));
+  return tahapParams(t);
 }
 
 // ============================================================================
-// Estimasi waktu (dalam ms yang sudah diskalakan)
+// Estimasi waktu (ms yang sudah diskalakan)
 // ============================================================================
-static float perfumeCups(const Step& st) {
-  return st.flag == PERFUME_FROM_SETTINGS ? cfg.parfume : st.flag / 2.0f;
-}
-
-static uint32_t estFillMs() {
-  if (C.nFill > 0) return (uint32_t)(C.avgFillMs / TIME_SCALE);
-  return minToMs(10);
-}
-static uint32_t estDrainMs() { return minToMs(cfg.drainTime) + stableMs(); }
-static uint32_t estimateStepMs(const Step& st) {
-  switch (st.type) {
-    case ST_WAIT: return secToMs(st.a);
-    case ST_FILL: return estFillMs() + scaledMs(FILL_SETTLE_MS);
-    case ST_AGITATE: return minToMs(st.a);
-    case ST_SOAK: return minToMs(st.a * 5);
-    case ST_PERFUME: return perfumeCups(st) > 0 ? scaledMs((uint32_t)(perfumeCups(st) * 5000) + 3000) : 0;
-    case ST_DRAIN: return estDrainMs();
-    case ST_SPIN: return minToMs(st.a);
-    case ST_CHECK: return stableMs();
-    case ST_TEST: return scaledMs(MOTOR_REVERSE_GAP_MS) + secToMs(st.flag ? st.flag : 2);
-  }
-  return 0;
+static uint32_t estimateStepMs(const Tahap& t) {
+  if (t.type == TH_UJI_RELAY) return scaledMs(MOTOR_REVERSE_GAP_MS) + secToMs(t.detik ? t.detik : 2);
+  return secToMs(tahapEstimateSec(t));
 }
 
 // ============================================================================
@@ -200,12 +248,24 @@ static SR agitateTick(uint32_t dt) {
 }
 
 // ============================================================================
-// Pembuangan air (valve ditarik motor). Dipakai langkah DRAIN dan pra-cek FILL.
+// Pembuangan air (valve ditarik motor). Dipakai Tahap Buang dan pra-cek Isi.
 // ============================================================================
 // Sensor level hanya ada di paling atas: ia hanya tahu "penuh" atau "tidak penuh".
-// Tarikan valve dibuktikan berhasil bila air turun dari posisi penuh dalam drainProbeSec.
-// Bila tidak, valve dilepas lalu ditarik lagi (unjam). Setelah waktu buang habis, air tidak boleh
-// masih penuh; bila masih penuh, sesi diulang.
+// Tarikan valve dibuktikan berhasil bila air turun dari posisi penuh dalam `probe` detik (Verifikasi Pengurangan
+// Jumlah Air). Bila tidak, valve dilepas lalu ditarik lagi (Tarik Ulang Valve). Setelah `lama` menit, air tidak boleh
+// masih penuh (cek akhir, selalu); bila masih penuh, sesi diulang sampai `sesi` kali.
+static void drainParamFrom(const Tahap& t) {
+  dp.lama = t.lama;
+  dp.probe = t.probe;
+  dp.tarik = t.tarik;
+  dp.sesi = t.sesi;
+}
+static void drainParamDefault() {
+  Tahap t;
+  tahapDefault(TH_BUANG, t);
+  drainParamFrom(t);
+}
+
 static bool drainPullStart() {
   if (!relaySet(R_DRAIN, true)) {
     D.phase = D_FAILED;
@@ -214,28 +274,21 @@ static bool drainPullStart() {
   D.phase = D_PULL;
   D.pullElapsed = 0;
   // Bila air sudah tidak penuh sejak awal (mis. isi sebagian), keberhasilan tarikan tidak bisa dibuktikan.
-  D.probeDone = cfg.drainMode == DRAIN_TIME || !sensorRaw();
-  int limit = D.soft ? 1 : cfg.drainSessionLimit;
-  logf(LOG_INFO, "Membuang air... sesi %d/%d", D.session, limit);
-  setDetail("Membuang air (sesi %d/%d)", D.session, limit);
+  D.probeDone = !sensorRaw();
+  logf(LOG_INFO, "Membuang air... sesi %d/%d", D.session, (int)dp.sesi);
+  setDetail("Membuang air (sesi %d/%d)", D.session, (int)dp.sesi);
   return true;
 }
 
-static void drainBegin(bool soft) {
+static void drainBegin() {
   memset(&D, 0, sizeof(D));
-  D.soft = soft;
   D.session = 1;
   drainPullStart();
 }
 
 static SR drainFail() {
   relaySet(R_DRAIN, false);
-  if (D.soft) {
-    logf(LOG_WARN, "Air masih penuh setelah pembuangan manual");
-    return SR_DONE;
-  }
-  strlcpy(pauseReason, "Pembuangan gagal, cek modul tarik valve buang", sizeof(pauseReason));
-  return SR_PAUSE;
+  return decide(DC_BUANG_GAGAL, OP_ULANG | OP_LANJUT | OP_BATAL, "Pembuangan gagal, cek modul tarik valve buang");
 }
 
 static void drainRelease() {
@@ -246,10 +299,9 @@ static void drainRelease() {
   logf(LOG_INFO, "Mengecek apakah air sudah turun dari posisi penuh...");
 }
 
-// Sesi gagal (air masih penuh): ulangi sesi sampai batas, lalu jeda.
+// Sesi gagal (air masih penuh): ulangi sesi sampai batas, lalu keputusan.
 static SR drainSessionFailed() {
-  int limit = D.soft ? 1 : cfg.drainSessionLimit;
-  if (D.session < limit) {
+  if (D.session < dp.sesi) {
     D.session++;
     D.unjam = 0;
     logf(LOG_INFO, "Mengulangi sesi pembuangan air");
@@ -270,21 +322,21 @@ static SR drainTick(uint32_t dt) {
         if (sensorStable(false, stableMs())) {
           D.probeDone = true;
           logf(LOG_INFO, "Tarikan valve berhasil: air mulai turun");
-        } else if (D.pullElapsed >= secToMs(cfg.drainProbeSec)) {
+        } else if (D.pullElapsed >= secToMs(dp.probe)) {
           relaySet(R_DRAIN, false);
-          logf(LOG_WARN, "Valve buang belum menarik (air masih penuh setelah %d dtk)", cfg.drainProbeSec);
-          if (D.unjam < cfg.unjamCount) {
+          logf(LOG_WARN, "Valve buang belum menarik (air masih penuh setelah %d dtk)", (int)dp.probe);
+          if (D.unjam < dp.tarik) {
             D.unjam++;
             D.phase = D_UNJAM_WAIT;
             D.left = scaledMs(UNJAM_RELEASE_MS);
-            logf(LOG_INFO, "Unjam %d/%d: valve dilepas lalu ditarik lagi", D.unjam, cfg.unjamCount);
-            setDetail("Unjam valve %d/%d", D.unjam, cfg.unjamCount);
+            logf(LOG_INFO, "Tarik ulang valve %d/%d: valve dilepas lalu ditarik lagi", D.unjam, (int)dp.tarik);
+            setDetail("Tarik ulang valve %d/%d", D.unjam, (int)dp.tarik);
             return SR_CONTINUE;
           }
           return drainSessionFailed();
         }
       }
-      if (D.probeDone && D.pullElapsed >= minToMs(cfg.drainTime)) drainRelease();
+      if (D.probeDone && D.pullElapsed >= minToMs(dp.lama)) drainRelease();
       return SR_CONTINUE;
 
     case D_UNJAM_WAIT:
@@ -316,16 +368,16 @@ static SR drainTick(uint32_t dt) {
 // ============================================================================
 // Pengisian air
 // ============================================================================
-static uint8_t effectiveFillLevel() {
-  if (cfg.fillLevel == FILL_PERCENT && C.nFill == 0) return FILL_SENSOR;
-  return cfg.fillLevel;
+static uint8_t effectiveFillMode(const Tahap& t) {
+  if (t.mode == ISI_PERSEN && C.nFill == 0) return ISI_SENSOR;
+  return t.mode;
 }
 
-static void fillBegin() {
+static void fillBegin(const Tahap& t) {
   memset(&R, 0, sizeof(R));
   R.phase = F_SETTLE;
   R.left = scaledMs(FILL_SETTLE_MS);
-  if (cfg.fillLevel == FILL_PERCENT && C.nFill == 0)
+  if (t.mode == ISI_PERSEN && C.nFill == 0)
     logf(LOG_WARN, "Belum ada data kalibrasi untuk level persen, memakai sensor penuh");
   setDetail("Menyiapkan pengisian");
 }
@@ -339,10 +391,9 @@ static SR fillStartValve() {
   return SR_CONTINUE;
 }
 
-static void fillFinished() {
+static void fillFinished(const Tahap& t) {
   relaySet(R_FILL, false);
-  uint8_t lv = effectiveFillLevel();
-  if (lv == FILL_SENSOR && R.attempt == 0) {
+  if (effectiveFillMode(t) == ISI_SENSOR && R.attempt == 0) {
     float real = (float)R.elapsed * TIME_SCALE;
     bool suspicious = false;
     if (C.nFill >= 2) {
@@ -362,7 +413,13 @@ static void fillFinished() {
   logf(LOG_INFO, "Air sudah penuh!");
 }
 
-static SR fillTick(uint32_t dt) {
+static void fillDrainFirst() {
+  drainParamDefault();
+  drainBegin();
+  R.phase = F_DRAINING;
+}
+
+static SR fillTick(const Tahap& t, uint32_t dt) {
   switch (R.phase) {
     case F_SETTLE:
       if (R.left > dt) {
@@ -376,19 +433,17 @@ static SR fillTick(uint32_t dt) {
 
     case F_PRECHECK:
       if (sensorStable(false, stableMs())) return fillStartValve();
-      // Sudah jelas penuh (atau tidak stabil terlalu lama): terapkan pilihan pengguna
+      // Sudah jelas penuh (atau tidak stabil terlalu lama): terapkan pilihan pada Tahap
       if ((sensorRaw() && sensorSteadyMs() >= secToMs(2)) || R.left <= dt) {
-        switch (cfg.fillPrecheck) {
-          case PRECHECK_PAUSE:
-            strlcpy(pauseReason, "Air masih penuh sebelum mengisi. Pilih Lanjutkan, Lewati, atau Stop", sizeof(pauseReason));
-            return SR_PAUSE;
-          case PRECHECK_USE:
+        switch (t.pra) {
+          case PRA_JEDA:
+            return decide(DC_PRA_PENUH, OP_BUANG | OP_PAKAI | OP_BATAL, "Air sudah penuh sebelum mengisi");
+          case PRA_PAKAI:
             logf(LOG_INFO, "Air sudah penuh, pengisian dilewati");
             return SR_DONE;
           default:
             logf(LOG_INFO, "Air masih penuh sebelum mengisi, membuang dulu");
-            drainBegin(false);
-            R.phase = F_DRAINING;
+            fillDrainFirst();
             return SR_CONTINUE;
         }
       }
@@ -403,15 +458,13 @@ static SR fillTick(uint32_t dt) {
 
     case F_FILLING: {
       R.elapsed += dt;
-      uint8_t lv = effectiveFillLevel();
+      uint8_t lv = effectiveFillMode(t);
       bool full = sensorStable(true, stableMs());
       bool done = false;
-      uint32_t limit = secToMs(fillLimitSeconds());
-      if (lv == FILL_SENSOR) {
+      if (lv == ISI_SENSOR) {
         done = full;
       } else {
-        uint32_t target = lv == FILL_PERCENT ? (uint32_t)(C.avgFillMs * cfg.fillPercent / 100.0f / TIME_SCALE)
-                                             : minToMs(cfg.fillTime);
+        uint32_t target = lv == ISI_PERSEN ? (uint32_t)(C.avgFillMs * t.persen / 100.0f / TIME_SCALE) : minToMs(t.lama);
         if (full) {
           logf(LOG_WARN, "Sensor penuh sebelum waktu habis, pengisian dihentikan");
           done = true;
@@ -420,24 +473,25 @@ static SR fillTick(uint32_t dt) {
         }
       }
       if (done) {
-        fillFinished();
+        fillFinished(t);
         return SR_DONE;
       }
-      bool timedOut = (lv != FILL_TIME) && R.elapsed >= limit;
+      bool timedOut = (lv != ISI_WAKTU) && R.elapsed >= secToMs(t.batas);
       if (!timedOut) return SR_CONTINUE;
 
       relaySet(R_FILL, false);
-      if (R.attempt < cfg.fillRetryCount) {
+      if (R.attempt < t.coba) {
         R.attempt++;
-        logf(LOG_WARN, "Air tidak penuh dalam batas waktu. Coba ulang %d/%d dalam %d menit", R.attempt,
-             cfg.fillRetryCount, cfg.fillRetryWait);
+        logf(LOG_WARN, "Air tidak penuh dalam batas waktu. Coba ulang %d/%d dalam %d menit", R.attempt, (int)t.coba,
+             (int)t.tunggu);
         R.phase = F_RETRYWAIT;
-        R.left = minToMs(cfg.fillRetryWait);
-        setDetail("Menunggu air (coba ulang %d/%d)", R.attempt, cfg.fillRetryCount);
+        R.left = minToMs(t.tunggu);
+        setDetail("Menunggu air (coba ulang %d/%d)", R.attempt, (int)t.coba);
         return SR_CONTINUE;
       }
-      snprintf(pauseReason, sizeof(pauseReason), "Air tidak terisi setelah %d percobaan", cfg.fillRetryCount + 1);
-      return SR_PAUSE;
+      char msg[72];
+      snprintf(msg, sizeof(msg), "Air tidak terisi setelah %d percobaan", (int)t.coba + 1);
+      return decide(DC_ISI_GAGAL, OP_ULANG | OP_LANJUT | OP_BATAL, msg);
     }
 
     case F_RETRYWAIT:
@@ -451,81 +505,106 @@ static SR fillTick(uint32_t dt) {
 }
 
 // ============================================================================
-// Siklus hidup langkah
+// Siklus hidup Tahap
 // ============================================================================
 static void publishStatus();
 
 static void stepInit() {
-  const Step& st = prog[idx];
+  const Tahap& t = job.t[idx];
   memset(&R, 0, sizeof(R));
-  switch (st.type) {
-    case ST_WAIT: R.left = secToMs(st.a); setDetail(st.kind == KIND_TUNGGU ? "Menunggu jam mulai" : "Menunggu"); break;
-    case ST_FILL: fillBegin(); break;
-    case ST_AGITATE:
-      R.left = minToMs(st.a);
-      agitateStart(st.flag);
+  switch (t.type) {
+    case TH_ISI: fillBegin(t); break;
+    case TH_BUANG:
+      drainParamFrom(t);
+      drainBegin();
       break;
-    case ST_SOAK:
+    case TH_PUTAR:
+      R.left = minToMs(t.lama);
+      agitateStart(t.pola);
+      break;
+    case TH_SOAK:
       R.sub = 0;
-      R.left = minToMs(1);
-      agitateStart(st.flag);
+      R.left = minToMs(t.putar);
+      agitateStart(t.pola);
       break;
-    case ST_PERFUME:
-      if (perfumeCups(st) <= 0) {
-        logf(LOG_INFO, "Pewangi tidak dimasukkan!");
-        R.phase = 1;
-      } else {
-        if (relaySet(R_PERFUME, true)) logf(LOG_INFO, "Memasukkan pewangi...");
-        R.left = scaledMs((uint32_t)(perfumeCups(st) * 5000.0f) + 3000);
-      }
+    case TH_RENDAM:
+      R.left = minToMs(t.lama);
+      setDetail("Merendam");
+      break;
+    case TH_SPIN:
+      R.phase = 0;   // periksa dulu air sudah turun
+      R.left = stableMs() + secToMs(2);
+      setDetail("Memeriksa air sudah turun");
+      break;
+    case TH_PEWANGI:
+      R.left = secToMs((uint32_t)t.cup2 * 10);   // 0,5 cup = 10 dtk
+      if (relaySet(R_PERFUME, true)) logf(LOG_INFO, "Memasukkan pewangi...");
       setDetail("Memasukkan pewangi");
       break;
-    case ST_DRAIN: drainBegin(st.flag == 1); break;
-    case ST_SPIN:
-      R.left = minToMs(st.a);
-      relaySet(R_SPIN, true);
-      setDetail("Spin");
+    case TH_TUNGGU:
+      R.left = secToMs(t.detik);
+      setDetail("Menunggu");
       break;
-    case ST_CHECK:
+    case TH_CEK:
       R.left = stableMs() + secToMs(2);
       setDetail("Memeriksa air");
       break;
-    case ST_TEST:
+    case TH_TINDAKAN:
+      setDetail("Menunggu tindakan");
+      break;
+    case TH_NOTIF:
+      logf(LOG_NOTIF, "%s", t.pesan);
+      setDetail("Mengirim notifikasi");
+      break;
+    case TH_BUANG_MANUAL:
+      R.left = minToMs(t.lama);
+      if (!relaySet(R_DRAIN, true)) R.phase = 9;   // gagal: dilaporkan di tick
+      setDetail("Membuang air (waktu %u mnt)", (unsigned)t.lama);
+      break;
+    case TH_UJI_RELAY:
       R.phase = 0;   // jeda dulu (juga memberi jeda ganti arah motor), lalu menyala
       R.left = scaledMs(MOTOR_REVERSE_GAP_MS) + TICK_MS * 2;
-      setDetail("Uji relay %s (siap)", relayName((RelayId)st.a));
+      setDetail("Uji relay %s (siap)", relayName((RelayId)t.mode));
       break;
   }
 }
 
 static void stepBegin() {
-  const Step& st = prog[idx];
-  char stage[28], title[32];
-  stageLabelFor(progId, st, progGroups, stage, sizeof(stage));
-  stepTitle(st, title, sizeof(title));
-  logf(LOG_STEP, "%s: %s mulai", stage, title);
-  if (idx >= waitOffset && !programIsTest(progId)) resumeSave(progId, idx - waitOffset, progArg);
+  const Tahap& t = job.t[idx];
+  char stage[40];
+  stageLabel(stage, sizeof(stage));
+  String params = stepParams(t);
+  logf(LOG_STEP, "%s mulai%s%s", stage, params.length() ? ": " : "", params.c_str());
+  if (!jobTest && !jobManual) resumeSave(jobSlot, idx, jobRev);
   stepInit();
 }
 
-// Setelah dilanjutkan dari jeda: nyalakan lagi keluaran tanpa mengulang langkah.
+// Setelah dilanjutkan dari jeda: nyalakan lagi keluaran tanpa mengulang Tahap.
 static void stepEngage() {
-  const Step& st = prog[idx];
-  switch (st.type) {
-    case ST_AGITATE: agitateStart(st.flag); break;
-    case ST_SOAK:
-      if (R.sub == 0) agitateStart(st.flag);
+  const Tahap& t = job.t[idx];
+  switch (t.type) {
+    case TH_PUTAR: agitateStart(t.pola); break;
+    case TH_SOAK:
+      if (R.sub == 0) agitateStart(t.pola);
       break;
-    case ST_PERFUME:
-      if (R.phase == 0 && R.left > 0) relaySet(R_PERFUME, true);
+    case TH_PEWANGI:
+      if (R.left > 0) relaySet(R_PERFUME, true);
       break;
-    case ST_SPIN: relaySet(R_SPIN, true); break;
-    case ST_TEST:
+    case TH_SPIN:
+      if (R.phase == 1) relaySet(R_SPIN, true);
+      break;
+    case TH_UJI_RELAY:
       R.phase = 0;
       R.left = scaledMs(MOTOR_REVERSE_GAP_MS) + TICK_MS * 2;
       break;
-    case ST_FILL: fillBegin(); break;
-    case ST_DRAIN: drainBegin(st.flag == 1); break;
+    case TH_ISI: fillBegin(t); break;
+    case TH_BUANG:
+      drainParamFrom(t);
+      drainBegin();
+      break;
+    case TH_BUANG_MANUAL:
+      if (R.left > 0) relaySet(R_DRAIN, true);
+      break;
     default: break;
   }
 }
@@ -534,49 +613,104 @@ static void endProgram(CycleResult res, const char* why) {
   relayAllOff();
   uint32_t durSec = (millis() - progStartMs) / 1000;
   uint32_t motorDelta = relayMotorSeconds() - progMotorStart;
-  if (!programIsTest(progId)) {
-    statsRecord(progId, progStartEpoch, durSec * TIME_SCALE, res);
+  if (!jobTest) {
+    statsRecord(job.name, progStartEpoch, durSec * TIME_SCALE, res);
     if (motorDelta) statsAddMotorSec(motorDelta);
-    resumeClear();
+    if (!jobManual) resumeClear();
   }
   mstate = MS_IDLE;
-  detail[0] = 0;
+  waitingStart = false;
+  dec.code = DC_NONE;
+  detailTxt[0] = 0;
   pauseReason[0] = 0;
-  if (res == RES_DONE) logf(LOG_DONE, "Proses %s selesai", progNameBuf);
-  else if (res == RES_STOPPED) logf(LOG_WARN, "Proses %s dihentikan%s%s", progNameBuf, why ? ": " : "", why ? why : "");
-  else logf(LOG_ERROR, "Proses %s dibatalkan: %s", progNameBuf, why ? why : "kesalahan");
+  if (res == RES_DONE) logf(LOG_DONE, "Proses %s selesai", job.name);
+  else if (res == RES_STOPPED) logf(LOG_WARN, "Proses %s dihentikan%s%s", job.name, why ? ": " : "", why ? why : "");
+  else logf(LOG_ERROR, "Proses %s dibatalkan: %s", job.name, why ? why : "kesalahan");
 }
 
 static void stepFinished() {
   idx++;
-  if (idx >= progN) {
+  if (idx >= job.count) {
     endProgram(RES_DONE, nullptr);
     return;
   }
   stepBegin();
 }
 
-static void doPause(const char* reason, bool automatic) {
+static void doPause() {
   relayAllOff();
   mstate = MS_PAUSED;
-  strlcpy(pauseReason, reason, sizeof(pauseReason));
-  if (automatic) logf(LOG_ERROR, "Proses dijeda: %s. Kirim /lanjutkan untuk mencoba lagi", reason);
-  else logf(LOG_WARN, "Proses dijeda oleh pengguna");
+  pauseReason[0] = 0;
+  logf(LOG_WARN, "Proses dijeda oleh pengguna");
 }
 
 static void doResume() {
   mstate = MS_RUNNING;
   pauseReason[0] = 0;
-  char title[32];
-  stepTitle(prog[idx], title, sizeof(title));
-  logf(LOG_STEP, "Melanjutkan: %s", title);
+  logf(LOG_STEP, "Melanjutkan: %s", stepTitle(job.t[idx]).c_str());
   stepEngage();
 }
 
-// Hitung berapa detik harus menunggu sebelum mulai (delay + "selesai jam")
-static uint32_t computeWaitSeconds(uint32_t estTotalMs) {
-  uint32_t wait = (uint32_t)cfg.dH * 3600UL + (uint32_t)cfg.dM * 60UL + (uint32_t)cfg.dS;
-  if (cfg.finishAt >= 0) {
+static void enterDecide() {
+  relayAllOff();
+  mstate = MS_DECIDE;
+  dec.remindMs = millis();
+  strlcpy(pauseReason, dec.msg, sizeof(pauseReason));
+  String opts = optsText(dec.opts);
+  if (dec.code == DC_TINDAKAN) logf(LOG_NOTIF, "%s. Buka dashboard: %s", dec.msg, opts.c_str());
+  else logf(LOG_ERROR, "Menunggu keputusan: %s. Buka dashboard: %s", dec.msg, opts.c_str());
+}
+
+static void applyDecision(uint8_t choice) {
+  const Tahap& t = job.t[idx];
+  uint8_t code = dec.code;
+  char msg[72];
+  strlcpy(msg, dec.msg, sizeof(msg));
+  dec.code = DC_NONE;
+  pauseReason[0] = 0;
+  mstate = MS_RUNNING;
+  switch (choice) {
+    case OP_BATAL:
+      logf(LOG_WARN, "Keputusan: Batal");
+      endProgram(RES_STOPPED, "dibatalkan oleh pengguna");
+      return;
+    case OP_ULANG:
+      logf(LOG_STEP, "Keputusan: Ulang Tahap");
+      stepInit();
+      return;
+    case OP_BUANG:
+      logf(LOG_INFO, "Keputusan: buang air dulu lalu isi");
+      memset(&R, 0, sizeof(R));
+      fillDrainFirst();
+      return;
+    case OP_PAKAI:
+      logf(LOG_INFO, "Keputusan: pakai air yang ada, pengisian dilewati");
+      stepFinished();
+      return;
+    case OP_LANJUT:
+      logf(LOG_WARN, "Keputusan: Lanjut meski %s", msg);
+      if (code == DC_BUANG_GAGAL && t.type == TH_ISI) {   // pembuangan pra-isi gagal: lanjut ke pengisian
+        SR r = fillStartValve();
+        if (r == SR_FAIL) endProgram(RES_ERROR, failMsg);
+      } else if (code == DC_SPIN_PENUH) {                  // spin walau air masih penuh
+        if (relaySet(R_SPIN, true)) {
+          R.phase = 1;
+          R.left = minToMs(t.lama);
+          setDetail("Spin");
+        } else {
+          endProgram(RES_ERROR, "Relay spin ditolak interlock");
+        }
+      } else {
+        stepFinished();
+      }
+      return;
+  }
+}
+
+// Hitung berapa detik harus menunggu sebelum mulai (tunda + "selesai pada jam")
+static uint32_t computeWaitSeconds(uint32_t estTotalMs, uint32_t waitSec, int finishAt) {
+  uint32_t wait = waitSec;
+  if (finishAt >= 0) {
     time_t t = time(nullptr);
     if (t < 1700000000) {
       logf(LOG_WARN, "Jam belum sinkron, 'selesai jam' diabaikan");
@@ -584,91 +718,121 @@ static uint32_t computeWaitSeconds(uint32_t estTotalMs) {
       struct tm lt;
       localtime_r(&t, &lt);
       int nowSec = lt.tm_hour * 3600 + lt.tm_min * 60 + lt.tm_sec;
-      int diff = cfg.finishAt * 60 - nowSec;
+      int diff = finishAt * 60 - nowSec;
       if (diff <= 0) diff += 86400;
       int est = (int)((uint64_t)estTotalMs * TIME_SCALE / 1000);
       if (diff - est > 0) {
         wait = diff - est;
       } else {
-        logf(LOG_WARN, "Tidak sempat selesai tepat waktu, proses dimulai sekarang");
+        logf(LOG_WARN, "Tidak sempat selesai tepat waktu, Proses dimulai sekarang");
       }
     }
-    S.finishAt = -1;   // sekali pakai
-    settingsSave();
   }
   return wait;
 }
 
-static void startProgram(uint8_t id, uint8_t arg, int resumeIdx) {
-  cfg = S;
-  uint8_t groups = 1;
-  uint8_t n = buildProgram(id, cfg, arg, prog, groups);
-  if (n == 0) {
-    if (id == PRG_CUSTOM) logf(LOG_WARN, "Custom proses slot %u kosong atau tidak ditemukan", (unsigned)(arg + 1));
-    else logf(LOG_WARN, "%s tidak dilakukan (waktu/sesi diatur 0)", programName(id));
-    return;
-  }
-  if (resumeIdx >= n) {
-    logf(LOG_ERROR, "Data pemulihan tidak cocok dengan program");
-    resumeClear();
-    return;
-  }
-  progId = id;
-  progArg = arg;
-  progNameBuf[0] = 0;
-  if (id == PRG_CUSTOM) {
-    CustomProc cp;
-    if (customLoad(arg, cp)) strlcpy(progNameBuf, cp.name, sizeof(progNameBuf));
-  }
-  if (!progNameBuf[0]) strlcpy(progNameBuf, programName(id), sizeof(progNameBuf));
-  progGroups = groups;
-  progN = n;
-  waitOffset = 0;
+static void commonStart(int resumeIdx, uint32_t waitSec) {
   progTotalEst = 0;
-  for (uint8_t i = 0; i < n; i++) progTotalEst += estimateStepMs(prog[i]);
-
-  if (resumeIdx < 0 && !programIsTest(id)) {
-    uint32_t waitSec = computeWaitSeconds(progTotalEst);
-    if (waitSec > 0 && progN < MAX_STEPS) {
-      memmove(prog + 1, prog, progN * sizeof(Step));
-      prog[0] = Step{ST_WAIT, 0, 0, KIND_TUNGGU, waitSec};
-      progN++;
-      waitOffset = 1;
-      progTotalEst += secToMs(waitSec);
-      logf(LOG_INFO, "Proses ditunda %lu menit %lu detik", (unsigned long)(waitSec / 60), (unsigned long)(waitSec % 60));
-    }
-  }
-  if (!programIsTest(id)) resumePending = false;
+  for (uint8_t i = 0; i < job.count; i++) progTotalEst += estimateStepMs(job.t[i]);
+  resumePending = false;
   idx = resumeIdx >= 0 ? (uint8_t)resumeIdx : 0;
   mstate = MS_RUNNING;
+  dec.code = DC_NONE;
   progStartMs = millis();
   time_t now = time(nullptr);
   progStartEpoch = now > 1700000000 ? (uint32_t)now : 0;
   progMotorStart = relayMotorSeconds();
   pauseReason[0] = 0;
-  logf(LOG_STEP, "Program %s %s (%u langkah)", progNameBuf, resumeIdx >= 0 ? "dilanjutkan" : "dimulai", progN);
+  waitingStart = false;
+  if (waitSec > 0) {
+    waitingStart = true;
+    waitLeft = secToMs(waitSec);
+    progTotalEst += waitLeft;
+    setDetail("Menunggu jam mulai");
+    logf(LOG_INFO, "Proses ditunda %lu menit %lu detik", (unsigned long)(waitSec / 60), (unsigned long)(waitSec % 60));
+  }
+}
+
+static void startProses(uint8_t slot, uint32_t waitSec, int finishAt, int resumeIdx) {
+  if (slot >= PROSES_SLOTS || !prosesLoad(slot, job)) {
+    logf(LOG_WARN, "Proses slot %u kosong atau rusak", (unsigned)slot + 1);
+    memset(&job, 0, sizeof(job));
+    return;
+  }
+  if (resumeIdx >= job.count || (resumeIdx >= 0 && job.rev != resumeInfo.rev)) {
+    logf(LOG_ERROR, "Data pemulihan tidak cocok dengan Proses");
+    resumeClear();
+    resumePending = false;
+    return;
+  }
+  jobSlot = slot;
+  jobRev = job.rev;
+  jobManual = jobTest = false;
+  uint32_t est = 0;
+  for (uint8_t i = 0; i < job.count; i++) est += estimateStepMs(job.t[i]);
+  uint32_t wait = resumeIdx < 0 ? computeWaitSeconds(est, waitSec, finishAt) : 0;
+  commonStart(resumeIdx, wait);
+  logf(LOG_STEP, "Proses %s %s (%u Tahap)", job.name, resumeIdx >= 0 ? "dilanjutkan" : "dimulai", (unsigned)job.count);
+  if (!waitingStart) stepBegin();
+}
+
+static void startSingle(const Tahap& t, const char* name, bool test) {
+  memset(&job, 0, sizeof(job));
+  strlcpy(job.name, name, sizeof(job.name));
+  job.t[0] = t;
+  job.count = 1;
+  jobSlot = NO_SLOT;
+  jobRev = 0;
+  jobManual = true;
+  jobTest = test;
+  if (resumePending) {   // memulai kerja baru menggugurkan tawaran pemulihan
+    resumePending = false;
+    resumeClear();
+  }
+  commonStart(-1, 0);
+  logf(LOG_STEP, "Proses %s dimulai (1 Tahap)", job.name);
+  stepBegin();
+}
+
+static void startRelaySeq(uint8_t secs) {
+  memset(&job, 0, sizeof(job));
+  strlcpy(job.name, "Kalibrasi relay", sizeof(job.name));
+  for (uint8_t r = 0; r < R_COUNT; r++) {
+    Tahap& t = job.t[job.count++];
+    memset(&t, 0, sizeof(t));
+    t.type = TH_UJI_RELAY;
+    t.mode = r;
+    t.detik = secs ? secs : 3;
+  }
+  jobSlot = NO_SLOT;
+  jobRev = 0;
+  jobManual = false;
+  jobTest = true;
+  if (resumePending) {
+    resumePending = false;
+    resumeClear();
+  }
+  commonStart(-1, 0);
+  logf(LOG_STEP, "Proses %s dimulai (%u Tahap)", job.name, (unsigned)job.count);
   stepBegin();
 }
 
 // ============================================================================
-// Eksekusi tick langkah
+// Eksekusi tick Tahap
 // ============================================================================
 static SR tickStep(uint32_t dt) {
-  const Step& st = prog[idx];
-  switch (st.type) {
-    case ST_WAIT:
-      if (R.left <= dt) return SR_DONE;
-      R.left -= dt;
-      return SR_CONTINUE;
-    case ST_FILL: return fillTick(dt);
-    case ST_AGITATE: return agitateTick(dt);
-    case ST_SOAK: {
+  const Tahap& t = job.t[idx];
+  switch (t.type) {
+    case TH_ISI: return fillTick(t, dt);
+    case TH_BUANG: return drainTick(dt);
+    case TH_PUTAR: return agitateTick(dt);
+    case TH_SOAK: {
       if (R.sub == 0) {
         SR r = agitateTick(dt);
         if (r == SR_DONE) {
           R.sub = 1;
-          R.left = minToMs(4);
-          setDetail("Soak: rendam (sesi %u/%lu)", R.attempt + 1, (unsigned long)st.a);
+          R.left = minToMs(t.rendam);
+          setDetail("Soak: rendam (sesi %u/%u)", (unsigned)R.attempt + 1, (unsigned)t.ulangi);
         }
         return r == SR_DONE ? SR_CONTINUE : r;
       }
@@ -679,13 +843,36 @@ static SR tickStep(uint32_t dt) {
       R.sub = 0;
       R.attempt++;   // jumlah sesi selesai
       logf(LOG_INFO, "Soak ke %u selesai", R.attempt);
-      if (R.attempt >= st.a) return SR_DONE;
-      R.left = minToMs(1);
-      agitateStart(st.flag);
+      if (R.attempt >= t.ulangi) return SR_DONE;
+      R.left = minToMs(t.putar);
+      agitateStart(t.pola);
       return SR_CONTINUE;
     }
-    case ST_PERFUME:
-      if (R.phase == 1) return SR_DONE;
+    case TH_RENDAM:
+    case TH_TUNGGU:
+      if (R.left <= dt) return SR_DONE;
+      R.left -= dt;
+      return SR_CONTINUE;
+    case TH_SPIN:
+      if (R.phase == 0) {   // sensor harus menunjukkan air sudah turun sebelum spin
+        if (sensorStable(false, stableMs())) {
+          if (!relaySet(R_SPIN, true)) return failStep("Relay spin ditolak interlock");
+          R.phase = 1;
+          R.left = minToMs(t.lama);
+          setDetail("Spin");
+          return SR_CONTINUE;
+        }
+        if (R.left <= dt) return decide(DC_SPIN_PENUH, OP_ULANG | OP_LANJUT | OP_BATAL, "Air masih penuh sebelum spin");
+        R.left -= dt;
+        return SR_CONTINUE;
+      }
+      if (R.left <= dt) {
+        relaySet(R_SPIN, false);
+        return SR_DONE;
+      }
+      R.left -= dt;
+      return SR_CONTINUE;
+    case TH_PEWANGI:
       if (R.left <= dt) {
         relaySet(R_PERFUME, false);
         logf(LOG_INFO, "Pewangi selesai dimasukkan!");
@@ -693,34 +880,44 @@ static SR tickStep(uint32_t dt) {
       }
       R.left -= dt;
       return SR_CONTINUE;
-    case ST_DRAIN: return drainTick(dt);
-    case ST_SPIN:
+    case TH_CEK: {
+      bool want = t.mode == CEK_PENUH;
+      if (sensorStable(want, stableMs())) return SR_DONE;
       if (R.left <= dt) {
-        relaySet(R_SPIN, false);
+        return decide(DC_CEK_GAGAL, OP_ULANG | OP_LANJUT | OP_BATAL,
+                      want ? "Air belum mencukupi (belum penuh)" : "Air masih penuh");
+      }
+      R.left -= dt;
+      return SR_CONTINUE;
+    }
+    case TH_TINDAKAN:
+      return decide(DC_TINDAKAN, OP_LANJUT | OP_BATAL, t.pesan);
+    case TH_NOTIF:
+      return SR_DONE;
+    case TH_BUANG_MANUAL:
+      if (R.phase == 9) return failStep("Valve buang ditolak interlock");
+      if (R.left <= dt) {
+        relaySet(R_DRAIN, false);
+        if (sensorRaw()) logf(LOG_WARN, "Air masih penuh setelah pembuangan manual");
         return SR_DONE;
       }
       R.left -= dt;
       return SR_CONTINUE;
-    case ST_CHECK:
-      if (sensorStable(true, stableMs())) return SR_DONE;
-      if (R.left <= dt) return failStep("Air belum mencukupi!");
-      R.left -= dt;
-      return SR_CONTINUE;
-    case ST_TEST:
+    case TH_UJI_RELAY:
       if (R.left > dt) {
         R.left -= dt;
         return SR_CONTINUE;
       }
       if (R.phase == 0) {
-        if (!relaySet((RelayId)st.a, true)) return failStep("Relay ditolak interlock saat uji");
-        logf(LOG_INFO, "Uji relay %s: ON", relayName((RelayId)st.a));
-        setDetail("Uji relay %s (menyala)", relayName((RelayId)st.a));
+        if (!relaySet((RelayId)t.mode, true)) return failStep("Relay ditolak interlock saat uji");
+        logf(LOG_INFO, "Uji relay %s: ON", relayName((RelayId)t.mode));
+        setDetail("Uji relay %s (menyala)", relayName((RelayId)t.mode));
         R.phase = 1;
-        R.left = secToMs(st.flag ? st.flag : 2);
+        R.left = secToMs(t.detik ? t.detik : 2);
         return SR_CONTINUE;
       }
-      relaySet((RelayId)st.a, false);
-      logf(LOG_INFO, "Uji relay %s: OFF", relayName((RelayId)st.a));
+      relaySet((RelayId)t.mode, false);
+      logf(LOG_INFO, "Uji relay %s: OFF", relayName((RelayId)t.mode));
       return SR_DONE;
   }
   return SR_DONE;
@@ -729,15 +926,50 @@ static SR tickStep(uint32_t dt) {
 // ============================================================================
 // Perintah
 // ============================================================================
+static bool rejectIfBusy() {
+  if (mstate != MS_IDLE || holdFlag) {
+    logf(LOG_WARN, "Perintah ditolak: mesin sedang %s", holdFlag ? "memperbarui firmware" : "bekerja");
+    return true;
+  }
+  return false;
+}
+
 static void processCmd(const MachineCmd& c) {
   switch (c.type) {
     case MC_RUN:
-      if (mstate != MS_IDLE || holdFlag) {
-        logf(LOG_WARN, "Perintah ditolak: mesin sedang %s", holdFlag ? "memperbarui firmware" : "bekerja");
-        break;
-      }
+      if (rejectIfBusy()) break;
       relayAllOff();   // batalkan kontrol relay manual yang mungkin masih menyala
-      startProgram(c.arg, c.arg2, -1);
+      if (resumePending) {
+        resumePending = false;
+        resumeClear();
+      }
+      startProses(c.arg, c.waitSec, c.finishAt, -1);
+      break;
+    case MC_RUN_MANUAL: {
+      if (rejectIfBusy()) break;
+      relayAllOff();
+      char name[28];
+      snprintf(name, sizeof(name), "Manual: %s", tahapLabel(c.tahap.type));
+      startSingle(c.tahap, name, false);
+      break;
+    }
+    case MC_RUN_RELAYTEST: {
+      if (rejectIfBusy() || c.arg >= R_COUNT) break;
+      relayAllOff();
+      Tahap t;
+      memset(&t, 0, sizeof(t));
+      t.type = TH_UJI_RELAY;
+      t.mode = c.arg;
+      t.detik = c.arg2 ? c.arg2 : 2;
+      char name[28];
+      snprintf(name, sizeof(name), "Uji relay %s", relayName((RelayId)c.arg));
+      startSingle(t, name, true);
+      break;
+    }
+    case MC_RUN_RELAYSEQ:
+      if (rejectIfBusy()) break;
+      relayAllOff();
+      startRelaySeq(c.arg);
       break;
     case MC_STOP:
       relayAllOff();
@@ -746,31 +978,48 @@ static void processCmd(const MachineCmd& c) {
       } else if (resumePending) {
         resumePending = false;
         resumeClear();
-        logf(LOG_INFO, "Pemulihan proses dibatalkan");
+        logf(LOG_INFO, "Pemulihan Proses dibatalkan");
       }
       break;
     case MC_PAUSE:
-      if (mstate == MS_RUNNING) doPause("", false);
-      else logf(LOG_WARN, "Tidak ada proses yang berjalan");
+      if (mstate == MS_RUNNING) doPause();
+      else logf(LOG_WARN, "Tidak ada Proses yang berjalan");
       break;
     case MC_RESUME:
       if (mstate == MS_PAUSED) {
         doResume();
+      } else if (mstate == MS_DECIDE) {
+        logf(LOG_WARN, "Mesin menunggu keputusan: pilih %s", optsText(dec.opts).c_str());
       } else if (mstate == MS_IDLE && resumePending && !holdFlag) {
-        startProgram(resumeInfo.program, resumeInfo.arg, resumeInfo.stepIndex);
+        relayAllOff();
+        startProses(resumeInfo.slot, 0, -1, resumeInfo.stepIndex);
       } else {
-        logf(LOG_WARN, "Tidak ada proses yang sedang dijeda");
+        logf(LOG_WARN, "Tidak ada Proses yang sedang dijeda");
       }
       break;
     case MC_SKIP:
       if (mstate == MS_IDLE) {
-        logf(LOG_WARN, "Tidak ada proses yang berjalan");
+        logf(LOG_WARN, "Tidak ada Proses yang berjalan");
+      } else if (waitingStart) {
+        waitingStart = false;
+        logf(LOG_STEP, "Penantian dilewati, Proses dimulai sekarang");
+        stepBegin();
       } else {
         relayAllOff();
         logf(LOG_STEP, "Tahap dilewati");
         mstate = MS_RUNNING;
+        dec.code = DC_NONE;
         pauseReason[0] = 0;
         stepFinished();
+      }
+      break;
+    case MC_DECIDE:
+      if (mstate != MS_DECIDE) {
+        logf(LOG_WARN, "Tidak ada keputusan yang menunggu");
+      } else if (!(dec.opts & c.arg) || !c.arg) {
+        logf(LOG_WARN, "Pilihan tidak tersedia untuk keputusan ini");
+      } else {
+        applyDecision(c.arg);
       }
       break;
     case MC_RELAY:
@@ -789,7 +1038,7 @@ static void processCmd(const MachineCmd& c) {
       if (resumePending) {
         resumePending = false;
         resumeClear();
-        logf(LOG_INFO, "Pemulihan proses dibatalkan");
+        logf(LOG_INFO, "Pemulihan Proses dibatalkan");
       }
       break;
   }
@@ -799,25 +1048,28 @@ static void processCmd(const MachineCmd& c) {
 // Snapshot status
 // ============================================================================
 static uint32_t currentStepLeftMs() {
-  const Step& st = prog[idx];
-  switch (st.type) {
-    case ST_WAIT: case ST_AGITATE: case ST_SPIN: case ST_CHECK:
+  if (waitingStart) return waitLeft;
+  const Tahap& t = job.t[idx];
+  switch (t.type) {
+    case TH_RENDAM: case TH_TUNGGU: case TH_PUTAR: case TH_CEK:
       return R.left;
-    case ST_TEST:
-      return R.left + (R.phase == 0 ? secToMs(st.flag ? st.flag : 2) : 0);
-    case ST_PERFUME:
-      return R.phase == 1 ? 0 : R.left;
-    case ST_SOAK: {
+    case TH_SPIN:
+      return R.left + (R.phase == 0 ? minToMs(t.lama) : 0);
+    case TH_UJI_RELAY:
+      return R.left + (R.phase == 0 ? secToMs(t.detik ? t.detik : 2) : 0);
+    case TH_PEWANGI: case TH_BUANG_MANUAL:
+      return R.left;
+    case TH_SOAK: {
       uint32_t doneSessions = R.attempt;
-      uint32_t remainingAfter = st.a > doneSessions + 1 ? st.a - doneSessions - 1 : 0;
-      return R.left + (R.sub == 0 ? minToMs(4) : 0) + remainingAfter * minToMs(5);
+      uint32_t remainingAfter = t.ulangi > doneSessions + 1 ? t.ulangi - doneSessions - 1 : 0;
+      return R.left + (R.sub == 0 ? minToMs(t.rendam) : 0) + remainingAfter * minToMs(t.putar + t.rendam);
     }
-    case ST_FILL: {
-      uint32_t est = estimateStepMs(st);
+    case TH_ISI: {
+      uint32_t est = estimateStepMs(t);
       return est > R.elapsed ? est - R.elapsed : 0;
     }
-    case ST_DRAIN: {
-      uint32_t est = estimateStepMs(st);
+    case TH_BUANG: {
+      uint32_t est = estimateStepMs(t);
       return est > D.pullElapsed ? est - D.pullElapsed : 0;
     }
   }
@@ -828,24 +1080,33 @@ static void publishStatus() {
   MachineStatus s;
   memset(&s, 0, sizeof(s));
   s.state = mstate;
+  s.slot = NO_SLOT;
+  s.resumeSlot = NO_SLOT;
   s.uptimeSec = millis() / 1000;
   s.waterRaw = sensorRaw();
   s.waterState = sensorStable(true, stableMs()) ? 1 : sensorStable(false, stableMs()) ? 0 : 2;
   s.resumePending = resumePending;
+  if (resumePending) s.resumeSlot = resumeInfo.slot;
   s.relayFault = relayFaulted();
   strlcpy(s.resumeInfo, resumeText, sizeof(s.resumeInfo));
   for (int i = 0; i < R_COUNT; i++) s.relays[i] = relayIsOn((RelayId)i);
   if (mstate != MS_IDLE) {
-    s.program = progId;
-    strlcpy(s.name, progNameBuf, sizeof(s.name));
-    s.stepIndex = idx + 1;
-    s.stepCount = progN;
-    stageLabelFor(progId, prog[idx], progGroups, s.stage, sizeof(s.stage));
-    strlcpy(s.detail, detail, sizeof(s.detail));
+    s.slot = jobManual || jobTest ? NO_SLOT : jobSlot;
+    s.manual = jobManual || jobTest;
+    strlcpy(s.name, job.name, sizeof(s.name));
+    s.stepIndex = waitingStart ? 0 : idx + 1;
+    s.stepCount = job.count;
+    stageLabel(s.stage, sizeof(s.stage));
+    if (!waitingStart) strlcpy(s.tahap, job.t[idx].type == TH_UJI_RELAY ? "uji" : tahapKey(job.t[idx].type), sizeof(s.tahap));
+    strlcpy(s.detail, detailTxt, sizeof(s.detail));
     strlcpy(s.pauseReason, pauseReason, sizeof(s.pauseReason));
+    if (mstate == MS_DECIDE) {
+      s.decision = dec.code;
+      s.decisionOpts = dec.opts;
+    }
     uint32_t cur = currentStepLeftMs();
     uint32_t total = cur;
-    for (uint8_t i = idx + 1; i < progN; i++) total += estimateStepMs(prog[i]);
+    for (uint8_t i = waitingStart ? 0 : idx + 1; i < job.count; i++) total += estimateStepMs(job.t[i]);
     s.stepLeftSec = cur / 1000;
     s.totalLeftSec = total / 1000;
     if (progTotalEst > 0) {
@@ -873,9 +1134,12 @@ static void machineLoopOnce(uint32_t& lastTick) {
   uint32_t dt = now - lastTick;
   lastTick = now;
 
-  // Failsafe relay (interlock dilanggar / motor menyala terlalu lama)
+  // Failsafe relay (interlock dilanggar / motor atau pompa menyala terlalu lama)
   uint8_t guard = relayGuard();
-  if (guard && mstate != MS_IDLE) endProgram(RES_ERROR, guard == 2 ? "pelanggaran interlock relay" : "motor menyala terlalu lama");
+  if (guard && mstate != MS_IDLE)
+    endProgram(RES_ERROR, guard == 2   ? "pelanggaran interlock relay"
+                          : guard == 3 ? "pompa pewangi menyala terlalu lama"
+                                       : "motor menyala terlalu lama");
 
   // Relay manual otomatis mati setelah MANUAL_MAX_ON_MS (hanya saat IDLE)
   for (int i = 0; i < R_COUNT; i++) {
@@ -889,14 +1153,26 @@ static void machineLoopOnce(uint32_t& lastTick) {
       logf(LOG_WARN, "Relay %s otomatis dimatikan (batas waktu manual)", relayName((RelayId)i));
     }
   }
-  if (mstate == MS_RUNNING) {
+
+  if (mstate == MS_RUNNING && waitingStart) {
+    if (waitLeft <= dt) {
+      waitingStart = false;
+      logf(LOG_STEP, "Waktu mulai tiba");
+      stepBegin();
+    } else {
+      waitLeft -= dt;
+    }
+  } else if (mstate == MS_RUNNING) {
     SR r = tickStep(dt);
     switch (r) {
       case SR_DONE: stepFinished(); break;
-      case SR_PAUSE: doPause(pauseReason, true); break;
+      case SR_DECIDE: enterDecide(); break;
       case SR_FAIL: endProgram(RES_ERROR, failMsg); break;
       default: break;
     }
+  } else if (mstate == MS_DECIDE && now - dec.remindMs >= minToMs(DECISION_REMIND_MIN)) {
+    dec.remindMs = now;
+    logf(LOG_ERROR, "Masih menunggu keputusan: %s. Buka dashboard: %s", dec.msg, optsText(dec.opts).c_str());
   }
   publishStatus();
 }
@@ -907,11 +1183,33 @@ void machineHostTick() { machineLoopOnce(hostLastTick); }
 void machineHostReset() {
   mstate = MS_IDLE;
   resumePending = false;
-  idx = progN = 0;
+  waitingStart = false;
+  idx = 0;
+  memset(&job, 0, sizeof(job));
+  jobSlot = NO_SLOT;
+  jobManual = jobTest = false;
+  dec.code = DC_NONE;
   memset(&R, 0, sizeof(R));
   memset(&D, 0, sizeof(D));
-  detail[0] = pauseReason[0] = failMsg[0] = 0;
+  detailTxt[0] = pauseReason[0] = failMsg[0] = 0;
   hostLastTick = millis();
+}
+// Meniru boot setelah listrik padam: baca ulang data pemulihan dari penyimpanan.
+void machineHostReboot() {
+  machineHostReset();
+  resumeText[0] = 0;
+  if (resumeLoad(resumeInfo)) {
+    if (resumeInfo.slot < PROSES_SLOTS && prosesLoad(resumeInfo.slot, job) && job.rev == resumeInfo.rev &&
+        resumeInfo.stepIndex < job.count) {
+      snprintf(resumeText, sizeof(resumeText), "%s \xE2\x80\xA2 Tahap %u: %s", job.name, (unsigned)resumeInfo.stepIndex + 1,
+               tahapLabel(job.t[resumeInfo.stepIndex].type));
+      resumePending = true;
+      logf(LOG_WARN, "Listrik sempat padam saat %s", resumeText);
+    } else {
+      resumeClear();
+    }
+  }
+  memset(&job, 0, sizeof(job));
 }
 #endif
 
@@ -930,22 +1228,21 @@ void machineBegin() {
   cmdQueue = xQueueCreate(8, sizeof(MachineCmd));
   statusMutex = xSemaphoreCreateMutex();
   memset(&snap, 0, sizeof(snap));
-  cfg = S;
+  memset(&job, 0, sizeof(job));
 
   // Pemulihan listrik padam: hanya menawarkan, tidak pernah lanjut otomatis.
+  // Dibatalkan bila Proses sudah berubah (rev berbeda) atau hilang.
   if (resumeLoad(resumeInfo)) {
-    Step tmp[MAX_STEPS];
-    uint8_t groups = 1;
-    uint8_t n = buildProgram(resumeInfo.program, S, resumeInfo.arg, tmp, groups);
-    if (resumeInfo.program < PRG_COUNT && resumeInfo.stepIndex < n) {
-      char stage[28];
-      stageLabelFor(resumeInfo.program, tmp[resumeInfo.stepIndex], groups, stage, sizeof(stage));
-      snprintf(resumeText, sizeof(resumeText), "%s", stage);
+    if (resumeInfo.slot < PROSES_SLOTS && prosesLoad(resumeInfo.slot, job) && job.rev == resumeInfo.rev &&
+        resumeInfo.stepIndex < job.count) {
+      snprintf(resumeText, sizeof(resumeText), "%s \xE2\x80\xA2 Tahap %u: %s", job.name, (unsigned)resumeInfo.stepIndex + 1,
+               tahapLabel(job.t[resumeInfo.stepIndex].type));
       resumePending = true;
-      logf(LOG_WARN, "Listrik sempat padam saat %s", stage);
+      logf(LOG_WARN, "Listrik sempat padam saat %s", resumeText);
     } else {
       resumeClear();
     }
+    memset(&job, 0, sizeof(job));
   }
 
 #if ESP_ARDUINO_VERSION_MAJOR >= 3
@@ -965,6 +1262,25 @@ bool machinePost(const MachineCmd& cmd) {
   return xQueueSend(cmdQueue, &cmd, 0) == pdTRUE;
 }
 
+bool machineStartProses(uint8_t slot, uint32_t waitSec, int finishAtMin) {
+  MachineCmd c;
+  memset(&c, 0, sizeof(c));
+  c.type = MC_RUN;
+  c.arg = slot;
+  c.waitSec = waitSec;
+  c.finishAt = (int16_t)finishAtMin;
+  return machinePost(c);
+}
+
+bool machineRunManual(const Tahap& t) {
+  MachineCmd c;
+  memset(&c, 0, sizeof(c));
+  c.type = MC_RUN_MANUAL;
+  c.finishAt = -1;
+  c.tahap = t;
+  return machinePost(c);
+}
+
 void machineGetStatus(MachineStatus& out) {
   if (xSemaphoreTake(statusMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
     out = snap;
@@ -980,6 +1296,13 @@ bool machineIsIdle() {
   return s.state == MS_IDLE;
 }
 
+bool machineSlotInUse(uint8_t slot) {
+  MachineStatus s;
+  machineGetStatus(s);
+  if (s.state != MS_IDLE && s.slot == slot) return true;
+  return s.resumePending && s.resumeSlot == slot;
+}
+
 void machineHold(bool hold) { holdFlag = hold; }
 
 String machineStatusLine() {
@@ -992,6 +1315,7 @@ String machineStatusLine() {
   } else {
     out = String(s.stage) + " \xE2\x80\xA2 " + s.detail;
     if (s.state == MS_PAUSED) out = "\xE2\x8F\xB8 DIJEDA \xE2\x80\xA2 " + String(s.pauseReason[0] ? s.pauseReason : "oleh pengguna");
+    if (s.state == MS_DECIDE) out = "\xE2\x9D\x93 MENUNGGU KEPUTUSAN \xE2\x80\xA2 " + String(s.pauseReason);
   }
   out += "\n\xF0\x9F\x92\xA7 Air: ";
   out += waterTxt[s.waterState];

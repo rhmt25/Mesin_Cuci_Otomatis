@@ -7,6 +7,8 @@
 #include "Preferences.h"
 #include "logger.h"
 #include "machine.h"
+#include "proses_store.h"
+#include "tahap.h"
 #include "backup.h"
 #include "net_policy.h"
 #include "remote_policy.h"
@@ -18,6 +20,7 @@ void relayHostForce(RelayId id, bool on);
 void relayHostUnfault();
 void machineHostTick();
 void machineHostReset();
+void machineHostReboot();
 
 // ------------------------------------------------------------------ stub ----
 static uint32_t g_ms = 100000;
@@ -84,11 +87,13 @@ static void model(uint32_t dt) {
   g_raw = g_level >= 95.0;   // sensor hanya di paling atas: hanya tahu penuh / tidak penuh
 }
 
+static uint32_t g_perfumeOnMs = 0;   // total relay pewangi menyala (ms skala)
 static long g_violations = 0;   // pelanggaran invarian keselamatan di SEMUA skenario
 static void tick() {
   g_ms += TICK_MS;
   model(TICK_MS);
   machineHostTick();
+  if (relayIsOn(R_PERFUME)) g_perfumeOnMs += TICK_MS;
   if (relayIsOn(R_LEFT) && relayIsOn(R_RIGHT)) g_violations++;                       // kiri+kanan
   if (relayIsOn(R_FILL) && relayIsOn(R_DRAIN)) g_violations++;                       // isi+buang
   if (relayIsOn(R_DRAIN) && (relayIsOn(R_LEFT) || relayIsOn(R_RIGHT))) g_violations++;  // buang+motor
@@ -108,12 +113,15 @@ static int count(const std::string& sub, int minLevel = 0) {
   for (auto& l : g_log) if (l.level >= minLevel && l.text.find(sub) != std::string::npos) n++;
   return n;
 }
-static void post(uint8_t type, uint8_t arg = 0, uint8_t arg2 = 0) { MachineCmd c{type, arg, arg2}; machinePost(c); }
+static void post(uint8_t type, uint8_t arg = 0, uint8_t arg2 = 0) { MachineCmd c; memset(&c, 0, sizeof(c)); c.type = type; c.arg = arg; c.arg2 = arg2; c.finishAt = -1; machinePost(c); }
 static bool anyRelayOn() { for (int i = 0; i < R_COUNT; i++) if (relayIsOn((RelayId)i)) return true; return false; }
 
 static void resetWorld() {
   relayHostUnfault();
   Preferences::db().clear();
+  prosesStoreHostReset();
+  prosesStoreBegin();
+  g_perfumeOnMs = 0;
   g_log.clear();
   g_level = 0; g_noWater = false; g_drainBroken = false; g_raw = false; g_fillOnMs = 0;
   g_pullFail = 0; g_drainPrev = false; g_pullEffective = true; g_drainOnMs = 0;
@@ -128,143 +136,6 @@ static void resetWorld() {
 // ------------------------------------------------------------------ uji ----
 static int failures = 0, checks = 0;
 #define CHECK(cond, msg) do { checks++; if (!(cond)) { failures++; printf("  GAGAL: %s  (%s:%d)\n", msg, __FILE__, __LINE__); } else printf("  ok: %s\n", msg); } while (0)
-
-static void t1_fullNormal() {
-  printf("[T1] Full proses Normal, air penuh tepat waktu\n");
-  resetWorld();
-  post(MC_RUN, PRG_NORMAL);
-  bool done = runUntil(idle, 600000);
-  CHECK(done, "program selesai");
-  CHECK(count("Proses Normal selesai", LOG_DONE) == 1, "notifikasi DONE");
-  int errs = 0; for (auto& l : g_log) if (l.level == LOG_ERROR) errs++;
-  CHECK(errs == 0, "tidak ada ERROR/interlock");
-  CHECK(!anyRelayOn(), "semua relay mati di akhir");
-  CHECK(ST.histCount == 1 && ST.hist[0].result == RES_DONE, "riwayat tercatat");
-  CHECK(C.nFill >= 1, "kalibrasi isi tersimpan");
-  CHECK(count("Mengisi air...") == 3, "3 kali isi air (cuci, bilas, bilas+pewangi)");
-  CHECK(count("Pewangi selesai") == 1, "pewangi masuk sekali");
-  printf("  (durasi simulasi %.1f dtk = %.0f menit nyata)\n", (g_ms - 100000) / 1000.0, (g_ms - 100000) * TIME_SCALE / 60000.0);
-}
-
-static void t2_noWater() {
-  printf("[T2] Air tidak pernah penuh -> coba ulang 3x lalu jeda; lanjutkan berfungsi\n");
-  resetWorld();
-  g_noWater = true;
-  post(MC_RUN, PRG_WATERIN);
-  bool p = runUntil(paused, 1200000);
-  CHECK(p, "berakhir dijeda");
-  CHECK(count("Coba ulang") == 3, "tepat 3 kali coba ulang");
-  CHECK(std::string(st().pauseReason).find("Air tidak terisi") != std::string::npos, "alasan jeda benar");
-  CHECK(!anyRelayOn(), "valve tertutup saat dijeda");
-  g_noWater = false;
-  post(MC_RESUME);
-  CHECK(runUntil(idle, 600000), "setelah air ada & Lanjutkan -> selesai");
-}
-
-static void t3_drainBroken() {
-  printf("[T3] Air tetap terdeteksi setelah buang -> unjam -> ulang sesi -> jeda\n");
-  resetWorld();
-  S.wash = 1; S.soak = 0;
-  post(MC_RUN, PRG_WASH);
-  g_drainBroken = true;
-  bool p = runUntil(paused, 1200000);
-  CHECK(p, "dijeda");
-  CHECK(count("Unjam ") == 2 * 3, "unjam 2x per sesi, 3 sesi");
-  CHECK(count("Mengulangi sesi pembuangan") == 2, "sesi diulang 2x");
-  CHECK(std::string(st().pauseReason).find("Pembuangan gagal") != std::string::npos, "alasan: pembuangan gagal");
-  CHECK(!anyRelayOn(), "relay mati saat dijeda");
-  g_drainBroken = false;
-  post(MC_RESUME);
-  CHECK(runUntil(idle, 600000), "valve diperbaiki, Lanjutkan -> selesai");
-}
-
-static void t4_stop() {
-  printf("[T4] Stop di tengah agitasi -> semua relay mati < 2 dtk\n");
-  resetWorld();
-  S.wash = 5;
-  post(MC_RUN, PRG_WASH);
-  runUntil([] { return relayIsOn(R_LEFT) || relayIsOn(R_RIGHT); }, 600000);
-  CHECK(relayIsOn(R_LEFT) || relayIsOn(R_RIGHT), "motor sedang berputar");
-  uint32_t t0 = g_ms;
-  post(MC_STOP);
-  tick();
-  CHECK(!anyRelayOn() && idle(), "relay mati & IDLE pada tick berikutnya");
-  CHECK(g_ms - t0 < 2000 / TIME_SCALE + 100, "respons jauh < 2 dtk");
-  uint32_t resume = ST.histCount;
-  CHECK(ST.hist[(ST.histHead + 9) % 10].result == RES_STOPPED && resume == 1, "riwayat: dihentikan");
-}
-
-static void t5_pauseResume() {
-  printf("[T5] Jeda -> Lanjutkan saat agitasi: sisa waktu benar\n");
-  resetWorld();
-  S.wash = 2;
-  post(MC_RUN, PRG_WASH);
-  runUntil([] { return std::string(st().detail).find("Agitasi (kiri)") != std::string::npos; }, 600000);
-  uint32_t agitStart = g_ms;
-  runUntil([] { return false; }, 700);
-  post(MC_PAUSE);
-  tick();
-  CHECK(paused() && !anyRelayOn(), "dijeda, relay mati");
-  uint32_t pausedAt = g_ms;
-  runUntil([] { return false; }, 900);
-  uint32_t pauseLen = g_ms - pausedAt;
-  post(MC_RESUME);
-  runUntil([] { return st().stepIndex >= 3 || idle(); }, 600000);   // sampai DRAIN
-  uint32_t agitTotal = g_ms - agitStart - pauseLen;
-  printf("  (agitasi efektif %u ms, target %u ms)\n", agitTotal, (unsigned)minToMs(2));
-  CHECK(agitTotal > minToMs(2) - 150 && agitTotal < minToMs(2) + 400, "total agitasi ~2 menit skala (jeda tidak dihitung)");
-  CHECK(runUntil(idle, 600000), "program selesai");
-}
-
-static void t6_powerLoss() {
-  printf("[T6] Reset di tengah bilas -> boot relay mati + tawaran Lanjutkan\n");
-  resetWorld();
-  post(MC_RUN, PRG_NORMAL);
-  runUntil([] { return std::string(st().stage).rfind("Bilas", 0) == 0; }, 900000);
-  CHECK(std::string(st().stage).rfind("Bilas", 0) == 0, "sedang di tahap bilas");
-  // simulasi listrik padam: RAM hilang, NVS tetap
-  relayAllOff();
-  machineHostReset();
-  g_level = 100; g_raw = true;
-  settingsLoad(); calibLoad(); statsLoad();
-  machineBegin();
-  tick();
-  MachineStatus s = st();
-  CHECK(s.state == MS_IDLE && !anyRelayOn(), "boot: IDLE, relay mati");
-  CHECK(s.resumePending, "ada tawaran pemulihan");
-  printf("  (info: %s)\n", s.resumeInfo);
-  post(MC_RESUME);
-  CHECK(runUntil([] { return st().state == MS_RUNNING; }, 2000), "Lanjutkan -> berjalan");
-  CHECK(runUntil(idle, 900000), "selesai sampai akhir");
-  CHECK(!st().resumePending, "tawaran hilang setelah selesai");
-}
-
-static void t7_percent() {
-  printf("[T7] Level 50%% setelah kalibrasi\n");
-  resetWorld();
-  post(MC_RUN, PRG_WATERIN);
-  runUntil(idle, 900000);
-  double full = g_fillOnMs;
-  CHECK(C.nFill == 1, "kalibrasi dipelajari dari mode sensor");
-  g_level = 0; g_raw = false;
-  for (int i = 0; i < 20; i++) tick();
-  S.fillLevel = FILL_PERCENT; S.fillPercent = 50;
-  g_fillOnMs = 0;
-  post(MC_RUN, PRG_WATERIN);
-  runUntil(idle, 900000);
-  printf("  (isi penuh %.0f ms, isi 50%% %.0f ms)\n", full, g_fillOnMs);
-  CHECK(g_fillOnMs > full * 0.4 && g_fillOnMs < full * 0.6, "isi ~setengah waktu penuh");
-}
-
-static void t8_timeOverflowGuard() {
-  printf("[T8] Mode waktu, sensor penuh lebih awal -> berhenti (pengaman meluap)\n");
-  resetWorld();
-  S.fillLevel = FILL_TIME; S.fillTime = 30;
-  post(MC_RUN, PRG_WATERIN);
-  runUntil(idle, 900000);
-  CHECK(count("Sensor penuh sebelum waktu habis") == 1, "pengaman meluap aktif");
-  CHECK(g_fillOnMs < minToMs(30) / 2, "isi berhenti jauh sebelum 30 menit");
-}
 
 static void t9_interlock() {
   printf("[T9] Interlock\n");
@@ -283,92 +154,6 @@ static void t9_interlock() {
   CHECK(count("Interlock menolak", LOG_ERROR) == 4, "penolakan tercatat sebagai ERROR");
 }
 
-static void t10_skipAndHold() {
-  printf("[T10] Lewati tahap & perintah ditolak saat bekerja\n");
-  resetWorld();
-  post(MC_RUN, PRG_NORMAL);
-  runUntil([] { return st().stepIndex == 1 && st().state == MS_RUNNING; }, 1000);
-  int idx0 = st().stepIndex;
-  post(MC_SKIP);
-  tick();
-  CHECK(st().stepIndex == idx0 + 1, "Lewati memajukan 1 langkah");
-  post(MC_RUN, PRG_CEPAT);
-  tick();
-  CHECK(count("ditolak", LOG_WARN) >= 1, "program kedua ditolak");
-  post(MC_STOP);
-  tick();
-}
-
-static void t11_manualRelay() {
-  printf("[T11] Kontrol relay manual + batas waktu otomatis + interlock manual\n");
-  resetWorld();
-  post(MC_RELAY, R_LEFT, 1);
-  tick();
-  CHECK(relayIsOn(R_LEFT), "relay kiri menyala manual");
-  post(MC_RELAY, R_RIGHT, 1);
-  tick();
-  CHECK(!relayIsOn(R_RIGHT) && relayIsOn(R_LEFT), "kanan ditolak saat kiri menyala");
-  post(MC_RELAY, R_LEFT, 0);
-  tick();
-  CHECK(!relayIsOn(R_LEFT), "kiri dimatikan manual");
-  post(MC_RELAY, R_RIGHT, 1);
-  runUntil([] { return false; }, 40);
-  post(MC_RELAY, R_LEFT, 1);
-  tick();
-  CHECK(!(relayIsOn(R_LEFT) && relayIsOn(R_RIGHT)), "kiri tidak ikut menyala (kanan masih ON)");
-  // batas waktu manual
-  uint32_t t0 = g_ms;
-  bool off = runUntil([] { return !relayIsOn(R_RIGHT); }, 70000);
-  CHECK(off && g_ms - t0 >= 55000 && g_ms - t0 <= 62000, "relay manual otomatis mati ~60 dtk");
-  // manual ditolak saat program berjalan
-  post(MC_RUN, PRG_WASH);
-  tick();
-  post(MC_RELAY, R_SPIN, 1);
-  tick();
-  CHECK(!relayIsOn(R_SPIN), "relay manual ditolak saat mesin bekerja");
-  post(MC_STOP);
-  tick();
-  // program dimulai membatalkan relay manual
-  post(MC_RELAY, R_PERFUME, 1);
-  tick();
-  CHECK(relayIsOn(R_PERFUME), "pewangi manual ON");
-  post(MC_RUN, PRG_SPIN);
-  tick();
-  CHECK(!relayIsOn(R_PERFUME), "memulai program mematikan relay manual");
-  post(MC_STOP);
-  tick();
-}
-
-static void t12_relaySequence() {
-  printf("[T12] Uji relay berurutan otomatis\n");
-  resetWorld();
-  std::vector<int> order;
-  bool prev[R_COUNT] = {false};
-  post(MC_RUN, PRG_RELAYSEQ, 2);
-  bool done = false;
-  for (uint32_t t = 0; t < 600000 && !done; t += TICK_MS) {
-    tick();
-    for (int i = 0; i < R_COUNT; i++) {
-      bool now = relayIsOn((RelayId)i);
-      if (now && !prev[i]) order.push_back(i);
-      prev[i] = now;
-    }
-    done = idle();
-  }
-  CHECK(done, "uji berurutan selesai");
-  bool inOrder = order.size() == R_COUNT;
-  for (size_t i = 0; i < order.size(); i++) inOrder = inOrder && order[i] == (int)i;
-  CHECK(inOrder, "tiap relay menyala tepat sekali, urut kiri,kanan,isi,buang,spin,pewangi");
-  CHECK(!anyRelayOn(), "semua relay mati di akhir");
-  CHECK(ST.histCount == 0, "uji relay tidak masuk riwayat");
-  // stop di tengah uji
-  post(MC_RUN, PRG_RELAYSEQ, 5);
-  runUntil([] { return relayIsOn(R_LEFT); }, 5000);
-  post(MC_STOP);
-  tick();
-  CHECK(!anyRelayOn() && idle(), "Stop menghentikan uji berurutan");
-}
-
 static void t13_failsafe() {
   printf("[T13] Failsafe: pelanggaran interlock mengunci relay\n");
   resetWorld();
@@ -380,7 +165,7 @@ static void t13_failsafe() {
   CHECK(g_violations == before, "tidak ada tick dengan kiri+kanan menyala setelah guard");
   CHECK(relayFaulted() && st().relayFault, "relay terkunci & status fault terlapor");
   CHECK(!relaySet(R_FILL, true) && !relaySet(R_LEFT, true), "semua relay ditolak saat terkunci");
-  post(MC_RUN, PRG_SPIN);
+  post(MC_RUN_RELAYTEST, R_SPIN);
   runUntil([] { return false; }, 200);
   CHECK(!anyRelayOn(), "program tidak bisa menyalakan relay saat terkunci");
   g_violations = before;   // pelanggaran paksaan uji tidak dihitung
@@ -427,198 +212,6 @@ static void t15_relayCheck() {
   CHECK(relayCheck(R_DRAIN, true) != nullptr, "buang ditolak saat motor aktif");
   CHECK(relayCheck(R_RIGHT, false) == nullptr, "mematikan selalu boleh");
   relayAllOff();
-}
-
-static CustomProc makeCustom(const char* name, std::vector<CustomItem> items) {
-  CustomProc p;
-  memset(&p, 0, sizeof(p));
-  strlcpy(p.name, name, sizeof(p.name));
-  p.count = (uint8_t)items.size();
-  for (size_t i = 0; i < items.size(); i++) p.items[i] = items[i];
-  return p;
-}
-
-static void t16_custom() {
-  printf("[T16] Custom Proses: simpan, validasi, jalankan, urutan bebas\n");
-  resetWorld();
-  // rinse 10 menit lalu rinse lagi 5 menit, lalu spin 2 menit
-  CustomItem r10{CI_RINSE, 3, 10, 0, 0, 0}, r5{CI_RINSE, 3, 5, 0, 0, 0}, sp{CI_SPIN, 3, 2, 0, 0, 0};
-  CustomProc p = makeCustom("Bilas dua kali", {r10, r5, sp});
-  String err;
-  CHECK(customValidate(p, err), "proses valid");
-  CHECK(customStepCount(p) == 7, "3+3+1 = 7 langkah mesin");
-  CHECK(customSave(2, p), "tersimpan di slot 3");
-  CustomProc back;
-  CHECK(customLoad(2, back) && std::string(back.name) == "Bilas dua kali" && back.count == 3 && back.items[1].a == 5, "dibaca kembali utuh");
-  CHECK(!customLoad(0, back), "slot kosong tidak terbaca");
-
-  CustomProc bad = makeCustom("", {r10});
-  CHECK(!customValidate(bad, err), "nama kosong ditolak");
-  CustomProc bad2 = makeCustom("x", {});
-  CHECK(!customValidate(bad2, err), "tanpa langkah ditolak");
-  CustomItem zero{CI_WASH, 3, 0, 0, 0, 0};
-  CHECK(!customValidate(makeCustom("x", {zero}), err) && err.length() > 0, "menit 0 ditolak dengan pesan");
-  std::vector<CustomItem> many(24, CustomItem{CI_RINSEPERFUME, 3, 5, 0, 2, 0});
-  CHECK(customValidate(makeCustom("x", many), err) && customStepCount(makeCustom("x", many)) == 96, "24 blok terbesar (96 langkah mesin) masih muat");
-  CustomProc over = makeCustom("x", many);
-  over.count = 25;
-  CHECK(!customValidate(over, err), "lebih dari 24 langkah ditolak");
-
-  g_log.clear();
-  post(MC_RUN, PRG_CUSTOM, 2);
-  CHECK(runUntil([] { return st().state == MS_RUNNING; }, 1000), "mulai");
-  CHECK(std::string(st().name) == "Bilas dua kali", "status memakai nama custom");
-  bool done = runUntil(idle, 900000);
-  CHECK(done, "selesai");
-  CHECK(count("Mengisi air...") == 2, "dua kali bilas = dua kali isi air");
-  CHECK(count("Putaran ke") >= 1 && count("Spin") >= 0, "ada agitasi");
-  CHECK(count("Proses Bilas dua kali selesai", LOG_DONE) == 1, "DONE memakai nama custom");
-
-  // urutan bebas + pewangi per langkah + tunggu
-  CustomItem pf{CI_RINSEPERFUME, 0, 3, 0, 4, 0};   // 2 cup
-  CustomItem wt{CI_WAIT, 3, 1, 0, 0, 0};
-  CHECK(customSave(0, makeCustom("Campur", {wt, pf})), "simpan proses kedua");
-  g_log.clear();
-  post(MC_RUN, PRG_CUSTOM, 0);
-  runUntil(idle, 900000);
-  CHECK(count("Memasukkan pewangi") == 1, "pewangi dimasukkan di bilas+pewangi");
-  CHECK(count("Menunggu") >= 1, "langkah tunggu berjalan");
-
-  // slot kosong
-  g_log.clear();
-  post(MC_RUN, PRG_CUSTOM, 4);
-  tick();
-  CHECK(idle() && count("kosong atau tidak ditemukan", LOG_WARN) == 1, "slot kosong ditolak dengan pesan");
-
-  // listrik padam di tengah custom -> pulih dengan slot yang benar
-  post(MC_RUN, PRG_CUSTOM, 2);
-  runUntil([] { return st().stepIndex >= 4; }, 900000);
-  relayAllOff(); machineHostReset(); g_level = 100; g_raw = true;
-  settingsLoad(); calibLoad(); statsLoad(); machineBegin(); tick();
-  CHECK(st().resumePending, "tawaran pulih untuk custom");
-  post(MC_RESUME);
-  CHECK(runUntil([] { return st().state == MS_RUNNING; }, 2000) && std::string(st().name) == "Bilas dua kali", "lanjut custom yang sama");
-  CHECK(runUntil(idle, 900000), "custom pulih sampai selesai");
-  customDelete(2); customDelete(0);
-  CHECK(!customLoad(2, back), "hapus slot");
-}
-
-
-static void t17_drainNormal() {
-  printf("[T17] Pembuangan normal: tarik sampai total waktu, lalu cek air sudah turun\n");
-  resetWorld();
-  S.wash = 1; S.soak = 0;
-  post(MC_RUN, PRG_WASH);
-  CHECK(runUntil(idle, 900000), "selesai");
-  printf("  (relay buang menyala %.0f ms, target %u ms)\n", g_drainOnMs, (unsigned)minToMs(S.drainTime));
-  CHECK(g_drainOnMs > minToMs(S.drainTime) - 100 && g_drainOnMs < minToMs(S.drainTime) + 400, "relay buang menyala ~total waktu buang");
-  CHECK(count("Tarikan valve berhasil") == 1, "tarikan dibuktikan berhasil lewat sensor");
-  CHECK(count("Valve buang belum menarik", LOG_WARN) == 0 && count("Unjam") == 0, "tanpa unjam");
-}
-
-static void t18_firstPullFails() {
-  printf("[T18] Tarikan pertama gagal -> lepas, tarik lagi (unjam) -> berhasil\n");
-  resetWorld();
-  S.wash = 1; S.soak = 0;
-  g_pullFail = 1;
-  post(MC_RUN, PRG_WASH);
-  CHECK(runUntil(idle, 900000), "selesai tanpa jeda");
-  CHECK(count("Valve buang belum menarik", LOG_WARN) == 1, "kegagalan tarikan terdeteksi sekali");
-  CHECK(count("Unjam 1/2") == 1 && count("Unjam 2/2") == 0, "unjam sekali lalu berhasil");
-  CHECK(count("Mengulangi sesi") == 0 && count("Proses Wash selesai", LOG_DONE) == 1, "tidak perlu ulang sesi, proses selesai");
-  CHECK(!st().pauseReason[0], "tidak pernah dijeda");
-  printf("  (relay buang menyala total %.0f ms)\n", g_drainOnMs);
-  CHECK(g_drainOnMs > minToMs(S.drainTime) && g_drainOnMs < minToMs(S.drainTime) + secToMs(S.drainProbeSec) + 500, "total = probe gagal + waktu buang penuh");
-}
-
-static void t19_drainTimeMode() {
-  printf("[T19] Mode waktu: tanpa probe, tarik total waktu lalu cek akhir\n");
-  resetWorld();
-  S.wash = 1; S.soak = 0; S.drainMode = DRAIN_TIME;
-  post(MC_RUN, PRG_WASH);
-  CHECK(runUntil(idle, 900000), "selesai");
-  CHECK(count("Tarikan valve berhasil") == 0 && count("belum menarik") == 0, "tidak memakai probe");
-  CHECK(g_drainOnMs > minToMs(S.drainTime) - 100 && g_drainOnMs < minToMs(S.drainTime) + 400, "tarik selama waktu buang");
-  // mode waktu + valve rusak total -> cek akhir masih penuh -> ulang sesi -> jeda
-  resetWorld();
-  S.wash = 1; S.soak = 0; S.drainMode = DRAIN_TIME;
-  post(MC_RUN, PRG_WASH);
-  g_drainBroken = true;
-  CHECK(runUntil(paused, 1800000) && count("Mengulangi sesi") == 2, "valve rusak: 3 sesi lalu jeda");
-}
-
-static void t20_fillPrecheck() {
-  printf("[T20] Pra-cek isi saat air masih penuh: buang / jeda / pakai\n");
-  // buang (default)
-  resetWorld();
-  g_level = 100; g_raw = true;
-  for (int i = 0; i < 20; i++) tick();
-  CHECK(S.fillPrecheck == PRECHECK_DRAIN, "default = buang dulu");
-  post(MC_RUN, PRG_WATERIN);
-  CHECK(runUntil(idle, 900000), "selesai");
-  CHECK(count("membuang dulu") == 1 && count("Mengisi air...") == 1 && g_drainOnMs > 0, "membuang dulu lalu mengisi");
-  // jeda
-  resetWorld();
-  S.fillPrecheck = PRECHECK_PAUSE;
-  g_level = 100; g_raw = true;
-  for (int i = 0; i < 20; i++) tick();
-  post(MC_RUN, PRG_WATERIN);
-  CHECK(runUntil(paused, 60000), "dijeda");
-  CHECK(std::string(st().pauseReason).find("Air masih penuh sebelum mengisi") != std::string::npos, "alasan jeda jelas");
-  CHECK(!relayIsOn(R_FILL) && !relayIsOn(R_DRAIN) && g_drainOnMs == 0, "tidak ada relay yang digerakkan otomatis");
-  post(MC_SKIP);
-  tick();
-  CHECK(idle(), "Lewati -> proses selesai");
-  // pakai
-  resetWorld();
-  S.fillPrecheck = PRECHECK_USE;
-  g_level = 100; g_raw = true;
-  for (int i = 0; i < 20; i++) tick();
-  post(MC_RUN, PRG_WATERIN);
-  CHECK(runUntil(idle, 60000), "selesai cepat");
-  CHECK(count("pengisian dilewati") == 1 && g_fillOnMs == 0 && g_drainOnMs == 0, "pengisian dan pembuangan dilewati");
-}
-
-static void t21_manualDrainSoft() {
-  printf("[T21] Buang manual: gagal tidak menjeda proses\n");
-  resetWorld();
-  g_level = 100; g_raw = true;
-  for (int i = 0; i < 20; i++) tick();
-  g_drainBroken = true;
-  post(MC_RUN, PRG_WATEROUT);
-  CHECK(runUntil(idle, 900000), "selesai tanpa jeda");
-  CHECK(count("Air masih penuh setelah pembuangan manual", LOG_WARN) == 1, "peringatan dicatat");
-}
-
-static void t22_partialFill() {
-  printf("[T22] Isi sebagian (sensor tidak penuh sejak awal): buang tetap berjalan sesuai waktu\n");
-  resetWorld();
-  S.fillLevel = FILL_TIME; S.fillTime = 3; S.wash = 1; S.soak = 0;
-  post(MC_RUN, PRG_WASH);
-  CHECK(runUntil(idle, 900000), "selesai");
-  CHECK(count("Tarikan valve berhasil") == 0, "keberhasilan tarikan tidak bisa dibuktikan (sensor tidak penuh), dilewati");
-  CHECK(g_drainOnMs > minToMs(S.drainTime) - 100, "tetap menarik selama total waktu buang");
-}
-
-static void t23_settingsMigration() {
-  printf("[T23] Migrasi NVS: kunci pembuangan lama dihapus, pengaturan baru valid\n");
-  resetWorld();
-  Preferences pr;
-  pr.begin("settings", false);
-  pr.putInt("drainExtra", 60);
-  pr.putInt("drainMax", 5);
-  pr.putInt("drainProbe", 9999);   // di luar rentang -> dibersihkan
-  pr.end();
-  settingsLoad();
-  Preferences chk;
-  chk.begin("settings", true);
-  CHECK(!chk.isKey("drainExtra") && !chk.isKey("drainMax"), "kunci lama dihapus");
-  CHECK(S.drainProbeSec == 45, "probe di luar rentang kembali ke default 45");
-  S.drainProbeSec = 30; S.fillPrecheck = PRECHECK_PAUSE;
-  settingsSave(); settingsLoad();
-  CHECK(S.drainProbeSec == 30 && S.fillPrecheck == PRECHECK_PAUSE, "probe & pra-cek tersimpan");
-  S.drainProbeSec = 2; settingsSave(); settingsLoad();
-  CHECK(S.drainProbeSec == 45, "probe < 5 dtk ditolak (default)");
 }
 
 static void t24_connWatchdog() {
@@ -693,135 +286,667 @@ static void t26_remotePolicy() {
   }
   fclose(f);
   printf("  (%d vektor)\n", total);
-  CHECK(total > 80 && bad == 0, "semua vektor allow/deny cocok dengan kebijakan Worker");
+  CHECK(total > 70 && bad == 0, "semua vektor allow/deny cocok dengan kebijakan Worker");
   CHECK(!remoteCmdAllowed("") && !remoteCmdAllowed(nullptr), "perintah kosong ditolak");
+}
+
+// ======================= uji Proses & Tahap (v3) =======================
+static Tahap TH(uint8_t ty) { Tahap t; tahapDefault(ty, t); return t; }
+static void saveP(int slot, const char* name, std::vector<Tahap> ts, uint16_t rev = 1) {
+  Proses* p = new Proses;
+  memset(p, 0, sizeof(*p));
+  strlcpy(p->name, name, sizeof(p->name));
+  p->rev = rev;
+  for (auto& t : ts) p->t[p->count++] = t;
+  prosesSave(slot, *p);
+  delete p;
+}
+static void runP(int slot, uint32_t wait = 0, int fin = -1) { machineStartProses(slot, wait, fin); }
+static bool deciding() { return st().state == MS_DECIDE; }
+static void choose(uint8_t o) { post(MC_DECIDE, o); tick(); }
+static int errCount() { int n = 0; for (auto& l : g_log) if (l.level == LOG_ERROR) n++; return n; }
+static void fullTank() { g_level = 100; g_raw = true; for (int i = 0; i < 20; i++) tick(); }
+static std::string stageNow() { return st().stage; }
+
+static void n1_fullProcess() {
+  printf("[N1] Proses lengkap: Isi, Putar, Pewangi 0,5 cup, Buang, Spin\n");
+  resetWorld();
+  Tahap putar = TH(TH_PUTAR); putar.lama = 1;
+  Tahap pw = TH(TH_PEWANGI); pw.cup2 = 1;
+  Tahap buang = TH(TH_BUANG); buang.lama = 1;
+  Tahap spin = TH(TH_SPIN); spin.lama = 1;
+  saveP(0, "Cuci Harian", {TH(TH_ISI), putar, pw, buang, spin});
+  runP(0);
+  CHECK(runUntil(idle, 120000), "Proses selesai");
+  CHECK(count("Proses Cuci Harian selesai", LOG_DONE) == 1, "notifikasi DONE");
+  CHECK(errCount() == 0, "tidak ada ERROR/interlock");
+  CHECK(!anyRelayOn(), "semua relay mati di akhir");
+  CHECK(ST.histCount == 1 && ST.hist[0].result == RES_DONE && std::string(ST.hist[0].name) == "Cuci Harian", "riwayat memuat nama Proses");
+  CHECK(C.nFill >= 1, "kalibrasi isi tersimpan");
+  CHECK(count("Mengisi air...") == 1, "isi air sekali");
+  CHECK(count("Tahap 3/5: Pewangi mulai") == 1 && count("Tahap 5/5: Spin mulai") == 1, "tiap Tahap mencatat mulai (notifikasi)");
+  CHECK(count("Pewangi selesai") == 1, "pewangi masuk sekali");
+  printf("  (pompa pewangi menyala %u ms sim = %u dtk nyata)\n", g_perfumeOnMs, g_perfumeOnMs * TIME_SCALE / 1000);
+  CHECK(g_perfumeOnMs >= 140 && g_perfumeOnMs <= 220, "0,5 cup = 10 dtk nyata");
+}
+
+static void n2_isiGagal() {
+  printf("[N2] Isi gagal -> keputusan Ulang / Lanjut / Batal\n");
+  resetWorld();
+  g_noWater = true;
+  Tahap isi = TH(TH_ISI); isi.batas = 900; isi.coba = 1; isi.tunggu = 1;
+  saveP(0, "A", {isi, TH(TH_NOTIF)});
+  runP(0);
+  CHECK(runUntil(deciding, 200000), "berhenti menunggu keputusan");
+  CHECK(count("Coba ulang") == 1, "tepat 1 kali coba ulang");
+  MachineStatus s = st();
+  CHECK(s.decision == DC_ISI_GAGAL && s.decisionOpts == (OP_ULANG | OP_LANJUT | OP_BATAL), "kode ISI_GAGAL dengan pilihan Ulang/Lanjut/Batal");
+  CHECK(std::string(s.pauseReason).find("Air tidak terisi") != std::string::npos, "pesan alasan");
+  CHECK(!anyRelayOn(), "valve tertutup saat menunggu");
+  CHECK(count("Menunggu keputusan", LOG_ERROR) == 1, "notifikasi ERROR (langsung terkirim)");
+  choose(OP_BUANG);
+  CHECK(deciding() && count("Pilihan tidak tersedia") == 1, "pilihan yang tidak ada ditolak");
+  choose(OP_ULANG);
+  CHECK(st().state == MS_RUNNING && count("Keputusan: Ulang") == 1, "Ulang memulai Tahap lagi");
+  g_noWater = false;
+  CHECK(runUntil(idle, 120000), "setelah air ada: Proses selesai");
+
+  resetWorld();
+  g_noWater = true;
+  saveP(0, "B", {isi, TH(TH_NOTIF)});
+  runP(0);
+  runUntil(deciding, 200000);
+  choose(OP_LANJUT);
+  CHECK(runUntil(idle, 5000), "Lanjut melewati Tahap Isi");
+  CHECK(count("Keputusan: Lanjut", LOG_WARN) == 1 && count("Tahap Notifikasi", 0) >= 0, "Lanjut tercatat sebagai peringatan");
+  CHECK(ST.hist[0].result == RES_DONE, "Proses dianggap selesai");
+
+  resetWorld();
+  g_noWater = true;
+  saveP(0, "C", {isi, TH(TH_NOTIF)});
+  runP(0);
+  runUntil(deciding, 200000);
+  choose(OP_BATAL);
+  CHECK(idle() && ST.hist[0].result == RES_STOPPED && !anyRelayOn(), "Batal menghentikan Proses (riwayat: dihentikan)");
+}
+
+static void n3_praCek() {
+  printf("[N3] Pra-cek isi: buang / jeda / pakai\n");
+  Tahap isi = TH(TH_ISI);
+  resetWorld(); fullTank();
+  isi.pra = PRA_BUANG;
+  saveP(0, "A", {isi});
+  runP(0);
+  CHECK(runUntil(idle, 200000) && count("membuang dulu") == 1 && count("Mengisi air...") == 1, "pra=buang: buang otomatis lalu isi");
+
+  resetWorld(); fullTank();
+  isi.pra = PRA_PAKAI;
+  saveP(0, "B", {isi});
+  runP(0);
+  CHECK(runUntil(idle, 50000) && count("pengisian dilewati") == 1 && count("Mengisi air...") == 0, "pra=pakai: isi dilewati");
+
+  resetWorld(); fullTank();
+  isi.pra = PRA_JEDA;
+  saveP(0, "C", {isi});
+  runP(0);
+  CHECK(runUntil(deciding, 50000), "pra=jeda: menunggu keputusan");
+  MachineStatus s = st();
+  CHECK(s.decision == DC_PRA_PENUH && s.decisionOpts == (OP_BUANG | OP_PAKAI | OP_BATAL), "pilihan Buang lalu isi / Pakai / Batal");
+  choose(OP_ULANG);
+  CHECK(deciding() && count("Pilihan tidak tersedia") == 1, "Ulang tidak tersedia pada kasus ini");
+  choose(OP_BUANG);
+  CHECK(runUntil(idle, 200000) && count("Mengisi air...") == 1 && count("Membuang air...") >= 1, "Buang lalu isi: selesai");
+
+  resetWorld(); fullTank();
+  saveP(0, "D", {isi, TH(TH_NOTIF)});
+  runP(0);
+  runUntil(deciding, 50000);
+  choose(OP_PAKAI);
+  CHECK(runUntil(idle, 5000) && count("Mengisi air...") == 0 && count("pakai air yang ada") == 1, "Pakai air yang ada: lanjut tanpa isi");
+}
+
+static void n4_buangGagal() {
+  printf("[N4] Buang gagal: Verifikasi Pengurangan Jumlah Air, Tarik Ulang Valve, sesi, keputusan\n");
+  resetWorld(); fullTank();
+  Tahap b = TH(TH_BUANG); b.lama = 1; b.probe = 10; b.tarik = 1; b.sesi = 2;
+  saveP(0, "A", {b, TH(TH_NOTIF)});
+  g_drainBroken = true;
+  runP(0);
+  CHECK(runUntil(deciding, 60000), "menunggu keputusan");
+  CHECK(count("Tarik ulang valve") == 2, "1x Tarik Ulang Valve per sesi, 2 sesi");
+  CHECK(count("Mengulangi sesi pembuangan") == 1, "sesi diulang 1x");
+  MachineStatus s = st();
+  CHECK(s.decision == DC_BUANG_GAGAL && s.decisionOpts == (OP_ULANG | OP_LANJUT | OP_BATAL), "kode BUANG_GAGAL, Ulang/Lanjut/Batal");
+  CHECK(!anyRelayOn(), "relay mati saat menunggu");
+  g_drainBroken = false;
+  choose(OP_ULANG);
+  CHECK(runUntil(idle, 120000), "valve diperbaiki, Ulang -> selesai");
+  CHECK(count("Air sudah turun, pembuangan selesai") == 1, "cek akhir 'tidak penuh' terpenuhi");
+
+  resetWorld(); fullTank();
+  saveP(0, "B", {b, TH(TH_NOTIF)});
+  g_drainBroken = true;
+  runP(0);
+  runUntil(deciding, 60000);
+  choose(OP_LANJUT);
+  CHECK(runUntil(idle, 5000), "Lanjut meski air masih penuh");
+  g_drainBroken = false;
+}
+
+static void n5_buangNormal() {
+  printf("[N5] Buang normal: lama + cek akhir; tarikan pertama gagal ditangani Tarik Ulang Valve\n");
+  resetWorld(); fullTank();
+  Tahap b = TH(TH_BUANG); b.lama = 2; b.probe = 30;
+  saveP(0, "A", {b});
+  runP(0);
+  CHECK(runUntil(idle, 120000), "selesai");
+  CHECK(g_drainOnMs >= minToMs(2) - 100, "valve ditarik selama minimal 'lama' (2 mnt skala)");
+  CHECK(count("Tarikan valve berhasil") == 1 && count("Tarik ulang valve") == 0, "probe berhasil tanpa tarik ulang");
+
+  resetWorld(); fullTank();
+  g_pullFail = 1;
+  saveP(0, "B", {b});
+  runP(0);
+  CHECK(runUntil(idle, 120000), "selesai walau tarikan pertama gagal");
+  CHECK(count("Valve buang belum menarik") == 1 && count("Tarik ulang valve 1/2") == 1, "tarikan pertama gagal -> Tarik Ulang Valve 1/2");
+  CHECK(errCount() == 0, "tanpa ERROR");
+}
+
+static void n6_spinCek() {
+  printf("[N6] Spin memeriksa sensor; Cek air; Minta tindakan; Notifikasi\n");
+  resetWorld(); fullTank();
+  Tahap sp = TH(TH_SPIN); sp.lama = 1;
+  saveP(0, "A", {sp});
+  runP(0);
+  CHECK(runUntil(deciding, 5000), "air masih penuh -> keputusan");
+  CHECK(st().decision == DC_SPIN_PENUH && !relayIsOn(R_SPIN), "SPIN_PENUH, motor spin tidak menyala");
+  choose(OP_LANJUT);
+  CHECK(relayIsOn(R_SPIN) && count("Keputusan: Lanjut", LOG_WARN) == 1, "Lanjut: spin berjalan (dengan peringatan)");
+  CHECK(runUntil(idle, 10000) && !anyRelayOn(), "spin selesai");
+
+  resetWorld(); fullTank();
+  saveP(0, "B", {sp});
+  runP(0);
+  runUntil(deciding, 5000);
+  g_level = 0;
+  choose(OP_ULANG);
+  CHECK(runUntil(idle, 20000) && count("Keputusan: Ulang") == 1, "air sudah turun -> Ulang -> spin selesai");
+
+  resetWorld();
+  Tahap cek = TH(TH_CEK);
+  saveP(0, "C", {cek});
+  runP(0);
+  CHECK(runUntil(deciding, 5000) && st().decision == DC_CEK_GAGAL, "Cek 'harus penuh' pada tangki kosong -> CEK_GAGAL");
+  choose(OP_LANJUT);
+  CHECK(idle(), "Lanjut");
+  resetWorld(); fullTank();
+  cek.mode = CEK_TIDAK_PENUH;
+  saveP(0, "D", {cek});
+  runP(0);
+  CHECK(runUntil(deciding, 5000), "Cek 'harus tidak penuh' pada tangki penuh -> keputusan");
+  g_level = 0;
+  choose(OP_ULANG);
+  CHECK(runUntil(idle, 5000), "setelah air turun: Ulang -> lulus");
+
+  resetWorld();
+  Tahap tin = TH(TH_TINDAKAN);
+  saveP(0, "E", {tin, TH(TH_NOTIF)});
+  runP(0);
+  CHECK(runUntil(deciding, 2000) && st().decision == DC_TINDAKAN && st().decisionOpts == (OP_LANJUT | OP_BATAL), "Minta tindakan: Lanjut/Batal");
+  int notifs = 0;
+  for (auto& l : g_log) if (l.level == LOG_NOTIF && l.text.find("Tambahkan deterjen") != std::string::npos) notifs++;
+  CHECK(notifs == 1, "pesan Minta tindakan dikirim sebagai LOG_NOTIF (lolos mode Senyap)");
+  choose(OP_ULANG);
+  CHECK(deciding(), "Ulang tidak tersedia");
+  choose(OP_LANJUT);
+  CHECK(runUntil(idle, 2000), "Lanjut -> Notifikasi -> selesai");
+  int custom = 0;
+  for (auto& l : g_log) if (l.level == LOG_NOTIF && l.text.find("Tahap selesai") != std::string::npos) custom++;
+  CHECK(custom == 1, "Tahap Notifikasi mengirim pesan sebagai LOG_NOTIF");
+}
+
+static void n7_reminder() {
+  printf("[N7] Pengingat keputusan tiap 10 menit; Stop/Jeda saat menunggu\n");
+  resetWorld();
+  saveP(0, "A", {TH(TH_TINDAKAN)});
+  runP(0);
+  runUntil(deciding, 2000);
+  g_log.clear();
+  runUntil([] { return false; }, minToMs(25));
+  CHECK(count("Masih menunggu keputusan", LOG_ERROR) == 2, "2 pengingat dalam 25 menit");
+  post(MC_PAUSE); tick();
+  CHECK(deciding(), "Jeda diabaikan saat menunggu keputusan");
+  post(MC_RESUME); tick();
+  CHECK(deciding() && count("Mesin menunggu keputusan") == 1, "Lanjutkan diarahkan ke pilihan keputusan");
+  post(MC_STOP); tick();
+  CHECK(idle() && !anyRelayOn(), "Stop mengakhiri Proses yang menunggu");
+}
+
+static void n8_soakRendam() {
+  printf("[N8] Soak (ulangi, putar, rendam) dan Rendam\n");
+  resetWorld();
+  Tahap sk = TH(TH_SOAK); sk.ulangi = 2; sk.putar = 1; sk.rendam = 1;
+  saveP(0, "A", {sk});
+  runP(0);
+  uint32_t t0 = g_ms;
+  bool motorSeen = false, offDuringRest = false;
+  bool done = false;
+  for (uint32_t t = 0; t < 60000 && !done; t += TICK_MS) {
+    tick();
+    if (relayIsOn(R_LEFT) || relayIsOn(R_RIGHT)) motorSeen = true;
+    if (std::string(st().detail).find("rendam") != std::string::npos && !anyRelayOn()) offDuringRest = true;
+    done = idle();
+  }
+  CHECK(done && count("Soak ke 2 selesai") == 1 && count("Soak ke") == 2, "2 sesi soak selesai");
+  CHECK(motorSeen && offDuringRest, "motor menyala saat putar, semua mati saat rendam");
+  printf("  (durasi %u ms, target %u ms)\n", g_ms - t0, (unsigned)minToMs(4));
+  CHECK(g_ms - t0 >= minToMs(4) - 100 && g_ms - t0 <= minToMs(4) + 800, "total = 2 x (putar 1 + rendam 1) mnt");
+
+  resetWorld();
+  Tahap rd = TH(TH_RENDAM); rd.lama = 1;
+  saveP(0, "B", {rd});
+  runP(0);
+  tick();
+  t0 = g_ms;
+  bool anyOn = false;
+  while (!idle() && g_ms - t0 < 10000) { tick(); if (anyRelayOn()) anyOn = true; }
+  CHECK(idle() && !anyOn && g_ms - t0 >= minToMs(1) - 60 && g_ms - t0 <= minToMs(1) + 300, "Rendam 1 mnt dengan semua relay mati");
+}
+
+static void n9_tundaDanSelesaiJam() {
+  printf("[N9] Tunda mulai & selesai pada jam\n");
+  resetWorld();
+  Tahap tg = TH(TH_TUNGGU); tg.detik = 1;
+  saveP(0, "A", {tg});
+  runP(0, 60);   // tunda 60 dtk nyata = 1 dtk skala
+  tick(); tick();
+  MachineStatus s = st();
+  CHECK(s.state == MS_RUNNING && s.stepIndex == 0 && stageNow() == "Menunggu mulai" && !anyRelayOn(), "menunggu mulai (Tahap 0)");
+  CHECK(count("Proses ditunda") == 1, "log tunda");
+  CHECK(runUntil([] { return st().stepIndex == 1; }, 3000), "mulai setelah waktu tunda");
+  CHECK(runUntil(idle, 3000), "selesai");
+
+  resetWorld();
+  Tahap tg2 = TH(TH_TUNGGU); tg2.detik = 600;
+  saveP(0, "B", {tg2});
+  runP(0, 3600);
+  runUntil([] { return false; }, 100);
+  post(MC_SKIP); tick();
+  CHECK(st().stepIndex == 1 && count("Penantian dilewati") == 1, "Lewati saat menunggu mulai memulai Proses sekarang");
+  post(MC_STOP); tick();
+
+  resetWorld();
+  Tahap pt = TH(TH_PUTAR); pt.lama = 120;
+  saveP(0, "C", {pt});
+  time_t now = time(nullptr);
+  struct tm lt; localtime_r(&now, &lt);
+  int fin = (lt.tm_hour * 60 + lt.tm_min + 1) % 1440;
+  runP(0, 0, fin);
+  tick();
+  CHECK(count("Tidak sempat selesai tepat waktu") == 1 && st().stepIndex == 1, "tidak sempat: Proses dimulai sekarang");
+  post(MC_STOP); tick();
+}
+
+static void n10_stopPause() {
+  printf("[N10] Stop saat putar; Jeda/Lanjutkan menjaga sisa waktu\n");
+  resetWorld();
+  Tahap pt = TH(TH_PUTAR); pt.lama = 5;
+  saveP(0, "A", {pt});
+  runP(0);
+  runUntil([] { return relayIsOn(R_LEFT) || relayIsOn(R_RIGHT); }, 60000);
+  CHECK(relayIsOn(R_LEFT) || relayIsOn(R_RIGHT), "motor berputar");
+  uint32_t t0 = g_ms;
+  post(MC_STOP); tick();
+  CHECK(!anyRelayOn() && idle() && g_ms - t0 < 100, "Stop: relay mati & IDLE pada tick berikutnya");
+  CHECK(ST.hist[(ST.histHead + 9) % 10].result == RES_STOPPED, "riwayat: dihentikan");
+
+  resetWorld();
+  pt.lama = 2;
+  saveP(0, "B", {pt});
+  runP(0);
+  runUntil([] { return std::string(st().detail).find("Agitasi (kiri)") != std::string::npos; }, 60000);
+  uint32_t agitStart = g_ms;
+  runUntil([] { return false; }, 700);
+  post(MC_PAUSE); tick();
+  CHECK(paused() && !anyRelayOn(), "dijeda, relay mati");
+  uint32_t pausedAt = g_ms;
+  runUntil([] { return false; }, 900);
+  uint32_t pauseLen = g_ms - pausedAt;
+  post(MC_RESUME);
+  runUntil(idle, 60000);
+  uint32_t agitTotal = g_ms - agitStart - pauseLen;
+  printf("  (agitasi efektif %u ms, target %u ms)\n", agitTotal, (unsigned)minToMs(2));
+  CHECK(agitTotal > minToMs(2) - 250 && agitTotal < minToMs(2) + 600, "total putar ~2 menit skala (jeda tidak dihitung)");
+}
+
+static void n11_resume() {
+  printf("[N11] Listrik padam: tawaran pemulihan, rev berbeda / Proses hilang dibatalkan, kunci slot\n");
+  resetWorld();
+  Tahap pt = TH(TH_PUTAR); pt.lama = 2;
+  Tahap b = TH(TH_BUANG); b.lama = 1;
+  saveP(0, "Harian", {TH(TH_ISI), pt, b});
+  runP(0);
+  CHECK(runUntil([] { return stageNow().rfind("Tahap 2/3", 0) == 0; }, 120000), "sedang di Tahap 2");
+  tick();
+  CHECK(machineSlotInUse(0) && !machineSlotInUse(1), "slot 1 terkunci saat berjalan, slot lain bebas");
+  relayAllOff();
+  g_level = 100; g_raw = true;
+  machineHostReboot();
+  g_log.clear();
+  tick();
+  MachineStatus s = st();
+  CHECK(s.state == MS_IDLE && !anyRelayOn() && s.resumePending && s.resumeSlot == 0, "boot: IDLE, relay mati, tawaran pemulihan");
+  CHECK(machineSlotInUse(0), "slot terkunci selama pemulihan tertunda");
+  printf("  (info: %s)\n", s.resumeInfo);
+  post(MC_RESUME);
+  CHECK(runUntil([] { return st().state == MS_RUNNING; }, 2000), "Lanjutkan -> berjalan");
+  CHECK(st().stepIndex == 2 && count("Mengisi air...") == 0, "lanjut dari Tahap 2 (Isi tidak diulang)");
+  CHECK(runUntil(idle, 120000), "selesai");
+  CHECK(!st().resumePending && !machineSlotInUse(0), "tawaran & kunci hilang setelah selesai");
+
+  // Proses diubah (rev berbeda) setelah padam
+  resetWorld();
+  saveP(0, "Harian", {TH(TH_ISI), pt, b}, 1);
+  runP(0);
+  runUntil([] { return stageNow().rfind("Tahap 2/3", 0) == 0; }, 120000);
+  relayAllOff();
+  saveP(0, "Harian", {TH(TH_ISI), pt, b}, 2);
+  machineHostReboot();
+  tick();
+  ResumeInfo ri;
+  CHECK(!st().resumePending && !resumeLoad(ri), "rev berbeda: pemulihan dibatalkan & data dibersihkan");
+
+  // Proses dihapus
+  resetWorld();
+  saveP(0, "Harian", {TH(TH_ISI), pt, b}, 1);
+  runP(0);
+  runUntil([] { return stageNow().rfind("Tahap 2/3", 0) == 0; }, 120000);
+  relayAllOff();
+  prosesDelete(0);
+  machineHostReboot();
+  tick();
+  CHECK(!st().resumePending && !resumeLoad(ri), "Proses hilang: pemulihan dibatalkan");
+
+  // Batalkan tawaran
+  resetWorld();
+  saveP(0, "Harian", {TH(TH_ISI), pt, b}, 1);
+  runP(0);
+  runUntil([] { return stageNow().rfind("Tahap 2/3", 0) == 0; }, 120000);
+  relayAllOff();
+  machineHostReboot();
+  tick();
+  CHECK(st().resumePending, "ada tawaran");
+  post(MC_CANCEL_RESUME); tick();
+  CHECK(!st().resumePending && !resumeLoad(ri) && !machineSlotInUse(0), "Batalkan membersihkan tawaran & kunci");
+}
+
+static void n12_fillModes() {
+  printf("[N12] Isi: persen setelah kalibrasi; mode waktu berhenti oleh sensor\n");
+  resetWorld();
+  saveP(0, "A", {TH(TH_ISI)});
+  runP(0);
+  runUntil(idle, 120000);
+  double full = g_fillOnMs;
+  CHECK(C.nFill == 1, "kalibrasi dipelajari dari mode sensor");
+  g_level = 0; g_raw = false;
+  for (int i = 0; i < 20; i++) tick();
+  Tahap pc = TH(TH_ISI); pc.mode = ISI_PERSEN; pc.persen = 50;
+  saveP(0, "B", {pc});
+  g_fillOnMs = 0;
+  runP(0);
+  runUntil(idle, 120000);
+  printf("  (isi penuh %.0f ms, 50%% %.0f ms)\n", full, g_fillOnMs);
+  CHECK(g_fillOnMs > full * 0.4 && g_fillOnMs < full * 0.6, "isi ~setengah waktu penuh");
+
+  resetWorld();
+  Tahap wk = TH(TH_ISI); wk.mode = ISI_WAKTU; wk.lama = 30;
+  saveP(0, "C", {wk});
+  runP(0);
+  runUntil(idle, 120000);
+  CHECK(count("Sensor penuh sebelum waktu habis") == 1, "pengaman meluap aktif");
+  CHECK(g_fillOnMs < minToMs(30) / 2, "isi berhenti jauh sebelum 30 menit");
+
+  resetWorld();
+  saveP(0, "D", {pc});
+  runP(0);
+  runUntil(idle, 120000);
+  CHECK(count("Belum ada data kalibrasi") == 1, "persen tanpa kalibrasi memakai sensor (dengan peringatan)");
+}
+
+static void n13_skipBusy() {
+  printf("[N13] Lewati Tahap; Proses kedua ditolak saat bekerja\n");
+  resetWorld();
+  Tahap tg = TH(TH_TUNGGU); tg.detik = 600;
+  saveP(0, "A", {tg, tg, tg});
+  saveP(1, "B", {tg});
+  runP(0);
+  runUntil([] { return st().stepIndex == 1; }, 1000);
+  post(MC_SKIP); tick();
+  CHECK(st().stepIndex == 2, "Lewati memajukan 1 Tahap");
+  runP(1); tick();
+  CHECK(count("ditolak", LOG_WARN) >= 1, "Proses kedua ditolak");
+  post(MC_STOP); tick();
+  runP(5); tick();
+  CHECK(count("kosong atau rusak") == 1 && idle(), "slot kosong tidak dijalankan");
+}
+
+static void n14_manual() {
+  printf("[N14] Manual: satu Tahap, Buang manual, relay manual, uji relay\n");
+  resetWorld();
+  Tahap tg = TH(TH_TUNGGU); tg.detik = 2;
+  machineRunManual(tg);
+  CHECK(runUntil([] { return st().state == MS_RUNNING; }, 200) && st().manual && st().slot == NO_SLOT, "Manual berjalan tanpa slot");
+  CHECK(std::string(st().stage) == "Manual: Tunggu", "label Manual");
+  CHECK(runUntil(idle, 2000), "selesai");
+  CHECK(ST.histCount == 1 && std::string(ST.hist[0].name) == "Manual: Tunggu", "riwayat 'Manual: Tunggu'");
+  ResumeInfo ri;
+  CHECK(!resumeLoad(ri), "Manual tidak membuat data pemulihan");
+
+  resetWorld(); fullTank();
+  Tahap bm = TH(TH_BUANG_MANUAL); bm.lama = 1;
+  g_drainBroken = true;
+  machineRunManual(bm);
+  CHECK(runUntil(idle, 5000), "Buang manual selesai tanpa sensor");
+  CHECK(g_drainOnMs >= minToMs(1) - 60 && count("Air masih penuh setelah pembuangan manual", LOG_WARN) == 1, "valve ditarik selama waktu; masih penuh -> peringatan");
+  g_drainBroken = false;
+
+  resetWorld();
+  post(MC_RELAY, R_LEFT, 1); tick();
+  CHECK(relayIsOn(R_LEFT), "relay kiri menyala manual");
+  post(MC_RELAY, R_RIGHT, 1); tick();
+  CHECK(!relayIsOn(R_RIGHT) && relayIsOn(R_LEFT), "kanan ditolak saat kiri menyala");
+  post(MC_RELAY, R_LEFT, 0); tick();
+  CHECK(!relayIsOn(R_LEFT), "kiri dimatikan manual");
+  post(MC_RELAY, R_RIGHT, 1);
+  runUntil([] { return false; }, 40);
+  post(MC_RELAY, R_LEFT, 1); tick();
+  CHECK(!(relayIsOn(R_LEFT) && relayIsOn(R_RIGHT)), "kiri tidak ikut menyala (kanan masih ON)");
+  uint32_t t0 = g_ms;
+  bool off = runUntil([] { return !relayIsOn(R_RIGHT); }, 70000);
+  CHECK(off && g_ms - t0 >= 55000 && g_ms - t0 <= 62000, "relay manual otomatis mati ~60 dtk");
+  Tahap pt = TH(TH_PUTAR); pt.lama = 5;
+  saveP(0, "A", {pt});
+  runP(0); tick();
+  post(MC_RELAY, R_SPIN, 1); tick();
+  CHECK(!relayIsOn(R_SPIN), "relay manual ditolak saat mesin bekerja");
+  post(MC_STOP); tick();
+  post(MC_RELAY, R_PERFUME, 1); tick();
+  CHECK(relayIsOn(R_PERFUME), "pewangi manual ON");
+  runP(0); tick();
+  CHECK(!relayIsOn(R_PERFUME), "memulai Proses mematikan relay manual");
+  post(MC_STOP); tick();
+
+  resetWorld();
+  post(MC_RUN_RELAYTEST, R_SPIN, 1);
+  CHECK(runUntil([] { return relayIsOn(R_SPIN); }, 3000), "uji relay spin menyala");
+  CHECK(runUntil(idle, 5000) && ST.histCount == 0, "uji relay selesai, tidak masuk riwayat");
+}
+
+static void n15_relaySequence() {
+  printf("[N15] Kalibrasi relay berurutan otomatis\n");
+  resetWorld();
+  std::vector<int> order;
+  bool prev[R_COUNT] = {false};
+  post(MC_RUN_RELAYSEQ, 2);
+  bool done = false;
+  for (uint32_t t = 0; t < 600000 && !done; t += TICK_MS) {
+    tick();
+    for (int i = 0; i < R_COUNT; i++) {
+      bool now = relayIsOn((RelayId)i);
+      if (now && !prev[i]) order.push_back(i);
+      prev[i] = now;
+    }
+    done = idle();
+  }
+  CHECK(done, "uji berurutan selesai");
+  bool inOrder = order.size() == R_COUNT;
+  for (size_t i = 0; i < order.size(); i++) inOrder = inOrder && order[i] == (int)i;
+  CHECK(inOrder, "tiap relay menyala tepat sekali, urut kiri,kanan,isi,buang,spin,pewangi");
+  CHECK(!anyRelayOn() && ST.histCount == 0, "semua relay mati & tidak masuk riwayat");
+  post(MC_RUN_RELAYSEQ, 5);
+  runUntil([] { return relayIsOn(R_LEFT); }, 5000);
+  post(MC_STOP); tick();
+  CHECK(!anyRelayOn() && idle(), "Stop menghentikan uji berurutan");
+}
+
+static void n16_pumpFailsafe() {
+  printf("[N16] Failsafe pompa pewangi 240 dtk\n");
+  resetWorld();
+  CHECK(relaySet(R_PERFUME, true), "pompa menyala");
+  g_ms += PERFUME_MAX_ON_MS + 1000;
+  tick();
+  CHECK(!relayIsOn(R_PERFUME) && count("Pompa pewangi menyala terlalu lama", LOG_ERROR) == 1, "dimatikan paksa + ERROR");
+  CHECK(!relayFaulted(), "tidak mengunci relay lain");
+  // di tengah Proses: Proses dibatalkan
+  resetWorld();
+  Tahap pw = TH(TH_PEWANGI); pw.cup2 = 20;
+  saveP(0, "A", {pw});
+  runP(0);
+  runUntil([] { return relayIsOn(R_PERFUME); }, 500);
+  g_ms += PERFUME_MAX_ON_MS + 1000;
+  tick();
+  CHECK(idle() && !anyRelayOn() && count("pompa pewangi menyala terlalu lama", LOG_ERROR) >= 1, "Proses dibatalkan saat pompa melewati batas");
+}
+
+static void n17_migration() {
+  printf("[N17] Migrasi v3: variabel global & Custom lama dibersihkan, notif dipertahankan\n");
+  resetWorld();
+  Preferences pr;
+  pr.begin("settings", false);
+  pr.clear();
+  pr.putUChar("notif", NOTIF_SENYAP);
+  pr.putInt("wash", 99);
+  pr.putInt("drainProbe", 9999);
+  pr.end();
+  Preferences cu; cu.begin("custom", false); cu.putBytes("p0", "xx", 2); cu.end();
+  Preferences rs; rs.begin("resume", false); rs.putBool("valid", true); rs.putUChar("prog", 3); rs.end();
+  settingsLoad();
+  Preferences chk; chk.begin("settings", true);
+  CHECK(!chk.isKey("wash") && !chk.isKey("drainProbe") && S.notif == NOTIF_SENYAP, "kunci lama hilang, notif dipertahankan");
+  Preferences c2; c2.begin("custom", true);
+  CHECK(!c2.isKey("p0"), "Custom Proses lama dihapus");
+  ResumeInfo ri;
+  CHECK(!resumeLoad(ri), "data pemulihan lama dihapus");
+  S.notif = NOTIF_RINGKAS; settingsSave(); settingsLoad();
+  CHECK(S.notif == NOTIF_RINGKAS, "pengaturan baru tersimpan (migrasi tidak berulang)");
 }
 
 static void wipeUserData() {
   settingsDefaults(S);
-  for (int i = 0; i < CUSTOM_SLOTS; i++) customDelete(i);
   while (wifiCount() > 0) wifiRemove(0);
 }
 
-static void t27_backupRestore() {
-  printf("[T27] Backup & restore: bolak-balik, atomik, validasi\n");
+static void n18_backupRestore() {
+  printf("[N18] Backup & restore v3: bolak-balik, atomik, validasi, impor cadangan v1\n");
   resetWorld();
   wipeUserData();
-  S.wash = 20; S.drainProbeSec = 30; S.pola = POLA_HIJAB; S.parfume = 1.5f; S.fillPrecheck = PRECHECK_PAUSE; S.drainTime = 7;
-  CustomItem a{CI_RINSE, 1, 7, 0, 0, 0}, b{CI_SOAKWASH, 3, 3, 12, 0, 0}, c{CI_RINSEPERFUME, 0, 5, 0, 4, 0};
-  customSave(0, makeCustom("Handuk", {a, b}));
-  customSave(3, makeCustom("Bilas pewangi", {c}));
+  S.notif = NOTIF_SENYAP; S.remoteOn = 0;
   wifiAdd("RumahA", "rahasia-A-123");
   wifiAdd("KantorB", "");
-
   std::string full = backupBuild(true), slim = backupBuild(false);
-  CHECK(full.find("rahasia-A-123") != std::string::npos, "cadangan dengan password WiFi memuat password");
-  CHECK(slim.find("rahasia-A-123") == std::string::npos && slim.find("RumahA") != std::string::npos, "cadangan tanpa password hanya memuat nama jaringan");
-  CHECK(full.size() < RESTORE_MAX_BYTES, "ukuran cadangan di bawah batas impor 8 KB");
-  printf("  (ukuran %zu byte)\n", full.size());
-
+  CHECK(full.find("rahasia-A-123") != std::string::npos && slim.find("rahasia-A-123") == std::string::npos, "password WiFi hanya ada di cadangan lengkap");
+  CHECK(full.find("\"version\":3") != std::string::npos && full.find("custom") == std::string::npos, "versi 3 tanpa Custom Proses");
   wipeUserData();
-  CHECK(S.wash == 15 && wifiCount() == 0, "data dikosongkan");
   RestoreReport dry = backupApply(full.c_str(), full.size(), true);
-  CHECK(dry.ok && dry.customSlots == 2 && dry.wifiNetworks == 2 && dry.settingsChanged >= 5, "simulasi (dry run): ringkasan benar");
-  CHECK(S.wash == 15 && wifiCount() == 0, "dry run tidak mengubah apa pun");
-  CustomProc cp;
-  CHECK(!customLoad(0, cp), "dry run tidak menulis Custom Proses");
-
+  CHECK(dry.ok && dry.wifiNetworks == 2 && dry.settingsChanged == 2 && dry.oldIgnored == 0, "dry run: ringkasan benar");
+  CHECK(S.notif == NOTIF_LENGKAP && wifiCount() == 0, "dry run tidak mengubah apa pun");
   RestoreReport r = backupApply(full.c_str(), full.size(), false);
-  CHECK(r.ok, "pemulihan berhasil");
-  CHECK(S.wash == 20 && S.drainProbeSec == 30 && S.pola == POLA_HIJAB && S.parfume == 1.5f && S.fillPrecheck == PRECHECK_PAUSE && S.drainTime == 7, "pengaturan pulih persis");
-  CHECK(customLoad(0, cp) && std::string(cp.name) == "Handuk" && cp.count == 2 && cp.items[1].b == 12, "Custom Proses slot 1 pulih");
-  CHECK(customLoad(3, cp) && std::string(cp.name) == "Bilas pewangi" && cp.items[0].cups2 == 4, "Custom Proses slot 4 pulih");
-  CHECK(!customLoad(1, cp) && !customLoad(2, cp) && !customLoad(4, cp), "slot kosong tetap kosong");
-  WifiCred w0, w1;
-  CHECK(wifiCount() == 2 && wifiGet(0, w0) && wifiGet(1, w1) && std::string(w0.ssid) == "RumahA" && std::string(w0.pass) == "rahasia-A-123" && std::string(w1.ssid) == "KantorB", "daftar WiFi pulih berurutan + password");
-
-  // pulihkan dari cadangan TANPA password: SSID yang sudah ada mempertahankan password lamanya
+  WifiCred w0;
+  CHECK(r.ok && S.notif == NOTIF_SENYAP && S.remoteOn == 0 && wifiCount() == 2 && wifiGet(0, w0) && std::string(w0.pass) == "rahasia-A-123", "pemulihan persis");
   wifiAdd("BaruC", "pw-baru-c");
   RestoreReport r2 = backupApply(slim.c_str(), slim.size(), false);
-  WifiCred x;
-  bool keptOld = false;
-  for (int i = 0; i < wifiCount(); i++) { wifiGet(i, x); if (std::string(x.ssid) == "RumahA") keptOld = std::string(x.pass) == "rahasia-A-123"; }
-  CHECK(r2.ok && wifiCount() == 2 && keptOld, "tanpa password di berkas: password lama SSID yang sama dipertahankan");
+  WifiCred x; bool kept = false;
+  for (int i = 0; i < wifiCount(); i++) { wifiGet(i, x); if (std::string(x.ssid) == "RumahA") kept = std::string(x.pass) == "rahasia-A-123"; }
+  CHECK(r2.ok && wifiCount() == 2 && kept, "tanpa password di berkas: password lama dipertahankan");
   wipeUserData();
-  RestoreReport r3 = backupApply(slim.c_str(), slim.size(), true);
-  CHECK(r3.ok && r3.wifiNoPassword == 1, "SSID baru berpassword tanpa password di berkas ditandai perlu diisi manual");
+  CHECK(backupApply(slim.c_str(), slim.size(), true).wifiNoPassword == 1, "SSID baru berpassword ditandai perlu diisi manual");
 
-  // penolakan (atomik: tidak ada yang berubah)
+  const char* v1 = "{\"app\":\"mesin-cuci\",\"version\":1,\"settings\":{\"wash\":99999,\"soak\":3,\"notif\":1},"
+                   "\"custom\":[{\"slot\":1,\"name\":\"X\",\"items\":[{\"t\":\"wash\",\"a\":5}]}]}";
+  RestoreReport r3 = backupApply(v1, strlen(v1), false);
+  CHECK(r3.ok && r3.oldIgnored == 3 && S.notif == NOTIF_RINGKAS, "cadangan v1: variabel global & Custom diabaikan (3), notif diterapkan");
+
   resetWorld(); wipeUserData();
-  S.wash = 33;
+  S.notif = NOTIF_RINGKAS;
   const char* bad[] = {
-      "", "bukan json", "{\"app\":\"lain\",\"version\":1}", "{\"app\":\"mesin-cuci\",\"version\":2}",
-      "{\"app\":\"mesin-cuci\",\"version\":1,\"settings\":{\"wash\":\"abc\"}}",
-      "{\"app\":\"mesin-cuci\",\"version\":1,\"settings\":{\"wash\":5},\"custom\":[{\"slot\":1,\"name\":\"X\",\"items\":[{\"t\":\"wash\",\"a\":0}]}]}",
-      "{\"app\":\"mesin-cuci\",\"version\":1,\"settings\":{\"wash\":5},\"custom\":[{\"slot\":9,\"name\":\"X\",\"items\":[{\"t\":\"drain\"}]}]}",
-      "{\"app\":\"mesin-cuci\",\"version\":1,\"settings\":{\"wash\":5},\"custom\":[{\"slot\":1,\"name\":\"X\",\"items\":[{\"t\":\"drain\"}]},{\"slot\":1,\"name\":\"Y\",\"items\":[{\"t\":\"drain\"}]}]}",
-      "{\"app\":\"mesin-cuci\",\"version\":1,\"settings\":{\"wash\":5},\"wifi\":[{\"ssid\":\"a\"},{\"ssid\":\"b\"},{\"ssid\":\"c\"},{\"ssid\":\"d\"},{\"ssid\":\"e\"},{\"ssid\":\"f\"}]}",
-      "{\"app\":\"mesin-cuci\",\"version\":1,\"settings\":{\"wash\":5},\"custom\":[{\"slot\":1,\"name\":\"X\",\"items\":[{\"t\":\"ngawur\"}]}]}",
+      "", "bukan json", "{\"app\":\"lain\",\"version\":3}", "{\"app\":\"mesin-cuci\",\"version\":2}",
+      "{\"app\":\"mesin-cuci\",\"version\":3,\"settings\":{\"notif\":\"abc\"}}",
+      "{\"app\":\"mesin-cuci\",\"version\":3,\"wifi\":[{\"ssid\":\"a\"},{\"ssid\":\"b\"},{\"ssid\":\"c\"},{\"ssid\":\"d\"},{\"ssid\":\"e\"},{\"ssid\":\"f\"}]}",
+      "{\"app\":\"mesin-cuci\",\"version\":3,\"wifi\":[{\"ssid\":\"\"}]}",
   };
   bool allRejected = true, untouched = true;
   for (const char* js : bad) {
     RestoreReport rr = backupApply(js, strlen(js), false);
     allRejected = allRejected && !rr.ok;
-    untouched = untouched && S.wash == 33 && wifiCount() == 0;
+    untouched = untouched && S.notif == NOTIF_RINGKAS && wifiCount() == 0;
   }
-  CHECK(allRejected, "berkas rusak/tidak valid ditolak (10 kasus)");
+  CHECK(allRejected, "berkas rusak/tidak valid ditolak (7 kasus)");
   CHECK(untouched, "penolakan atomik: tidak ada data yang berubah");
   std::string big(RESTORE_MAX_BYTES + 10, ' ');
-  CHECK(!backupApply(big.c_str(), big.size(), false).ok, "berkas > 8 KB ditolak");
-  const char* clampJs = "{\"app\":\"mesin-cuci\",\"version\":1,\"settings\":{\"wash\":99999,\"soak\":3,\"tidakAda\":7}}";
+  CHECK(!backupApply(big.c_str(), big.size(), false).ok, "berkas > 12 KB ditolak");
+  const char* clampJs = "{\"app\":\"mesin-cuci\",\"version\":3,\"settings\":{\"notif\":9,\"remoteOn\":0,\"tidakAda\":7}}";
   RestoreReport rc = backupApply(clampJs, strlen(clampJs), false);
-  CHECK(rc.ok && rc.clamped == 1 && S.wash == 15 && S.soak == 3, "nilai di luar rentang disesuaikan (bukan ditolak), kunci asing diabaikan");
-  // kasus terburuk: 5 slot x 24 langkah terbesar + 5 WiFi terpanjang harus muat di batas impor
+  CHECK(rc.ok && rc.clamped == 1 && S.notif == NOTIF_LENGKAP && S.remoteOn == 0 && rc.oldIgnored == 1, "nilai di luar rentang disesuaikan, kunci asing diabaikan");
   wipeUserData();
-  for (int sl = 0; sl < CUSTOM_SLOTS; sl++) {
-    std::vector<CustomItem> items(24, CustomItem{CI_RINSEPERFUME, 2, 1440, 1440, 40, 0});
-    CustomProc big2 = makeCustom("Nama proses yang cukup panjang", items);
-    customSave(sl, big2);
-  }
   for (int i = 0; i < MAX_WIFI_NETWORKS; i++) {
     std::string ssid(32, (char)('a' + i)), pw(64, (char)('A' + i));
     wifiAdd(ssid.c_str(), pw.c_str());
   }
   std::string worst = backupBuild(true);
   printf("  (kasus terburuk %zu byte, batas %d)\n", worst.size(), RESTORE_MAX_BYTES);
-  CHECK(worst.size() < RESTORE_MAX_BYTES, "cadangan kasus terburuk muat di batas impor");
+  CHECK(worst.size() < RESTORE_MAX_BYTES / 2, "cadangan kasus terburuk jauh di bawah batas impor");
   wipeUserData();
-  RestoreReport rw = backupApply(worst.c_str(), worst.size(), false);
-  CHECK(rw.ok && rw.customSlots == 5 && rw.wifiNetworks == 5, "cadangan kasus terburuk bisa dipulihkan");
+  CHECK(backupApply(worst.c_str(), worst.size(), false).ok && wifiCount() == 5, "cadangan kasus terburuk bisa dipulihkan");
   wipeUserData();
 }
 
 int main(int argc, char** argv) {
   g_verbose = argc > 1;
-  t1_fullNormal();
-  t2_noWater();
-  t3_drainBroken();
-  t4_stop();
-  t5_pauseResume();
-  t6_powerLoss();
-  t7_percent();
-  t8_timeOverflowGuard();
+  n1_fullProcess();
+  n2_isiGagal();
+  n3_praCek();
+  n4_buangGagal();
+  n5_buangNormal();
+  n6_spinCek();
+  n7_reminder();
+  n8_soakRendam();
+  n9_tundaDanSelesaiJam();
+  n10_stopPause();
+  n11_resume();
+  n12_fillModes();
+  n13_skipBusy();
+  n14_manual();
+  n15_relaySequence();
+  n16_pumpFailsafe();
   t9_interlock();
-  t10_skipAndHold();
-  t11_manualRelay();
-  t12_relaySequence();
   t13_failsafe();
   t14_devices();
   t15_relayCheck();
-  t16_custom();
-  t17_drainNormal();
-  t18_firstPullFails();
-  t19_drainTimeMode();
-  t20_fillPrecheck();
-  t21_manualDrainSoft();
-  t22_partialFill();
-  t23_settingsMigration();
+  n17_migration();
   t24_connWatchdog();
   t25_apPolicy();
   t26_remotePolicy();
-  t27_backupRestore();
+  n18_backupRestore();
   checks++;
   if (g_violations != 0) { failures++; printf("  GAGAL: %ld tick melanggar invarian keselamatan\n", g_violations); }
   else printf("  ok: 0 pelanggaran invarian (kiri+kanan, isi+buang, buang+motor) di seluruh skenario\n");

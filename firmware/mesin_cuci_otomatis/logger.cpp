@@ -64,8 +64,8 @@ void loggerInit() {
 }
 
 const char* logLevelName(uint8_t level) {
-  static const char* names[] = {"DEBUG", "INFO", "STEP", "WARN", "ERROR", "DONE"};
-  return level < 6 ? names[level] : "?";
+  static const char* names[] = {"DEBUG", "INFO", "STEP", "WARN", "ERROR", "DONE", "NOTIF"};
+  return level < 7 ? names[level] : "?";
 }
 
 const char* logLevelEmoji(uint8_t level) {

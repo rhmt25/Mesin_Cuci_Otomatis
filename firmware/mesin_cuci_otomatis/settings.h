@@ -4,32 +4,10 @@
 #include "config.h"
 
 enum Pola : uint8_t { POLA_NORMAL, POLA_GENTLE, POLA_HIJAB };
-enum FillLevel : uint8_t { FILL_SENSOR, FILL_PERCENT, FILL_TIME };
-enum DrainMode : uint8_t { DRAIN_SENSOR, DRAIN_TIME };
 enum NotifMode : uint8_t { NOTIF_LENGKAP, NOTIF_RINGKAS, NOTIF_SENYAP };
-enum FillPrecheck : uint8_t { PRECHECK_DRAIN, PRECHECK_PAUSE, PRECHECK_USE };  // bila sensor penuh sebelum mengisi
 
+// Pengaturan global yang tersisa. Semua variabel proses (air, putar, pewangi, ...) kini ada di tiap Tahap (tahap.h).
 struct Settings {
-  uint8_t pola;
-  int soak;          // sesi
-  int wash;          // menit
-  int rinse;         // menit
-  float parfume;     // cup (kelipatan 0,5)
-  int spin;          // menit
-  uint8_t fillLevel;
-  uint8_t fillPercent;     // 25 / 50 / 75
-  int fillTime;            // menit (mode waktu)
-  int flH, flM, flS;       // batas waktu isi
-  int fillRetryCount;
-  int fillRetryWait;       // menit
-  uint8_t drainMode;
-  int drainTime;           // menit (mode waktu)
-  int drainSessionLimit;
-  int drainProbeSec;       // lama menunggu air turun setelah valve ditarik (deteksi tarikan gagal)
-  uint8_t fillPrecheck;    // FillPrecheck
-  int unjamCount;
-  int dH, dM, dS;          // delay sebelum mulai
-  int finishAt;            // menit-dalam-hari target selesai, -1 = tidak ada (sekali pakai)
   uint8_t notif;
   uint8_t remoteOn;        // kontrol jarak jauh aktif (bila REMOTE_URL terisi)
 };
@@ -41,7 +19,6 @@ void settingsSanitize(Settings& s);   // jepit nilai ke rentang valid
 void settingsLoad();
 void settingsSave();
 void settingsReset();
-uint32_t fillLimitSeconds();
 
 // --- WiFi ---
 struct WifiCred {
@@ -68,12 +45,12 @@ void calibReset();
 // --- Resume listrik padam ---
 struct ResumeInfo {
   bool valid;
-  uint8_t program;
-  uint8_t stepIndex;
-  uint8_t arg;        // argumen program (mis. nomor slot Custom Proses)
+  uint8_t slot;       // slot Proses (0..9)
+  uint8_t stepIndex;  // indeks Tahap yang sedang berjalan
+  uint16_t rev;       // revisi Proses saat dimulai; berbeda = Proses sudah diubah, pemulihan dibatalkan
   uint32_t savedAt;   // epoch (0 bila tidak diketahui)
 };
-void resumeSave(uint8_t program, uint8_t stepIndex, uint8_t arg = 0);
+void resumeSave(uint8_t slot, uint8_t stepIndex, uint16_t rev);
 bool resumeLoad(ResumeInfo& out);
 void resumeClear();
 
@@ -82,7 +59,7 @@ enum CycleResult : uint8_t { RES_DONE, RES_STOPPED, RES_ERROR };
 struct HistoryEntry {
   uint32_t startEpoch;
   uint32_t durSec;
-  uint8_t program;
+  char name[24];      // nama Proses ("Manual: Isi air" untuk menu Manual)
   uint8_t result;
 };
 struct Stats {
@@ -94,38 +71,12 @@ struct Stats {
 };
 extern Stats ST;
 void statsLoad();
-void statsRecord(uint8_t program, uint32_t startEpoch, uint32_t durSec, uint8_t result);
+void statsRecord(const char* name, uint32_t startEpoch, uint32_t durSec, uint8_t result);
 void statsAddMotorSec(uint32_t sec);
 
 // --- Auth web ---
 bool authCheck(const String& password);
 void authSet(const String& password);   // juga mencabut semua sesi login
-
-// --- Custom Proses: urutan langkah yang disusun sendiri ---
-#define CUSTOM_SLOTS 5
-#define CUSTOM_MAX_ITEMS 24
-enum CustomType : uint8_t {
-  CI_FILL, CI_AGITATE, CI_SOAK, CI_PERFUME, CI_DRAIN, CI_SPIN, CI_WAIT,   // langkah dasar
-  CI_WASH, CI_SOAKWASH, CI_RINSE, CI_RINSEPERFUME,                          // blok siap pakai
-  CI_COUNT
-};
-struct CustomItem {
-  uint8_t type;    // CustomType
-  uint8_t pola;    // 0 normal, 1 gentle, 2 hijab, 3 ikut Pengaturan
-  uint16_t a;      // menit / sesi / (WAIT: menit)
-  uint16_t b;      // SOAKWASH: menit cuci
-  uint8_t cups2;   // pewangi dalam setengah cup (cup x 2); 0 = ikut Pengaturan
-  uint8_t pad;
-};
-struct CustomProc {
-  char name[28];
-  uint8_t count;
-  uint8_t spare[3];
-  CustomItem items[CUSTOM_MAX_ITEMS];
-};
-bool customLoad(uint8_t slot, CustomProc& out);   // slot 0..4, false bila kosong
-bool customSave(uint8_t slot, const CustomProc& p);
-bool customDelete(uint8_t slot);
 
 // --- Perangkat login yang diingat (maks 5, selamanya sampai dihapus) ---
 #define MAX_DEVICES 5

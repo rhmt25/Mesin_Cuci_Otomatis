@@ -3,49 +3,37 @@
 cmd allow stop
 cmd allow /stop
 cmd allow STOP
-cmd allow program
-cmd allow full_proses
-cmd allow soak
-cmd allow wash
-cmd allow soak_and_wash
-cmd allow rinse
-cmd allow rinse_parfume
-cmd allow spin
-cmd allow water_in
-cmd allow water_out
-cmd allow add_parfume
-cmd allow motor_on
-cmd allow custom
-cmd allow kalibrasi_relay
+cmd allow proses
+cmd allow pilih
 cmd allow relay
 cmd allow relay_test
+cmd allow kalibrasi_relay
+cmd allow buang_manual
 cmd allow jeda
 cmd allow lanjutkan
-cmd allow lanjutkan_proses
 cmd allow lewati
 cmd allow batalkan
 cmd allow cek_air
 cmd allow status
+cmd allow menu
 cmd allow pengaturan
 cmd allow riwayat
 cmd allow statistik
 cmd allow info
-cmd allow pola
-cmd allow level_air
-cmd allow mode_buang
-cmd allow mode_waktu_pengisian_air
+cmd allow bantuan
 cmd allow notif
-cmd allow pra_cek_isi
-cmd allow mulai_nanti
-cmd allow selesai_jam
 cmd allow kalibrasi_air
 cmd allow reset_semua
 cmd allow restart
-cmd allow set_wash_time
-cmd allow set_probe_buang
-cmd allow reset_wash_time
-cmd allow set_delay
 cmd allow remote
+cmd deny program
+cmd deny full_proses
+cmd deny soak
+cmd deny wash
+cmd deny custom
+cmd deny set_wash_time
+cmd deny pola
+cmd deny level_air
 cmd deny wifi_tambah
 cmd deny wifi_hapus
 cmd deny wifi_urutan
@@ -69,10 +57,19 @@ api allow GET /api/info
 api allow GET /api/settings
 api allow GET /api/logs
 api allow GET /api/history
-api allow GET /api/custom
+api allow GET /api/tahap/meta
+api allow GET /api/proses
+api allow GET /api/proses/export
+api allow POST /api/proses
+api allow DELETE /api/proses
+api allow POST /api/run
+api allow POST /api/decide
 api allow POST /api/settings
-api allow POST /api/custom
-api allow DELETE /api/custom
+api deny POST /api/proses/import
+api deny GET /api/proses/import
+api deny GET /api/custom
+api deny POST /api/custom
+api deny DELETE /api/custom
 api deny GET /api/wifi
 api deny POST /api/wifi
 api deny DELETE /api/wifi
@@ -88,8 +85,10 @@ api deny GET /api/backup
 api deny POST /api/login
 api deny PUT /api/cmd
 api deny GET /api/cmd
+api deny PUT /api/proses
 apicmd allow stop
-apicmd allow program
+apicmd allow proses
+apicmd allow pilih
 apicmd deny wifi_tambah
 apicmd deny web_password
 apicmd deny serial

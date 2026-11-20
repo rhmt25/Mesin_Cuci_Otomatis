@@ -11,103 +11,55 @@ static WifiCred wifiList[MAX_WIFI_NETWORKS];
 static int wifiN = 0;
 
 void settingsDefaults(Settings& s) {
-  s.pola = POLA_NORMAL;
-  s.soak = 2;
-  s.wash = 15;
-  s.rinse = 10;
-  s.parfume = 1.0f;
-  s.spin = 10;
-  s.fillLevel = FILL_SENSOR;
-  s.fillPercent = 50;
-  s.fillTime = 30;
-  s.flH = 0; s.flM = 30; s.flS = 0;
-  s.fillRetryCount = 3;
-  s.fillRetryWait = 15;
-  s.drainMode = DRAIN_SENSOR;
-  s.drainTime = 5;
-  s.drainSessionLimit = 3;
-  s.drainProbeSec = 45;
-  s.fillPrecheck = PRECHECK_DRAIN;
-  s.unjamCount = 2;
-  s.dH = 0; s.dM = 0; s.dS = 0;
-  s.finishAt = -1;
   s.notif = NOTIF_LENGKAP;
   s.remoteOn = 1;
 }
 
-static int clampInt(int v, int lo, int hi, int def) { return (v < lo || v > hi) ? def : v; }
-
 static void sanitize(Settings& s) {
   Settings d;
   settingsDefaults(d);
-  if (s.pola > POLA_HIJAB) s.pola = d.pola;
-  s.soak = clampInt(s.soak, 0, 1440, d.soak);
-  s.wash = clampInt(s.wash, 0, 1440, d.wash);
-  s.rinse = clampInt(s.rinse, 0, 1440, d.rinse);
-  if (s.parfume < 0 || s.parfume > 1440 || (int)(s.parfume * 2) != s.parfume * 2) s.parfume = d.parfume;
-  s.spin = clampInt(s.spin, 0, 1440, d.spin);
-  if (s.fillLevel > FILL_TIME) s.fillLevel = d.fillLevel;
-  if (s.fillPercent != 25 && s.fillPercent != 50 && s.fillPercent != 75) s.fillPercent = d.fillPercent;
-  s.fillTime = clampInt(s.fillTime, 1, 1440, d.fillTime);
-  s.flH = clampInt(s.flH, 0, 23, 0);
-  s.flM = clampInt(s.flM, 0, 59, 30);
-  s.flS = clampInt(s.flS, 0, 59, 0);
-  if (s.flH == 0 && s.flM == 0 && s.flS == 0) s.flM = 30;
-  s.fillRetryCount = clampInt(s.fillRetryCount, 0, 20, d.fillRetryCount);
-  s.fillRetryWait = clampInt(s.fillRetryWait, 0, 240, d.fillRetryWait);
-  if (s.drainMode > DRAIN_TIME) s.drainMode = d.drainMode;
-  s.drainTime = clampInt(s.drainTime, 1, 1440, d.drainTime);
-  s.drainSessionLimit = clampInt(s.drainSessionLimit, 1, 1440, d.drainSessionLimit);
-  s.drainProbeSec = clampInt(s.drainProbeSec, 5, 600, d.drainProbeSec);
-  if (s.fillPrecheck > PRECHECK_USE) s.fillPrecheck = d.fillPrecheck;
-  s.unjamCount = clampInt(s.unjamCount, 0, 10, d.unjamCount);
-  s.dH = clampInt(s.dH, 0, 23, 0);
-  s.dM = clampInt(s.dM, 0, 59, 0);
-  s.dS = clampInt(s.dS, 0, 59, 0);
-  s.finishAt = (s.finishAt < -1 || s.finishAt >= 1440) ? -1 : s.finishAt;
   if (s.notif > NOTIF_SENYAP) s.notif = d.notif;
   if (s.remoteOn > 1) s.remoteOn = d.remoteOn;
 }
 
 void settingsSanitize(Settings& s) { sanitize(s); }
 
-uint32_t fillLimitSeconds() { return (uint32_t)S.flH * 3600UL + (uint32_t)S.flM * 60UL + (uint32_t)S.flS; }
+// Versi 3: variabel global lama (air, putar, pewangi, delay) dan Custom Proses lama dihapus; semuanya kini per Tahap.
+static void migrateV3() {
+  Preferences p;
+  p.begin("settings", false);
+  if (p.isKey("v3")) {
+    p.end();
+    return;
+  }
+  uint8_t notif = p.getUChar("notif", NOTIF_LENGKAP);
+  uint8_t remoteOn = p.getUChar("remoteOn", 1);
+  p.clear();
+  p.putUChar("notif", notif);
+  p.putUChar("remoteOn", remoteOn);
+  p.putBool("v3", true);
+  p.end();
+  Preferences cu;   // Custom Proses lama (format blok gabungan) tidak dikonversi
+  cu.begin("custom", false);
+  cu.clear();
+  cu.end();
+  Preferences r;    // data pemulihan lama merujuk ke ID program yang sudah tidak ada
+  r.begin("resume", false);
+  r.clear();
+  r.end();
+  Preferences st;   // riwayat lama memakai format tanpa nama Proses
+  st.begin("stats", false);
+  st.remove("hist");
+  st.putUChar("hCount", 0);
+  st.putUChar("hHead", 0);
+  st.end();
+}
 
 void settingsLoad() {
-  {   // migrasi: kunci pembuangan lama sudah tidak dipakai (sensor hanya di atas)
-    Preferences m;
-    m.begin("settings", false);
-    if (m.isKey("drainExtra")) m.remove("drainExtra");
-    if (m.isKey("drainMax")) m.remove("drainMax");
-    m.end();
-  }
+  migrateV3();
   Preferences p;
   p.begin("settings", true);
   settingsDefaults(S);
-  S.pola = p.getUChar("pola", S.pola);
-  S.soak = p.getInt("soak", S.soak);
-  S.wash = p.getInt("wash", S.wash);
-  S.rinse = p.getInt("rinse", S.rinse);
-  S.parfume = p.getFloat("parfume", S.parfume);
-  S.spin = p.getInt("spin", S.spin);
-  S.fillLevel = p.getUChar("fillLevel", S.fillLevel);
-  S.fillPercent = p.getUChar("fillPct", S.fillPercent);
-  S.fillTime = p.getInt("fillTime", S.fillTime);
-  S.flH = p.getInt("flH", S.flH);
-  S.flM = p.getInt("flM", S.flM);
-  S.flS = p.getInt("flS", S.flS);
-  S.fillRetryCount = p.getInt("fRetry", S.fillRetryCount);
-  S.fillRetryWait = p.getInt("fRetryWait", S.fillRetryWait);
-  S.drainMode = p.getUChar("drainMode", S.drainMode);
-  S.drainTime = p.getInt("drainTime", S.drainTime);
-  S.drainSessionLimit = p.getInt("drainLimit", S.drainSessionLimit);
-  S.drainProbeSec = p.getInt("drainProbe", S.drainProbeSec);
-  S.fillPrecheck = p.getUChar("fillPre", S.fillPrecheck);
-  S.unjamCount = p.getInt("unjam", S.unjamCount);
-  S.dH = p.getInt("dH", S.dH);
-  S.dM = p.getInt("dM", S.dM);
-  S.dS = p.getInt("dS", S.dS);
-  S.finishAt = p.getInt("finishAt", S.finishAt);
   S.notif = p.getUChar("notif", S.notif);
   S.remoteOn = p.getUChar("remoteOn", S.remoteOn);
   p.end();
@@ -118,40 +70,14 @@ void settingsSave() {
   sanitize(S);
   Preferences p;
   p.begin("settings", false);
-  p.putUChar("pola", S.pola);
-  p.putInt("soak", S.soak);
-  p.putInt("wash", S.wash);
-  p.putInt("rinse", S.rinse);
-  p.putFloat("parfume", S.parfume);
-  p.putInt("spin", S.spin);
-  p.putUChar("fillLevel", S.fillLevel);
-  p.putUChar("fillPct", S.fillPercent);
-  p.putInt("fillTime", S.fillTime);
-  p.putInt("flH", S.flH);
-  p.putInt("flM", S.flM);
-  p.putInt("flS", S.flS);
-  p.putInt("fRetry", S.fillRetryCount);
-  p.putInt("fRetryWait", S.fillRetryWait);
-  p.putUChar("drainMode", S.drainMode);
-  p.putInt("drainTime", S.drainTime);
-  p.putInt("drainLimit", S.drainSessionLimit);
-  p.putInt("drainProbe", S.drainProbeSec);
-  p.putUChar("fillPre", S.fillPrecheck);
-  p.putInt("unjam", S.unjamCount);
-  p.putInt("dH", S.dH);
-  p.putInt("dM", S.dM);
-  p.putInt("dS", S.dS);
-  p.putInt("finishAt", S.finishAt);
   p.putUChar("notif", S.notif);
   p.putUChar("remoteOn", S.remoteOn);
+  p.putBool("v3", true);
   p.end();
 }
 
 void settingsReset() {
-  uint8_t keepNotif = S.notif, keepRemote = S.remoteOn;
   settingsDefaults(S);
-  S.notif = keepNotif;
-  S.remoteOn = keepRemote;
   settingsSave();
 }
 
@@ -279,12 +205,12 @@ void calibReset() {
 }
 
 // ---------------------------------------------------------------- Resume ----
-void resumeSave(uint8_t program, uint8_t stepIndex, uint8_t arg) {
+void resumeSave(uint8_t slot, uint8_t stepIndex, uint16_t rev) {
   Preferences p;
   p.begin("resume", false);
-  p.putUChar("prog", program);
+  p.putUChar("slot", slot);
   p.putUChar("step", stepIndex);
-  p.putUChar("arg", arg);
+  p.putUShort("rev", rev);
   time_t now = time(nullptr);
   p.putUInt("ts", now > 1700000000 ? (uint32_t)now : 0);
   p.putBool("valid", true);
@@ -295,9 +221,9 @@ bool resumeLoad(ResumeInfo& out) {
   Preferences p;
   p.begin("resume", true);
   out.valid = p.getBool("valid", false);
-  out.program = p.getUChar("prog", 0);
+  out.slot = p.getUChar("slot", 0);
   out.stepIndex = p.getUChar("step", 0);
-  out.arg = p.getUChar("arg", 0);
+  out.rev = p.getUShort("rev", 0);
   out.savedAt = p.getUInt("ts", 0);
   p.end();
   return out.valid;
@@ -337,11 +263,11 @@ static void statsSave() {
   p.end();
 }
 
-void statsRecord(uint8_t program, uint32_t startEpoch, uint32_t durSec, uint8_t result) {
+void statsRecord(const char* name, uint32_t startEpoch, uint32_t durSec, uint8_t result) {
   HistoryEntry& e = ST.hist[ST.histHead];
   e.startEpoch = startEpoch;
   e.durSec = durSec;
-  e.program = program;
+  strlcpy(e.name, name ? name : "", sizeof(e.name));
   e.result = result;
   ST.histHead = (ST.histHead + 1) % 10;
   if (ST.histCount < 10) ST.histCount++;
@@ -361,47 +287,6 @@ static String sha256Hex(const String& text) {
   char hex[65];
   for (int i = 0; i < 32; i++) snprintf(hex + i * 2, 3, "%02x", out[i]);
   return String(hex);
-}
-
-// ----------------------------------------------------------- Custom Proses ----
-static void customKey(uint8_t slot, char* k) { snprintf(k, 8, "p%u", slot); }
-
-bool customLoad(uint8_t slot, CustomProc& out) {
-  if (slot >= CUSTOM_SLOTS) return false;
-  Preferences p;
-  p.begin("custom", true);
-  char k[8];
-  customKey(slot, k);
-  bool ok = p.isKey(k) && p.getBytesLength(k) == sizeof(CustomProc);
-  if (ok) p.getBytes(k, &out, sizeof(CustomProc));
-  p.end();
-  if (ok) {
-    out.name[sizeof(out.name) - 1] = 0;
-    if (out.count == 0 || out.count > CUSTOM_MAX_ITEMS) ok = false;
-  }
-  return ok;
-}
-
-bool customSave(uint8_t slot, const CustomProc& proc) {
-  if (slot >= CUSTOM_SLOTS) return false;
-  Preferences p;
-  p.begin("custom", false);
-  char k[8];
-  customKey(slot, k);
-  p.putBytes(k, &proc, sizeof(CustomProc));
-  p.end();
-  return true;
-}
-
-bool customDelete(uint8_t slot) {
-  if (slot >= CUSTOM_SLOTS) return false;
-  Preferences p;
-  p.begin("custom", false);
-  char k[8];
-  customKey(slot, k);
-  p.remove(k);
-  p.end();
-  return true;
 }
 
 // ------------------------------------------------------------------ Sesi ----

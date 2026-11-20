@@ -10,6 +10,7 @@ static bool state[R_COUNT];
 static uint32_t lastMotorOffMs = 0;
 static int8_t lastMotorDir = -1;     // 0 kiri, 1 kanan
 static uint32_t motorOnSince = 0;
+static uint32_t perfumeOnSince = 0;
 static uint64_t motorMsTotal = 0;
 static portMUX_TYPE relayMux = portMUX_INITIALIZER_UNLOCKED;
 static bool faulted = false;
@@ -96,6 +97,7 @@ bool relaySet(RelayId id, bool on) {
       // Sabuk & pengaman: paksa pin motor lawan mati secara fisik sebelum menyalakan
       writePin(pins[id == R_LEFT ? R_RIGHT : R_LEFT], false);
     }
+    if (id == R_PERFUME && on && !state[id]) perfumeOnSince = millis();
     state[id] = on;
     writePin(pins[id], on);
     if (on && (id == R_LEFT || id == R_RIGHT)) lastMotorDir = id == R_LEFT ? 0 : 1;
@@ -160,6 +162,11 @@ uint8_t relayGuard() {
       result = 2;
       why = "PELANGGARAN INTERLOCK: semua relay dimatikan dan dikunci";
     }
+  } else if (state[R_PERFUME] && millis() - perfumeOnSince > PERFUME_MAX_ON_MS) {
+    state[R_PERFUME] = false;
+    writePin(pins[R_PERFUME], false);
+    result = 3;
+    why = "Pompa pewangi menyala terlalu lama, dimatikan paksa";
   } else if ((state[R_LEFT] || state[R_RIGHT]) && millis() - motorOnSince > MOTOR_MAX_ON_MS) {
     bool motorsBefore = true;
     state[R_LEFT] = state[R_RIGHT] = false;

@@ -4,7 +4,8 @@
 #include <Arduino.h>
 #include "config.h"
 
-enum LogLevel : uint8_t { LOG_DEBUG, LOG_INFO, LOG_STEP, LOG_WARN, LOG_ERROR, LOG_DONE };
+enum LogLevel : uint8_t { LOG_DEBUG, LOG_INFO, LOG_STEP, LOG_WARN, LOG_ERROR, LOG_DONE,
+                       LOG_NOTIF };   // pesan khusus pemilik (Tahap Notifikasi / Minta tindakan): selalu dikirim, termasuk mode Senyap
 
 struct LogEntry {
   uint32_t seq;
