@@ -1,6 +1,8 @@
-name = "mesin-cuci-relay"
+name = "mesin-cuci-remote"
 main = "src/index.js"
 compatibility_date = "2025-09-01"
+workers_dev = true      # alamat https://<nama>.<subdomain>.workers.dev
+preview_urls = false    # tanpa URL pratinjau tambahan
 
 # UI jarak jauh (hasil: python tools/build_web.py --remote)
 [assets]

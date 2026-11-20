@@ -27,7 +27,7 @@ static bool begun = false;
 static char host[96], path[64];
 static uint16_t port = 443;
 static bool useTls = true;
-static char authHeader[100];
+static char authHeader[140];
 
 static uint32_t viewersUntil = 0;
 static uint32_t lastHb = 0, lastStatus = 0, lastLogSeq = 0;
@@ -56,7 +56,7 @@ static bool parseUrl() {
   if (hp.length() == 0 || hp.length() >= sizeof(host) || p.length() >= sizeof(path)) return false;
   strlcpy(host, hp.c_str(), sizeof(host));
   strlcpy(path, p.c_str(), sizeof(path));
-  snprintf(authHeader, sizeof(authHeader), "Bearer %s", REMOTE_DEVICE_TOKEN);
+  snprintf(authHeader, sizeof(authHeader), "Authorization: Bearer %s", REMOTE_DEVICE_TOKEN);
   return true;
 }
 
@@ -143,9 +143,22 @@ static void onEvent(WStype_t type, uint8_t* payload, size_t length) {
     case WStype_TEXT:
       handleText(payload, length);
       break;
+    case WStype_ERROR:
+      logf(LOG_WARN, "Jarak jauh: kesalahan WebSocket");
+      break;
     default:
       break;
   }
+}
+
+// Diagnosis sekali per percobaan: mencatat hasil DNS (alasan kegagalan paling umum di jaringan yang memblokir DNS).
+static void diagnoseConnect() {
+  IPAddress ip;
+  if (!WiFi.hostByName(host, ip)) {
+    logf(LOG_WARN, "Jarak jauh: DNS gagal untuk %s", host);
+    return;
+  }
+  logf(LOG_INFO, "Jarak jauh: %s -> %s", host, ip.toString().c_str());
 }
 
 static void startClient() {
@@ -153,7 +166,8 @@ static void startClient() {
     logf(LOG_ERROR, "REMOTE_URL tidak valid (harus wss://host/path)");
     return;
   }
-  ws.setAuthorization(authHeader);
+  diagnoseConnect();
+  ws.setExtraHeaders(authHeader);   // setAuthorization() mengirim skema Basic; Worker meminta Bearer
   if (useTls) ws.beginSslWithBundle(host, port, path, x509_crt_bundle_start, "");
   else ws.begin(host, port, path, "");
   ws.onEvent(onEvent);
@@ -225,7 +239,7 @@ static void pump() {
 static void remoteTask(void*) {
   notifierInit();
   for (;;) {
-    bool want = S.remoteOn && remoteConfigured() && netOnline() && !otaBusy();
+    bool want = S.remoteOn && remoteConfigured() && netOnline() && netTimeSynced() && !otaBusy();   // TLS butuh jam yang benar
     if (want && !begun) startClient();
     else if (!want && begun) stopClient();
 

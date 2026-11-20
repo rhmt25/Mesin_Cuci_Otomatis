@@ -4,6 +4,7 @@
 #include <ESPmDNS.h>
 #include <time.h>
 #include <esp_wifi.h>
+#include <lwip/dns.h>
 #include "ping/ping_sock.h"
 #include "config.h"
 #include "logger.h"
@@ -28,6 +29,28 @@ static bool ntpStarted = false;
 static ApPolicy apPol;
 static ConnWatchdog connWd;
 static uint32_t lastPingMs = 0;
+static uint32_t lastDnsMs = 0;
+static ip_addr_t routerDns;       // DNS bawaan DHCP, dipakai sebagai cadangan
+static bool routerDnsSaved = false;
+
+// Beberapa jaringan memblokir/mengalihkan DNS (mis. workers.dev mengembalikan alamat salah). DNS publik jadi utama,
+// DNS router cadangan. DHCP bisa mengembalikan DNS lama saat lease diperbarui, jadi dipanggil berkala.
+static void applyPublicDns() {
+  ip_addr_t cf;
+  IP_ADDR4(&cf, 1, 1, 1, 1);
+  const ip_addr_t* cur = dns_getserver(0);
+  if (cur && !ip_addr_isany(cur) && !ip_addr_cmp(cur, &cf)) {   // simpan DNS router yang baru dari DHCP
+    routerDns = *cur;
+    routerDnsSaved = true;
+  }
+  dns_setserver(0, &cf);
+  if (routerDnsSaved) dns_setserver(1, &routerDns);
+  else {
+    ip_addr_t g;
+    IP_ADDR4(&g, 8, 8, 8, 8);
+    dns_setserver(1, &g);
+  }
+}
 
 bool netOnline() { return online; }
 String netIp() { return online ? WiFi.localIP().toString() : String(""); }
@@ -127,6 +150,8 @@ static void beginTry() {
 
 static void onConnected() {
   WiFi.setSleep(false);
+  applyPublicDns();
+  lastDnsMs = millis();
   online = true;
   allSsidFailed = false;
   backoffMs = 30000;
@@ -171,6 +196,10 @@ static void netTask(void*) {
     bool connected = WiFi.status() == WL_CONNECTED;
     if (connected) {
       if (!online) onConnected();
+      if (millis() - lastDnsMs >= 5000) {   // jaga agar DHCP tidak mengembalikan DNS router sebagai utama
+        lastDnsMs = millis();
+        applyPublicDns();
+      }
 
       // Watchdog konektivitas: ping gateway tiap 30 dtk; link "zombie" (CONNECTED tapi tanpa paket) dipulihkan.
       if (millis() - lastPingMs >= 30000) {

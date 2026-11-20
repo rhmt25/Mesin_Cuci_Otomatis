@@ -22,3 +22,4 @@ todo.md
 # Uji UI
 tools/uitest/node_modules/
 tools/uitest/package-lock.json
+cloud/.remote-password.tmp

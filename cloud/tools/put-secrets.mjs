@@ -7,7 +7,7 @@ const local = JSON.parse(fs.readFileSync(new URL("../.secrets.local.json", impor
 const espSecrets = new URL("../../firmware/mesin_cuci_otomatis/secrets.h", import.meta.url);
 const grab = (name) => {
   try {
-    const m = fs.readFileSync(espSecrets, "utf8").match(new RegExp(`#define\s+${name}\s+"([^"]*)"`));
+    const m = fs.readFileSync(espSecrets, "utf8").match(new RegExp(String.raw`#define\s+${name}\s+"([^"]*)"`));
     return m ? m[1] : "";
   } catch { return ""; }
 };
