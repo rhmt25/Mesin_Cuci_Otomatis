@@ -38,8 +38,8 @@ std::string backupBuild(bool includeWifi) {
     WifiCred c;
     wifiGet(i, c);
     JsonObject o = wifi.add<JsonObject>();
-    o["ssid"] = c.ssid;
-    if (includeWifi) o["pass"] = c.pass;
+    o["ssid"] = JsonString((const char*)c.ssid);
+    if (includeWifi) o["pass"] = JsonString((const char*)c.pass);
     else o["secured"] = c.pass[0] != 0;
   }
   d["includesWifiPasswords"] = includeWifi;

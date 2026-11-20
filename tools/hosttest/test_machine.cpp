@@ -865,6 +865,7 @@ static void n18_backupRestore() {
   wifiAdd("KantorB", "");
   std::string full = backupBuild(true), slim = backupBuild(false);
   CHECK(full.find("rahasia-A-123") != std::string::npos && slim.find("rahasia-A-123") == std::string::npos, "password WiFi hanya ada di cadangan lengkap");
+  CHECK(slim.find("RumahA") != std::string::npos && slim.find("KantorB") != std::string::npos, "cadangan memuat SEMUA SSID (bukan salinan penunjuk yang sama)");
   CHECK(full.find("\"version\":3") != std::string::npos && full.find("custom") == std::string::npos, "versi 3 tanpa Custom Proses");
   wipeUserData();
   RestoreReport dry = backupApply(full.c_str(), full.size(), true);

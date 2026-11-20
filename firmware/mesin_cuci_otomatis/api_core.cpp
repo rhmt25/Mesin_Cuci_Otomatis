@@ -112,7 +112,7 @@ static void addLogEntries(JsonArray arr, const LogEntry* e, size_t n) {
     o["t"] = e[i].ms;
     o["e"] = e[i].epoch;
     o["l"] = e[i].level;
-    o["m"] = e[i].text;
+    o["m"] = JsonString((const char*)e[i].text);   // salin: buffer sumber dipakai ulang
   }
 }
 
@@ -151,7 +151,7 @@ static String historyJson() {
     int pos = (ST.histHead - 1 - i + 20) % 10;
     const HistoryEntry& e = ST.hist[pos];
     JsonObject o = arr.add<JsonObject>();
-    o["proses"] = e.name;
+    o["proses"] = JsonString((const char*)e.name);
     o["start"] = e.startEpoch;
     o["dur"] = e.durSec;
     o["result"] = res[e.result < 3 ? e.result : 2];
@@ -171,7 +171,7 @@ static String wifiJson() {
     wifiGet(i, c);
     JsonObject o = arr.add<JsonObject>();
     o["i"] = i + 1;
-    o["ssid"] = c.ssid;
+    o["ssid"] = JsonString((const char*)c.ssid);   // salin: c dipakai ulang tiap iterasi
     o["secured"] = c.pass[0] != 0;   // password tidak pernah dikirim
     o["active"] = active == c.ssid;
   }
@@ -209,7 +209,7 @@ static String prosesListJson() {
       o["bad"] = true;
       continue;
     }
-    o["name"] = p->name;
+    o["name"] = JsonString((const char*)p->name);   // salin: p dipakai ulang tiap slot
     o["count"] = p->count;
     o["rev"] = p->rev;
     o["est"] = prosesEstimateSec(*p);

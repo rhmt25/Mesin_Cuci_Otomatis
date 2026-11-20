@@ -11,11 +11,16 @@ binding = "ASSETS"
 
 [[durable_objects.bindings]]
 name = "RELAY"
-class_name = "Relay"
+class_name = "RelayV2"
 
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Relay"]
+
+# v2: ganti nama kelas agar instans lama (yang masih memegang sambungan basi) dimulai ulang dengan kode baru; data dipertahankan
+[[migrations]]
+tag = "v2"
+renamed_classes = [{ from = "Relay", to = "RelayV2" }]
 
 [vars]
 # Menit tanpa kabar dari mesin sebelum alarm "mesin tidak terhubung" dikirim ke Telegram

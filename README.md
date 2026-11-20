@@ -184,3 +184,20 @@ Web lokal (HTTP, rumah/hotspot) ─────► ESP32   (jalur utama, tetap j
   ±20-35% paket (ping 1400 B hilang 36%, permintaan web sesekali tertahan 2-8 dtk); pada 15 dBm: 300/300 permintaan sukses.
   Ini ciri suplai 5V/USB yang drop saat memancar: perbaiki suplai (kabel tebal, catu cukup arus, catu relay terpisah, kapasitor
   470-1000 µF) sebelum menaikkan daya pancar.
+
+## Keamanan login (brute-force)
+
+- **Web lokal:** tiap 5 password salah beruntun dikunci makin lama: 30 dtk, 1, 2, 5, 15 mnt, lalu 1 jam; berhasil login mereset.
+  Setiap penguncian masuk log WARN (dan notifikasi). Password web minimal 8 karakter.
+- **Web jarak jauh (Worker):** kunci per IP bertingkat 5 mnt, 15 mnt, 1 jam, 6 jam, 24 jam (turun lagi setelah 24 jam tenang);
+  bila >50 percobaan gagal dalam 10 menit dari banyak IP, semua login dikunci 5 menit. Sesi bertanda tangan HMAC, cookie
+  `HttpOnly` + `SameSite=Strict`, pemeriksaan Origin (CSRF). Logika di `cloud/src/ratelimit.js` (diuji di `cloud/test/e2e.mjs`).
+  Catatan: penguncian per IP juga mengunci pemilik bila salah mengetik 5 kali; tunggu hitungan mundur yang ditampilkan.
+- Disarankan password acak panjang (≥ 16 karakter) untuk jarak jauh dan 2FA pada akun Cloudflare.
+
+## Catatan stabilitas sambungan jarak jauh
+- Heartbeat tingkat aplikasi (`hb` tiap 30 dtk, Worker membalas `ack`); tanpa `ack` 100 dtk ESP32 menyambung ulang. Ping WebSocket
+  bawaan pustaka tidak dipakai (tidak dijawab Worker).
+- Daya pancar WiFi 11 dBm (`WIFI_TX_POWER`): pada 15 dBm sambungan TLS tetap tersendat di perangkat ini.
+- Setelah `wrangler deploy` yang mengubah Durable Object, instans lama bisa tetap berjalan selama sambungan ESP32 masih terbuka;
+  migrasi `renamed_classes` (Relay -> RelayV2) dipakai untuk memaksa kode baru.

@@ -2,7 +2,7 @@
 import { verifyPassword, makeSession, verifySession, parseCookie, timingSafeEqual } from "./auth.js";
 import { isAllowed } from "./allow.js";
 
-export { Relay } from "./relay.js";
+export { RelayV2 } from "./relay.js";
 
 const SESSION_REMEMBER_SEC = 400 * 24 * 3600; // 400 hari (batas cookie browser), diperpanjang tiap dipakai
 const SESSION_TEMP_SEC = 24 * 3600;

@@ -58,20 +58,28 @@ void prosesStoreHostFailWrites(bool fail) { failWrites = fail; }
 #include <esp_log.h>
 
 static bool mounted = false;
+static uint16_t presentMask = 0;   // bit N = berkas pN.json ada (hindari open() pada berkas tak ada: menulis galat palsu ke serial)
 
 static String pathOf(uint8_t slot, const char* ext) { return String("/p") + String((int)slot) + ext; }
 
 bool prosesStoreBegin() {
-  esp_log_level_set("vfs_api", ESP_LOG_NONE);   // exists()/open() pada berkas yang belum ada menulis galat palsu ke serial
   // formatOnFail=true aman: partisi ini tidak dipakai data lain; hanya terformat bila belum pernah dipasang.
   mounted = LittleFS.begin(true, "/lfs", 6, "spiffs");
   if (!mounted) {
     logf(LOG_ERROR, "Penyimpanan Proses (LittleFS) gagal dipasang");
     return false;
   }
-  for (uint8_t i = 0; i < PROSES_SLOTS; i++) {   // sisa tulis yang terputus (listrik padam)
-    String tmp = pathOf(i, ".tmp");
-    if (LittleFS.exists(tmp)) LittleFS.remove(tmp);
+  presentMask = 0;
+  File root = LittleFS.open("/");
+  for (File f = root.openNextFile(); f; f = root.openNextFile()) {   // daftar berkas yang ada
+    String name = f.name();
+    if (name.startsWith("/")) name.remove(0, 1);
+    f.close();
+    if (name.length() >= 6 && name[0] == 'p' && name[1] >= '0' && name[1] <= '9') {
+      uint8_t slot = (uint8_t)(name[1] - '0');
+      if (name.endsWith(".json")) presentMask |= (1u << slot);
+      else if (name.endsWith(".tmp")) LittleFS.remove(String("/") + name);   // sisa tulis yang terputus (listrik padam)
+    }
   }
   return true;
 }
@@ -79,8 +87,8 @@ bool prosesStoreReady() { return mounted; }
 
 static bool readRaw(uint8_t slot, String& raw) {
   if (!mounted || slot >= PROSES_SLOTS) return false;
+  if (!(presentMask & (1u << slot))) return false;
   String path = pathOf(slot, ".json");
-  if (!LittleFS.exists(path)) return false;
   File f = LittleFS.open(path, "r");
   if (!f) return false;
   size_t n = f.size();
@@ -113,13 +121,14 @@ static bool writeRaw(uint8_t slot, const String& raw) {
       return false;
     }
   }
+  presentMask |= (1u << slot);
   return true;
 }
 static bool removeRaw(uint8_t slot) {
   if (!mounted || slot >= PROSES_SLOTS) return false;
-  String path = pathOf(slot, ".json");
-  if (LittleFS.exists(path)) return LittleFS.remove(path);
-  return true;
+  if (!(presentMask & (1u << slot))) return true;
+  presentMask &= ~(1u << slot);
+  return LittleFS.remove(pathOf(slot, ".json"));
 }
 #endif
 

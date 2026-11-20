@@ -14,7 +14,7 @@ const NOTIF_BATCH_MS = 2000;
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 
-export class Relay extends DurableObject {
+export class RelayV2 extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
     this.env = env;
@@ -40,8 +40,11 @@ export class Relay extends DurableObject {
     const min = Number(this.env.OFFLINE_MIN);
     return (Number.isFinite(min) && min > 0 ? min : 5) * 60000;
   }
+  // Soket perangkat yang masih terbuka dan paling baru (sisa sambungan lama, mis. sebelum ESP32 reboot, bisa belum tertutup)
   device() {
-    return this.ctx.getWebSockets("device")[0] || null;
+    const list = this.ctx.getWebSockets("device");
+    for (let i = list.length - 1; i >= 0; i--) if (list[i].readyState === 1) return list[i];
+    return null;
   }
 
   async fetch(request) {
@@ -68,7 +71,7 @@ export class Relay extends DurableObject {
   // ---------------------------------------------------------------- browser ----
   async info() {
     await this.load();
-    return json({ remote: true, online: !!this.device(), lastSeen: this.state.lastSeen, fw: this.state.fw });
+    return json({ remote: true, online: !!this.device(), lastSeen: this.state.lastSeen, fw: this.state.fw, build: "r3" });
   }
 
   async poll(url) {
@@ -104,10 +107,10 @@ export class Relay extends DurableObject {
       this.pending.set(id, { resolve, timer });
       try {
         dev.send(JSON.stringify({ t: "req", id, ...body }));
-      } catch {
+      } catch (e) {
         clearTimeout(timer);
         this.pending.delete(id);
-        resolve({ code: 503, body: { ok: false, msg: "Mesin offline" } });
+        resolve({ code: 503, body: { ok: false, msg: "Mesin offline (" + String(e && e.message ? e.message : e).slice(0, 80) + ")" } });
       }
     });
     return json(result.body, result.code);
@@ -144,11 +147,13 @@ export class Relay extends DurableObject {
 
     switch (msg.t) {
       case "hello":
+        try { ws.send('{"t":"ack"}'); } catch { /* socket sudah tertutup */ }
         this.state.fw = msg.fw || "";
         if (msg.d) { this.state.status = msg.d; this.state.statusAt = now; }
         await this.touch(wasOffline);
         break;
       case "hb":
+        try { ws.send('{"t":"ack"}'); } catch { /* socket sudah tertutup */ }
         if (msg.d) { this.state.status = msg.d; this.state.statusAt = now; }
         if (msg.fw) this.state.fw = msg.fw;
         await this.touch(wasOffline);

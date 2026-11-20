@@ -269,7 +269,7 @@ void netBegin() {
   WiFi.mode(WIFI_STA);   // hotspot TIDAK nyala saat boot; hanya bila semua SSID gagal
   WiFi.setSleep(false);  // matikan power-save WiFi: tanpa ini dashboard lambat/putus-putus
   esp_wifi_set_bandwidth(WIFI_IF_STA, WIFI_BW_HT20);   // HT20 lebih tahan interferensi 2,4 GHz daripada HT40
-  WiFi.setTxPower(WIFI_TX_POWER);   // daya pancar penuh membuat paket hilang (suplai drop); 15 dBm terukur 300/300 sukses
+  WiFi.setTxPower(WIFI_TX_POWER);   // daya pancar penuh membuat paket hilang (suplai drop); 11 dBm terukur loss 2%
   WiFi.setHostname(DEVICE_HOSTNAME);
 
   uint8_t mac[6];

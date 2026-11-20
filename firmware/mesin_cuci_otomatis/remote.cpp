@@ -30,7 +30,8 @@ static bool useTls = true;
 static char authHeader[140];
 
 static uint32_t viewersUntil = 0;
-static uint32_t lastHb = 0, lastStatus = 0, lastLogSeq = 0;
+static uint32_t lastHb = 0, lastStatus = 0, lastLogSeq = 0, lastAck = 0;
+#define ACK_TIMEOUT_MS 100000   // hb dikirim tiap 30 dtk; tanpa ack selama ini = sambungan dianggap mati
 static bool helloPending = false, bootNotified = false, resumeNotified = false;
 static uint8_t backoffLevel = 0;
 static const uint32_t backoffSteps[] = {5000, 15000, 30000, 60000, 120000, 300000};
@@ -86,10 +87,18 @@ static void sendNotif(const String& text) {
 }
 
 static void handleText(const uint8_t* payload, size_t length) {
-  if (length == 0 || length > MAX_INCOMING) return;
+  if (length == 0 || length > MAX_INCOMING) {
+    logf(LOG_DEBUG, "Pesan server diabaikan (panjang %u)", (unsigned)length);
+    return;
+  }
   JsonDocument doc;
   if (deserializeJson(doc, payload, length) != DeserializationError::Ok) return;
   String t = doc["t"] | "";
+
+  if (t == "ack") {
+    lastAck = millis();
+    return;
+  }
 
   if (t == "viewers") {
     uint32_t ttl = doc["ttl"] | 15;
@@ -111,6 +120,7 @@ static void handleText(const uint8_t* payload, size_t length) {
     JsonObjectConst q = doc["q"];
     String body;
     if (!doc["b"].isNull()) serializeJson(doc["b"], body);
+    logf(LOG_DEBUG, "RPC %s %s", method.c_str(), p.c_str());
     ApiResult r = apiHandle(API_REMOTE, method.c_str(), p, [&q](const char* k) { return q[k].as<String>(); }, body);
     String out;
     out.reserve(r.body.length() + 48);
@@ -121,7 +131,8 @@ static void handleText(const uint8_t* payload, size_t length) {
     out += ",\"body\":";
     out += r.body.length() ? r.body : String("{}");
     out += "}";
-    ws.sendTXT(out);
+    bool sent = ws.sendTXT(out);
+    logf(LOG_DEBUG, "RPC selesai %d, %u B, kirim %s", r.code, (unsigned)out.length(), sent ? "ok" : "GAGAL");
   }
 }
 
@@ -129,6 +140,7 @@ static void onEvent(WStype_t type, uint8_t* payload, size_t length) {
   switch (type) {
     case WStype_CONNECTED:
       connected = true;
+      lastAck = millis();
       helloPending = true;
       backoffLevel = 0;
       ws.setReconnectInterval(backoffSteps[0]);
@@ -172,7 +184,7 @@ static void startClient() {
   else ws.begin(host, port, path, "");
   ws.onEvent(onEvent);
   ws.setReconnectInterval(backoffSteps[0]);
-  ws.enableHeartbeat(25000, 15000, 2);   // ping WebSocket menjaga NAT & mendeteksi koneksi mati
+  // Ping WebSocket bawaan pustaka tidak dijawab Worker (sambungan putus tiap ±80 dtk): pakai heartbeat aplikasi hb -> ack
   begun = true;
   logf(LOG_INFO, "Menyambung ke server jarak jauh (%s)", host);
 }
@@ -247,7 +259,14 @@ static void remoteTask(void*) {
     if (begun) {
       ws.loop();
       notifierSetOnline(connected);
-      if (connected) pump();
+      if (connected) {
+        pump();
+        if (millis() - lastAck > ACK_TIMEOUT_MS) {   // server tidak menjawab: paksa sambung ulang
+          logf(LOG_WARN, "Server jarak jauh tidak menjawab, menyambung ulang");
+          lastAck = millis();
+          ws.disconnect();
+        }
+      }
     }
     vTaskDelay(pdMS_TO_TICKS(begun ? 20 : 250));
   }
