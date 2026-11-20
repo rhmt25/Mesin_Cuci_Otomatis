@@ -55,12 +55,14 @@ void prosesStoreHostFailWrites(bool fail) { failWrites = fail; }
 #else
 // ------------------------------------------------------------ LittleFS (perangkat)
 #include <LittleFS.h>
+#include <esp_log.h>
 
 static bool mounted = false;
 
 static String pathOf(uint8_t slot, const char* ext) { return String("/p") + String((int)slot) + ext; }
 
 bool prosesStoreBegin() {
+  esp_log_level_set("vfs_api", ESP_LOG_NONE);   // exists()/open() pada berkas yang belum ada menulis galat palsu ke serial
   // formatOnFail=true aman: partisi ini tidak dipakai data lain; hanya terformat bila belum pernah dipasang.
   mounted = LittleFS.begin(true, "/lfs", 6, "spiffs");
   if (!mounted) {

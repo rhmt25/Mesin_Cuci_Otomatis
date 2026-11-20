@@ -4,6 +4,7 @@
 // - meneruskan permintaan API ke ESP32 (RPC) dan menunggu balasan
 // - mengirim notifikasi Telegram dan alarm "mesin tidak terhubung"
 import { DurableObject } from "cloudflare:workers";
+import { applyFail, applyGlobalFail } from "./ratelimit.js";
 import { sendTelegram, wibTime } from "./telegram.js";
 
 const MAX_LOGS = 60;
@@ -112,18 +113,21 @@ export class Relay extends DurableObject {
     return json(result.body, result.code);
   }
 
-  // Batas laju login per alamat IP: 5 gagal -> kunci 5 menit
+  // Batas laju login: kunci bertingkat per alamat IP (5 mnt, 15 mnt, 1 jam, 6 jam, 24 jam) + batas global semua IP
   async rateLimit(request) {
     const { op, ip } = await request.json();
     const key = `rl:${ip}`;
     const now = Date.now();
-    const rec = (await this.ctx.storage.get(key)) || { n: 0, lockUntil: 0 };
-    if (op === "check") return json({ locked: rec.lockUntil > now, retryMs: Math.max(0, rec.lockUntil - now) });
+    const rec = (await this.ctx.storage.get(key)) || { n: 0, level: 0, lockUntil: 0, lastFail: 0 };
+    const g = (await this.ctx.storage.get("rl:global")) || { start: 0, count: 0, lockUntil: 0 };
+    const lockedUntil = () => Math.max(rec.lockUntil || 0, g.lockUntil || 0);
+    if (op === "check") return json({ locked: lockedUntil() > now, retryMs: Math.max(0, lockedUntil() - now) });
     if (op === "fail") {
-      rec.n += 1;
-      if (rec.n >= 5) { rec.lockUntil = now + 5 * 60000; rec.n = 0; }
+      applyFail(rec, now);
+      applyGlobalFail(g, now);
       await this.ctx.storage.put(key, rec);
-      return json({ locked: rec.lockUntil > now });
+      await this.ctx.storage.put("rl:global", g);
+      return json({ locked: lockedUntil() > now, retryMs: Math.max(0, lockedUntil() - now) });
     }
     if (op === "ok") { await this.ctx.storage.delete(key); return json({ ok: true }); }
     return json({ ok: false }, 400);

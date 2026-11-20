@@ -485,7 +485,7 @@ CmdResult executeCommand(const String& command, const String& argsIn, CmdSource 
   }
   if (name == "web_password") {
     if (src != SRC_WEB) return fail("Hanya bisa diganti dari dashboard web.");
-    if (args.length() < 6) return fail("Password minimal 6 karakter.");
+    if (args.length() < 8) return fail("Password minimal 8 karakter.");
     authSet(args);
     return ok("Password web diganti.");
   }

@@ -17,8 +17,10 @@ static AsyncWebServer server(80);
 // ============================================================================
 // Sesi login (token tersimpan di NVS lewat settings.cpp -> bertahan saat restart)
 // ============================================================================
-static uint8_t loginFails = 0;
+static uint8_t loginFails = 0, loginLevel = 0;
 static uint32_t lockUntil = 0;
+// Penguncian bertingkat: tiap 5 salah beruntun, kunci makin lama (30 dtk, 1, 2, 5, 15 mnt, 1 jam); berhasil login mereset
+static const uint32_t LOCK_STEPS_MS[] = {30000, 60000, 120000, 300000, 900000, 3600000};
 static volatile bool uploadOk = false;
 
 static String cookieToken(const String& cookie) {
@@ -121,20 +123,26 @@ static void setupRoutes() {
 
   // ---- login ----
   server.addHandler(new AsyncCallbackJsonWebHandler("/api/login", [](AsyncWebServerRequest* r, JsonVariant& json) {
-    if (millis() < lockUntil) {
-      sendJson(r, 429, "{\"ok\":false,\"msg\":\"Terlalu banyak percobaan. Tunggu sebentar.\"}");
+    int32_t lockLeft = (int32_t)(lockUntil - millis());
+    if (lockUntil != 0 && lockLeft > 0) {
+      sendJson(r, 429, String("{\"ok\":false,\"msg\":\"Terlalu banyak percobaan. Coba lagi dalam ") + (lockLeft / 1000 + 1) + " detik.\"}");
       return;
     }
     String pw = json["password"] | "";
     if (!authCheck(pw)) {
       if (++loginFails >= 5) {
-        lockUntil = millis() + 30000;
+        uint32_t ms = LOCK_STEPS_MS[loginLevel];
+        if (loginLevel < sizeof(LOCK_STEPS_MS) / sizeof(LOCK_STEPS_MS[0]) - 1) loginLevel++;
+        lockUntil = millis() + ms;
+        if (lockUntil == 0) lockUntil = 1;
         loginFails = 0;
+        logf(LOG_WARN, "Login web gagal berulang: dikunci %lu detik", (unsigned long)(ms / 1000));
       }
       sendJson(r, 401, "{\"ok\":false,\"msg\":\"Password salah\"}");
       return;
     }
     loginFails = 0;
+    loginLevel = 0;
     bool remember = json["remember"] | false;
     String ua = r->hasHeader("User-Agent") ? r->header("User-Agent") : String("");
     String token = sessionCreate(remember, deviceNameFromUA(ua));

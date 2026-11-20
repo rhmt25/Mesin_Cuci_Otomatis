@@ -185,6 +185,23 @@ try {
   ok(locked, "5 kali salah -> 429 (dikunci)");
   const afterLock = await call("POST", "/api/login", { password: PASSWORD });
   ok(afterLock.code === 429, "password benar pun ditolak saat dikunci");
+
+  console.log("[W10] Penguncian bertingkat (logika murni)");
+  const { applyFail, applyGlobalFail, LEVELS_MS, DECAY_MS, GLOBAL } = await import("../src/ratelimit.js");
+  let rec = { n: 0, level: 0, lockUntil: 0, lastFail: 0 }, t = 1e9, locks = [];
+  for (let round = 0; round < 7; round++) {
+    for (let i = 0; i < 5; i++) { t += 1000; applyFail(rec, t); }
+    locks.push(rec.lockUntil - t);
+    t = rec.lockUntil + 1000;
+  }
+  ok(locks.slice(0, 5).join() === LEVELS_MS.join() && locks[5] === LEVELS_MS[4] && locks[6] === LEVELS_MS[4], "kunci naik 5 mnt, 15 mnt, 1 jam, 6 jam, 24 jam lalu tetap 24 jam");
+  t = rec.lockUntil + DECAY_MS + 1000; for (let i = 0; i < 5; i++) { t += 1000; applyFail(rec, t); }
+  ok(rec.lockUntil - t === LEVELS_MS[0], "tanpa percobaan gagal 24 jam: kembali ke tingkat 5 menit");
+  let g = { start: 0, count: 0, lockUntil: 0 }; t = 2e9;
+  for (let i = 0; i < GLOBAL.max - 1; i++) applyGlobalFail(g, t + i);
+  ok(!g.lockUntil, "49 gagal dari banyak IP: belum dikunci global");
+  applyGlobalFail(g, t + 100);
+  ok(g.lockUntil > t, "50 gagal dalam 10 menit dari banyak IP: semua login dikunci global");
 } catch (e) {
   fail++;
   console.log("  GAGAL (pengecualian):", e && e.stack ? e.stack : e);

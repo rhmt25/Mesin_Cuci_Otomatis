@@ -88,14 +88,14 @@ async function login(request, env, url) {
     (await stub.fetch("https://relay/rl", { method: "POST", body: JSON.stringify({ op, ip }) })).json();
 
   const state = await rl("check");
-  if (state.locked) return jsonResp({ ok: false, msg: "Terlalu banyak percobaan. Coba lagi beberapa menit." }, 429);
+  if (state.locked) return jsonResp({ ok: false, msg: `Terlalu banyak percobaan. Coba lagi dalam ${Math.ceil((state.retryMs || 60000) / 60000)} menit.` }, 429);
 
   let body;
   try { body = await request.json(); } catch { return jsonResp({ ok: false, msg: "JSON tidak valid" }, 400); }
   const good = await verifyPassword(String(body.password || ""), env.REMOTE_PASSWORD_HASH);
   if (!good) {
     const r = await rl("fail");
-    return jsonResp({ ok: false, msg: r.locked ? "Terlalu banyak percobaan. Dikunci 5 menit." : "Password salah" }, r.locked ? 429 : 401);
+    return jsonResp({ ok: false, msg: r.locked ? `Terlalu banyak percobaan. Dikunci ${Math.ceil((r.retryMs || 60000) / 60000)} menit.` : "Password salah" }, r.locked ? 429 : 401);
   }
   await rl("ok");
   const remember = !!body.remember;
