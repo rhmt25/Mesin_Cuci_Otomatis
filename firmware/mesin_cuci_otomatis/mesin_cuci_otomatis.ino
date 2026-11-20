@@ -7,6 +7,7 @@
 #include "relay.h"
 #include "water_sensor.h"
 #include "settings.h"
+#include "proses_store.h"
 #include "machine.h"
 #include "commands.h"
 #include "net_wifi.h"
@@ -46,6 +47,15 @@ void setup() {
   calibLoad();
   statsLoad();
   wifiStoreInit();
+  if (prosesStoreBegin()) {
+    int ok = 0, bad = 0;
+    for (uint8_t i = 0; i < PROSES_SLOTS; i++) {
+      SlotState st = prosesSlotState(i);
+      if (st == SLOT_OK) ok++;
+      else if (st == SLOT_BAD) bad++;
+    }
+    logf(LOG_INFO, "Penyimpanan Proses siap: %d Proses%s", ok, bad ? " (ada berkas rusak)" : "");
+  }
   machineBegin();            // task kontrol mesin di Core 1
   netBegin();                // WiFi + hotspot + OTA di Core 0
   webBegin();                // dashboard web + WebSocket

@@ -62,6 +62,10 @@ class String {
   bool operator==(const char* o) const { return s == o; }
   bool operator!=(const char* o) const { return s != o; }
   char operator[](unsigned i) const { return s[i]; }
+  size_t write(uint8_t c) { s += (char)c; return 1; }   // agar ArduinoJson bisa menulis ke String
+  size_t write(const uint8_t* b, size_t n) { s.append((const char*)b, n); return n; }
+  String& operator+=(char c) { s += c; return *this; }
+  void reserve(unsigned n) { s.reserve(n); }
 };
 inline String operator+(const String& a, const String& b) { String r(a); r += b; return r; }
 inline String operator+(const String& a, const char* b) { String r(a); r += b; return r; }
