@@ -272,7 +272,7 @@ Aksi berbahaya (reset, restart, rollback, hapus) memakai gaya "danger-outline" d
 ## 13. Batas teknis (wajib)
 
 - Satu halaman (`index.html` + `style.css` + `app.js`) dibundel `tools/build_web.py` → gzip ke `web_ui.h` (PROGMEM ESP32) dan
-  `cloud/public/index.html`. **Target ukuran gzip ≤ 32 KB** (sekarang ±20 KB). Tanpa pustaka/CDN/font luar/gambar raster.
+  `cloud/public/index.html`. **Target ukuran gzip ≤ 36 KB** (sekarang ±33 KB). Tanpa pustaka/CDN/font luar/gambar raster.
 - Polling, bukan WebSocket (`/api/poll` 2 dtk, 10 dtk saat tab tersembunyi). Jangan menambah permintaan per poll.
 - Semua teks bahasa Indonesia. Istilah: **Proses**, **Tahap**, **keputusan**, **Tarik Ulang Valve**, **Verifikasi Pengurangan
   Jumlah Air**.
@@ -285,4 +285,4 @@ Aksi berbahaya (reset, restart, rollback, hapus) memakai gaya "danger-outline" d
 - Palet Tahap di HP berupa **strip gulir horizontal** (bukan sheet); di desktop kolom kiri.
 - Konfirmasi memakai dialog bawaan peramban (`confirm`), bukan dialog kustom: andal, aksesibel, dan hemat ukuran.
 - Kartu Proses di daftar memuat `trail` (maks 12 jenis Tahap) dari `GET /api/proses`.
-- Ukuran halaman: ±31,5 KB gzip (`build_web.py` membuang komentar dan indentasi).
+- Ukuran halaman: ±33 KB gzip (batas dinaikkan ke 36 KB) (`build_web.py` membuang komentar dan indentasi).

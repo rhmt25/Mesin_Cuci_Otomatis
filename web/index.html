@@ -199,7 +199,7 @@
             <div class="cpSummary" id="pcSummary"></div>
             <div id="pcWarn" class="callout warn" hidden></div>
             <div id="pcError" class="callout err" role="alert" hidden></div>
-            <div class="row"><button class="btn primary" id="pcSave"><svg class="ic sm"><use href="#i-check"/></svg>Simpan</button><button class="btn" id="pcSaveNew">Simpan sebagai baru</button></div>
+            <div class="row"><button class="btn primary" id="pcSave"><svg class="ic sm"><use href="#i-check"/></svg>Simpan</button></div>
             <button class="btn ghost sm" id="pcReset" type="button">Kosongkan</button>
           </aside>
         </div>
@@ -273,6 +273,8 @@
               <button class="btn primary" type="submit"><svg class="ic sm"><use href="#i-plus"/></svg>Tambah WiFi</button>
               <p class="field-help">Maksimal 5 WiFi, dicoba berurutan. Password tidak pernah ditampilkan.</p></form></div>
           <div class="card"><h3>Kontrol jarak jauh</h3><p class="muted" id="remoteInfo"></p>
+            <div id="remoteKv"></div>
+            <p class="field-help">Sambungan keluar ke server Cloudflare dan memakai enkripsi. Dari internet hanya bisa memantau, memulai, dan menghentikan Proses; WiFi, firmware, dan password tidak bisa diubah.</p>
             <div class="row"><button class="btn" data-cmd="remote" data-args="on">Aktifkan</button><button class="btn" data-cmd="remote" data-args="off">Nonaktifkan</button></div></div>
         </div>
       </div>
@@ -286,11 +288,11 @@
             <label>Ulangi password<input id="lpw2" type="password" minlength="12" maxlength="64" autocomplete="new-password"></label>
             <button class="btn" id="btnPwLocal">Ganti password lokal</button></div>
           <div class="card form"><h3>Password jarak jauh</h3>
-            <p class="muted">Untuk dashboard di internet (berbeda dari password lokal). Minimal 12 karakter. Dikirim sekali lewat sambungan terenkripsi ke server dan tidak disimpan di mesin; semua sesi jarak jauh akan keluar. Butuh mesin sedang terhubung ke server.</p>
+            <p class="muted">Untuk dashboard di internet. Minimal 12 karakter. Mengganti password mengeluarkan semua sesi jarak jauh.</p>
             <label>Password baru<input id="rpw1" type="password" minlength="12" maxlength="64" autocomplete="new-password" placeholder="min 12 karakter"></label>
             <label>Ulangi password<input id="rpw2" type="password" minlength="12" maxlength="64" autocomplete="new-password"></label>
-            <button class="btn" id="btnPwRemote">Ganti password jarak jauh</button>
-            <p class="muted" id="pwRemoteMsg" role="status"></p></div>
+            <p class="field-help" id="pwRemoteMsg" role="status"></p>
+            <button class="btn" id="btnPwRemote">Ganti password jarak jauh</button></div>
           <div class="card"><h3>Perangkat yang diingat</h3><p class="muted" id="devHint"></p><div id="devList"></div>
             <div class="dpanel"><button class="btn dout" id="btnDevOthers">Keluarkan semua perangkat lain</button></div></div>
         </div>
@@ -306,8 +308,7 @@
           <div class="card"><h3>Kalibrasi isi air</h3><p class="muted" id="calibNote"></p>
             <div class="row"><button class="btn" data-cmd="cek_air"><svg class="ic sm"><use href="#i-search"/></svg>Cek air</button><button class="btn dout" id="btnCalib">Reset kalibrasi</button></div></div>
           <div class="card"><h3>Tampilan</h3>
-            <div class="seg" id="themeSeg" role="group" aria-label="Tema"><button type="button" data-theme-set="auto">Otomatis</button><button type="button" data-theme-set="light">Terang</button><button type="button" data-theme-set="dark">Gelap</button></div>
-            <p class="field-help">Variabel air, putar, dan pewangi diatur per Tahap di menu Proses dan Manual.</p></div>
+            <div class="seg" id="themeSeg" role="group" aria-label="Tema"><button type="button" data-theme-set="auto">Otomatis</button><button type="button" data-theme-set="light">Terang</button><button type="button" data-theme-set="dark">Gelap</button></div></div>
         </div>
       </div>
 
@@ -326,8 +327,9 @@
             <label class="chk"><input type="checkbox" id="bkWifi"> Sertakan password WiFi</label>
             <div class="row"><button class="btn" id="btnBackup"><svg class="ic sm"><use href="#i-download"/></svg>Unduh cadangan</button></div><label class="drop" for="restoreFile"><svg class="ic lg"><use href="#i-upload"/></svg><span class="t">Seret Berkas Cadangan (.json) ke Sini</span><span class="h">atau klik untuk memilih berkas</span><span class="dn"></span><input id="restoreFile" type="file" accept=".json,application/json" hidden></label>
             <p class="muted" id="restoreMsg" role="status"></p></div>
-          <div class="card"><h3>Zona berbahaya</h3><p class="muted">Aksi berikut meminta konfirmasi.</p>
-            <div class="row"><button class="btn dout" id="btnResetAll">Reset pengaturan</button><button class="btn dout" id="btnRestart"><svg class="ic sm"><use href="#i-power"/></svg>Restart mesin</button></div></div>
+          <div class="card"><h3>Zona berbahaya</h3>
+            <div class="danger-item"><div><b>Reset Pengaturan</b><p class="field-help">Mengembalikan semua pengaturan mesin ke nilai bawaan. Proses tersimpan tidak dihapus.</p></div><button class="btn dout" id="btnResetAll">Reset</button></div>
+            <div class="danger-item"><div><b>Restart Mesin</b><p class="field-help">Memulai ulang ESP32. Dashboard terputus beberapa detik.</p></div><button class="btn dout" id="btnRestart"><svg class="ic sm"><use href="#i-power"/></svg>Restart</button></div></div>
         </div>
       </div>
     </section>

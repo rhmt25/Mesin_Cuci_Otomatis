@@ -244,6 +244,7 @@ function renderRail() {
 }
 const fmtNum = v => String(v).replace('.', ',');
 function fieldVal(f, v) {
+  if (f.k === 'tunggu' && v === 0) return 'Tanpa Jeda';
   if (f.kind === 'enum') { const i = f.opts.indexOf(v); return i >= 0 ? f.optLabels[i] : String(v); }
   if (f.kind === 'choice') return `${v}${f.unit ? ' ' + f.unit : ''}`;
   if (f.kind === 'cup') return fmtNum(v) + ' cup';
@@ -491,6 +492,8 @@ function renderSys() {
     kv('WiFi', s.wifi.online ? esc(s.wifi.ssid) + ' · ' + esc(s.wifi.ip) : 'offline') + kv('Hotspot', s.wifi.apOn ? esc(s.wifi.ap) + ' aktif (' + s.wifi.apClients + ' klien)' : 'nonaktif') +
     kv('Jam', esc(s.wifi.time)) + kv('Notifikasi', esc(s.notif)) + kv('Penyimpanan Proses', s.fs ? 'siap' : 'tidak tersedia');
   const rm = s.remote || {}, ri = $('#remoteInfo');
+  const kvr = $('#remoteKv');
+  if (kvr) kvr.innerHTML = kv('Dikonfigurasi', rm.configured ? 'Ya' : 'Belum') + kv('Status', rm.enabled ? 'Aktif' : 'Nonaktif') + kv('Server', rm.connected ? 'Terhubung' : 'Belum Terhubung');
   if (ri) ri.textContent = !rm.configured ? 'Belum dikonfigurasi (isi REMOTE_URL dan REMOTE_DEVICE_TOKEN di secrets.h).' : !rm.enabled ? 'Dinonaktifkan.' : rm.connected ? 'Terhubung ke server jarak jauh.' : 'Mencoba menyambung ke server…';
 }
 // Password: lokal dan jarak jauh berbeda, keduanya diatur dari sini (minimal 12 karakter, diketik dua kali)
@@ -565,6 +568,7 @@ function newItem(t, vals) {
 // f.when memakai nilai "mode": v bisa berupa nilai item (editor, {mode}) atau Tahap dari API (tampilan, juga punya mode)
 const applies = (f, v) => !f.when || f.when.includes((v.v || v).mode);
 
+const OPTIONAL = { 'isi.tunggu': 1 };
 function fieldHtml(f, it) {
   const val = it.v[f.k], base = `data-uid="${it.uid}" data-k="${f.k}"`;
   let ctl, unit = '';
@@ -574,14 +578,29 @@ function fieldHtml(f, it) {
   else if (f.kind === 'text') ctl = `<input type="text" ${base} maxlength="${f.max}" value="${esc(val)}">`;
   else if (f.fmt === 'hms') {
     ctl = '<span class="tri">' + [['h', Math.floor(val / 3600), 23, 'jam'], ['m', Math.floor(val % 3600 / 60), 59, 'mnt'], ['s', val % 60, 59, 'dtk']]
-      .map(([p, x, mx, cap]) => `<span><input type="number" ${base} data-hms="${p}" min="0" max="${mx}" inputmode="numeric" value="${x}" aria-label="${f.label} (${cap})"><em>${cap}</em></span>`).join('') + '</span>';
+      .map(([p, x, mx, cap]) => `<span><input type="number" ${base} data-hms="${p}" min="0" max="${mx}" inputmode="numeric" value="${x}" aria-label="${f.label} (${cap})"></span>`).join('') + '</span>';
+    unit = ' (J : M : D)';
   } else { ctl = `<input type="number" ${base} min="${f.min}" max="${f.max}" inputmode="numeric" value="${val}">`; unit = f.unit ? ` (${f.unit})` : ''; }
-  return `<label data-f="${f.k}"${applies(f, it) ? '' : ' hidden'}><span>${esc(f.label)}<span class="u">${unit}</span></span>${ctl}</label>`;
+  const cap = `<span>${esc(f.label)}<span class="u">${unit}</span></span>`;
+  // Variabel opsional (nilai 0 = mati): saklar di baris label; kotak tetap ada agar sejajar dengan tetangganya
+  if (OPTIONAL[it.t + '.' + f.k]) {
+    const on = +val > 0;
+    ctl = ctl.replace('<input ', `<input ${on ? '' : 'disabled '}`);
+    return `<label data-f="${f.k}"${applies(f, it) ? '' : ' hidden'}><span class="optlab">${cap}<span class="sw"><input type="checkbox" data-opt="${it.uid}" data-k2="${f.k}"${on ? ' checked' : ''} aria-label="Gunakan ${esc(f.label)}"></span></span>${ctl}</label>`;
+  }
+  return `<label data-f="${f.k}"${applies(f, it) ? '' : ' hidden'}>${cap}${ctl}</label>`;
 }
 const fieldsHtml = it => typeMeta(it.t).fields.map(f => fieldHtml(f, it)).join('');
 
 // Mengambil nilai dari kontrol ke item. Mengembalikan true bila event ini milik form Tahap.
 function handleField(e, items) {
+  const sw = e.target.closest('[data-opt]');
+  if (sw) {   // saklar variabel opsional: mati = 0, nyala = nilai bawaan
+    const it = items.find(x => x.uid === +sw.dataset.opt); if (!it) return false;
+    const f = typeMeta(it.t).fields.find(x => x.k === sw.dataset.k2), inp = $('[data-k]', sw.closest('label'));
+    it.v[f.k] = sw.checked ? f.def : 0; inp.value = it.v[f.k]; inp.disabled = !sw.checked;
+    return true;
+  }
   const el = e.target.closest('[data-k]'); if (!el) return false;
   const it = items.find(x => x.uid === +el.dataset.uid); if (!it) return false;
   const f = typeMeta(it.t).fields.find(x => x.k === el.dataset.k);
@@ -591,6 +610,9 @@ function handleField(e, items) {
     const [h, m, s] = $$('[data-hms]', el.closest('label')).map(i => parseInt(i.value, 10) || 0);
     it.v[f.k] = h * 3600 + m * 60 + s;
   } else it.v[f.k] = parseInt(el.value, 10);
+  if (OPTIONAL[it.t + '.' + f.k] && el.value !== '' && it.v[f.k] === 0) {   // nilai 0 -> saklar otomatis mati
+    const sw2 = $('[data-opt]', el.closest('label')); if (sw2) { sw2.checked = false; it.v[f.k] = 0; el.disabled = true; }
+  }
   const body = el.closest('.fields');
   typeMeta(it.t).fields.forEach(g => { const lab = $(`[data-f="${g.k}"]`, body); if (lab) lab.hidden = !applies(g, it); });
   const row = el.closest('.crow'); if (row) { row.classList.remove('bad'); const fe = $('.ferr', row); if (fe) fe.remove(); }
@@ -704,25 +726,58 @@ $('#pcStack').addEventListener('click', e => {
   else if (b.dataset.act === 'dup') { if (ed.items.length >= 40) return toast('Maksimal 40 Tahap per Proses', 'warn'); ed.items.splice(i + 1, 0, { uid: uidSeq++, t: ed.items[i].t, v: { ...ed.items[i].v } }); }
   renderStack(); scheduleDry();
 });
-// Geser untuk menukar urutan (pointer events: jalan di mouse & layar sentuh)
-$('#pcStack').addEventListener('pointerdown', e => {
-  const h = e.target.closest('.handle'); if (!h || ed.locked) return;
-  const list = $('#pcStack'), row = h.closest('.crow');
-  e.preventDefault(); h.setPointerCapture(e.pointerId); row.classList.add('drag');
-  const move = ev => {
-    const others = [...list.children].filter(r => r !== row);
-    const target = others.find(r => { const b = r.getBoundingClientRect(); return ev.clientY < b.top + b.height / 2; });
-    if (target) { if (row.nextElementSibling !== target) list.insertBefore(row, target); } else list.appendChild(row);
-    if (ev.clientY < 70) window.scrollBy(0, -12); else if (ev.clientY > innerHeight - 70) window.scrollBy(0, 12);
-  };
-  const up = () => {
-    h.removeEventListener('pointermove', move); h.removeEventListener('pointerup', up); h.removeEventListener('pointercancel', up);
-    row.classList.remove('drag');
-    ed.items = [...list.children].map(r => ed.items.find(x => x.uid === +r.dataset.uid));
+// Geser bebas untuk menukar urutan: tahan di mana saja pada kartu Tahap (kecuali kotak isian/tombol) lalu geser.
+// Kartu yang diseret mengambang; penanda (placeholder) menandai posisi jatuh, dihitung dari kartu lain yang tidak ikut bergeser.
+let dragSt = null;
+const stackEl = $('#pcStack');
+function cancelDrag(commit) {
+  if (!dragSt) return;
+  const d = dragSt; dragSt = null;
+  clearTimeout(d.timer);
+  document.removeEventListener('pointermove', dragMove); document.removeEventListener('pointerup', dragUp); document.removeEventListener('pointercancel', dragCancel);
+  if (!d.on) return;
+  d.row.style.cssText = ''; d.row.classList.remove('drag'); document.body.classList.remove('dragging');
+  if (commit) {
+    stackEl.insertBefore(d.row, d.ph);
+    ed.items = [...stackEl.children].filter(r => r.classList.contains('crow')).map(r => ed.items.find(x => x.uid === +r.dataset.uid));
     renumber(); scheduleDry();
-  };
-  h.addEventListener('pointermove', move); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
+  }
+  d.ph.remove();
+}
+function beginDrag() {
+  const d = dragSt; if (!d) return;
+  d.on = true;
+  const r = d.row.getBoundingClientRect();
+  d.ph = document.createElement('div'); d.ph.className = 'crow-ph'; d.ph.style.height = r.height + 'px';
+  d.row.after(d.ph);
+  d.off = d.y - r.top;
+  d.row.classList.add('drag');
+  d.row.style.cssText = `position:fixed;left:${r.left}px;top:${r.top}px;width:${r.width}px;z-index:40;pointer-events:none`;
+  document.body.classList.add('dragging');
+}
+function dragMove(ev) {
+  const d = dragSt; if (!d) return;
+  if (!d.on) { if (Math.hypot((ev.clientX || 0) - d.x, ev.clientY - d.y) > 8) cancelDrag(false); return; }   // bergerak sebelum selesai menahan = menggulir
+  ev.preventDefault && ev.preventDefault();
+  d.row.style.top = (ev.clientY - d.off) + 'px';
+  const others = [...stackEl.children].filter(r => r !== d.row && r !== d.ph);
+  const target = others.find(r => { const b = r.getBoundingClientRect(); return ev.clientY < b.top + b.height / 2; });
+  if (target) { if (d.ph.nextElementSibling !== target) stackEl.insertBefore(d.ph, target); } else if (stackEl.lastElementChild !== d.ph) stackEl.appendChild(d.ph);
+  if (ev.clientY < 70) window.scrollBy(0, -14); else if (ev.clientY > innerHeight - 70) window.scrollBy(0, 14);
+}
+const dragUp = () => cancelDrag(true), dragCancel = () => cancelDrag(false);
+stackEl.addEventListener('pointerdown', e => {
+  if (ed.locked || (e.button && e.button !== 0)) return;
+  const row = e.target.closest('.crow'); if (!row) return;
+  const onHandle = !!e.target.closest('.handle');
+  if (!onHandle && e.target.closest('input,select,button,label,textarea,a')) return;
+  cancelDrag(false);
+  dragSt = { row, x: e.clientX || 0, y: e.clientY || 0, on: false };
+  document.addEventListener('pointermove', dragMove); document.addEventListener('pointerup', dragUp); document.addEventListener('pointercancel', dragCancel);
+  if (onHandle) { e.preventDefault(); beginDrag(); } else dragSt.timer = setTimeout(beginDrag, 280);
 });
+document.addEventListener('touchmove', e => { if (dragSt && dragSt.on) e.preventDefault(); }, { passive: false });
+stackEl.addEventListener('contextmenu', e => { if (dragSt) e.preventDefault(); });
 function edClear(title) {
   ed.slot = 0; ed.items = []; ed.locked = false; ed.warnings = []; ed.est = 0;
   $('#pcName').value = ''; $('#pcError').hidden = true; $('#pcTitle').textContent = title || 'Proses baru';
@@ -752,7 +807,6 @@ async function pcSave(asNew) {
   loadProses();
 }
 $('#pcSave').onclick = () => pcSave(false);
-$('#pcSaveNew').onclick = () => pcSave(true);
 
 async function pcLoad(slot, asCopy) {
   let r; try { r = await api('/api/proses?slot=' + slot); } catch { return; }

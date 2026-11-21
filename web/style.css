@@ -384,3 +384,28 @@ h1,h2,h3,label:not(.chk):not(.drop),dt,.nav button,.seg button,.filters button,.
 
 .listmode{display:flex;flex-direction:column;gap:var(--s3)}
 .listmode .sechead{margin:var(--s2) 0 0}
+/* ===== Revisi 3: drag bebas, saklar opsional, kartu Sistem ===== */
+#startOpts{margin-bottom:var(--s3)}
+#btnPwLocal,#btnPwRemote{margin-top:auto}
+.field-help:empty{display:none}
+.grid2>.card:last-child:nth-child(odd){grid-column:1/-1}
+.danger-item{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);padding:var(--s3);border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface-2)}
+.danger-item>div{min-width:0;flex:1}.danger-item b{font-size:.9375rem}
+.danger-item .btn{flex:0 0 auto}
+.crow{cursor:grab;touch-action:pan-y}
+.crow input,.crow select,.crow label{cursor:auto}
+.crow .handle{touch-action:none}
+.crow-head{user-select:none;-webkit-user-select:none}
+.crow.drag{box-shadow:0 14px 34px -10px rgba(0,0,0,.45);opacity:.96}
+.crow-ph{border:2px dashed var(--accent-text);border-radius:var(--r-md);background:var(--accent-soft)}
+body.dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
+.optlab{display:flex;align-items:center;justify-content:space-between;gap:var(--s2)}
+.sw{flex:0 0 auto;display:inline-flex}
+.sw input{appearance:none;-webkit-appearance:none;width:40px;height:24px;min-height:0;padding:0;border-radius:var(--r-pill);background:var(--surface-3);border:1px solid var(--line);position:relative;cursor:pointer;transition:background .15s}
+.sw input::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:var(--text-2);transition:transform .15s var(--ease),background .15s}
+.sw input:checked{background:var(--accent);border-color:var(--accent)}
+.sw input:checked::after{transform:translateX(16px);background:var(--accent-ink)}
+.tri input{text-align:center}
+#grpKoneksi .grid2{align-items:start}
+.card>.seg{align-self:flex-start}
+.fields>label>span:first-child{min-height:24px;display:flex;align-items:center}
