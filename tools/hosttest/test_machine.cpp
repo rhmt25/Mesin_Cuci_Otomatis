@@ -730,6 +730,35 @@ static void n13_skipBusy() {
   CHECK(count("kosong atau rusak") == 1 && idle(), "slot kosong tidak dijalankan");
 }
 
+static void n19_copyJob() {
+  printf("[N19] machineCopyJob: salinan pekerjaan untuk /api/job\n");
+  resetWorld();
+  Proses* c = new Proses; uint8_t idx = 9, slot = 0; bool waiting = true, manual = true, test = true; uint32_t wl = 0;
+  CHECK(!machineCopyJob(*c, idx, waiting, wl, slot, manual, test), "idle: tidak aktif");
+  Tahap tg = TH(TH_TUNGGU); tg.detik = 5;
+  Tahap pt = TH(TH_PUTAR); pt.lama = 1;
+  saveP(0, "Dua Tahap", {tg, pt});
+  runP(0); tick();
+  CHECK(machineCopyJob(*c, idx, waiting, wl, slot, manual, test), "berjalan: aktif");
+  CHECK(std::string(c->name) == "Dua Tahap" && c->count == 2 && idx == 0 && !waiting && slot == 0 && !manual && !test, "nama, jumlah, idx 0, slot 0, bukan manual/uji");
+  CHECK(c->t[0].type == TH_TUNGGU && c->t[1].type == TH_PUTAR, "urutan Tahap benar");
+  post(MC_SKIP); tick();
+  CHECK(machineCopyJob(*c, idx, waiting, wl, slot, manual, test) && idx == 1, "idx maju setelah Lewati");
+  post(MC_STOP); tick();
+  CHECK(!machineCopyJob(*c, idx, waiting, wl, slot, manual, test), "setelah Stop: tidak aktif");
+  runP(0, 120); tick();
+  CHECK(machineCopyJob(*c, idx, waiting, wl, slot, manual, test) && waiting && wl > 0 && c->count == 2, "menunggu mulai: waiting + sisa tunggu");
+  post(MC_STOP); tick();
+  Tahap mt = TH(TH_TUNGGU); mt.detik = 3;
+  machineRunManual(mt); tick();
+  CHECK(machineCopyJob(*c, idx, waiting, wl, slot, manual, test) && manual && !test && c->count == 1 && slot == NO_SLOT, "manual: 1 Tahap tanpa slot");
+  post(MC_STOP); tick();
+  post(MC_RUN_RELAYSEQ, 1); tick();
+  CHECK(machineCopyJob(*c, idx, waiting, wl, slot, manual, test) && test && c->count == R_COUNT && c->t[0].type == TH_UJI_RELAY, "uji relay: 6 langkah, flag test");
+  post(MC_STOP); tick();
+  delete c;
+}
+
 static void n14_manual() {
   printf("[N14] Manual: satu Tahap, Buang manual, relay manual, uji relay\n");
   resetWorld();
@@ -937,6 +966,7 @@ int main(int argc, char** argv) {
   n12_fillModes();
   n13_skipBusy();
   n14_manual();
+  n19_copyJob();
   n15_relaySequence();
   n16_pumpFailsafe();
   t9_interlock();

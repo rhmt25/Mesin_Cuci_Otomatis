@@ -152,7 +152,7 @@ static void handleText(const uint8_t* payload, size_t length) {
     String body;
     if (!doc["b"].isNull()) serializeJson(doc["b"], body);
     logf(LOG_DEBUG, "RPC %s %s", method.c_str(), p.c_str());
-    ApiResult r = apiHandle(API_REMOTE, method.c_str(), p, [&q](const char* k) { return q[k].as<String>(); }, body);
+    ApiResult r = apiHandle(API_REMOTE, method.c_str(), p, [&q](const char* k) { JsonVariantConst v = q[k]; return v.isNull() ? String() : v.as<String>(); }, body);
     String out;
     out.reserve(r.body.length() + 48);
     out += "{\"t\":\"res\",\"id\":";

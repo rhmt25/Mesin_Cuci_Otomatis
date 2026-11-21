@@ -25,7 +25,7 @@ export function cmdAllowed(raw) {
 }
 
 const GET_OK = new Set(["/api/status", "/api/poll", "/api/info", "/api/settings", "/api/logs", "/api/history",
-  "/api/tahap/meta", "/api/proses", "/api/proses/export"]);
+  "/api/tahap/meta", "/api/job", "/api/proses", "/api/proses/export"]);
 const POST_OK = new Set(["/api/cmd", "/api/settings", "/api/proses", "/api/run", "/api/decide"]);
 const DELETE_OK = new Set(["/api/proses"]);
 

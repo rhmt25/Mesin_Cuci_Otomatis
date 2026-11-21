@@ -58,6 +58,8 @@ api allow GET /api/settings
 api allow GET /api/logs
 api allow GET /api/history
 api allow GET /api/tahap/meta
+api allow GET /api/job
+api deny POST /api/job
 api allow GET /api/proses
 api allow GET /api/proses/export
 api allow POST /api/proses
