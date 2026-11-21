@@ -182,8 +182,8 @@ kanan 440px.
 ### 8.3 Proses
 - Daftar: **grid kartu** (2 kolom HP lebar ≥ 560px, 3 kolom desktop). Kartu: nama, jumlah Tahap, perkiraan, **jejak ikon Tahap**
   (deretan ikon kecil berurutan, maks 12 lalu "+n"), status kunci (gembok + "sedang dipakai"), menu ⋯ (Edit, Salin, Ekspor,
-  Hapus). Tombol **Mulai** langsung di kartu. Kartu "+ Proses baru" sebagai kartu bergaris putus-putus di akhir grid.
-- Opsi mulai (Sekarang / Tunda / Selesai pada jam) sebagai **segmented control** di atas grid, bukan select.
+  Hapus). Tombol **Mulai** ada di kartu Proses pada Beranda (satu tempat memulai; kartu di menu Proses untuk mengelola). Kartu "+ Proses baru" sebagai kartu bergaris putus-putus di akhir grid.
+- Opsi mulai (Sekarang / Tunda / Selesai pada jam) sebagai **segmented control** di atas grid Beranda, bukan select.
 - Editor (layar penuh di HP, tiga kolom di desktop):
   kiri **Palet Tahap** (kartu kecil ikon+nama+deskripsi satu baris; HP: sheet yang dibuka tombol "+ Tahap"),
   tengah **Rel Tahap yang disusun** (kartu sama seperti 8.2 tetapi bisa diedit, nomor, pegangan geser, ▲▼ ⧉ 🗑 sebagai ikon
@@ -277,3 +277,12 @@ Aksi berbahaya (reset, restart, rollback, hapus) memakai gaya "danger-outline" d
 - Semua teks bahasa Indonesia. Istilah: **Proses**, **Tahap**, **keputusan**, **Tarik Ulang Valve**, **Verifikasi Pengurangan
   Jumlah Air**.
 - Data variabel/label/rentang Tahap selalu dari `/api/tahap/meta`.
+
+---
+
+## 14. Catatan implementasi (v4)
+
+- Palet Tahap di HP berupa **strip gulir horizontal** (bukan sheet); di desktop kolom kiri.
+- Konfirmasi memakai dialog bawaan peramban (`confirm`), bukan dialog kustom: andal, aksesibel, dan hemat ukuran.
+- Kartu Proses di daftar memuat `trail` (maks 12 jenis Tahap) dari `GET /api/proses`.
+- Ukuran halaman: ±31,5 KB gzip (`build_web.py` membuang komentar dan indentasi).

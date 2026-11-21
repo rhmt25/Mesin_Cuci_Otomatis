@@ -2,260 +2,347 @@
 <html lang="id">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101517">
 <title>Mesin Cuci</title>
 <style>/*CSS*/</style>
 </head>
 <body>
-<div id="toast"></div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+<symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10"/></symbol>
+<symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5"/></symbol>
+<symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 6h8M18 6h2M4 12h2M12 12h8M4 18h10M20 18h0"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></symbol>
+<symbol id="i-activity" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></symbol>
+<symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+<symbol id="i-stop" viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></symbol>
+<symbol id="i-skip" viewBox="0 0 24 24"><path d="M5 5l10 7-10 7zM19 5v14"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 10-2.3 5.7M20 4v7h-7"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3l10 18H2zM12 10v5M12 18h0"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5h0"/></symbol>
+<symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2 9a15 15 0 0120 0M5.5 12.5a10 10 0 0113 0M9 16a5 5 0 016 0M12 19.5h0"/></symbol>
+<symbol id="i-wifi-off" viewBox="0 0 24 24"><path d="M3 3l18 18M8.5 16a5 5 0 017 0M5.5 12.5a10 10 0 012-1.4M2 9a15 15 0 015-3M12 19.5h0"/></symbol>
+<symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18a4 4 0 010-8 5.5 5.5 0 0110.7 1.5A3.3 3.3 0 0117 18z"/></symbol>
+<symbol id="i-cloud-off" viewBox="0 0 24 24"><path d="M3 3l18 18M7 18a4 4 0 01-1.5-7.7M10 6a5.5 5.5 0 017.7 5.5A3.3 3.3 0 0119 17"/></symbol>
+<symbol id="i-drop" viewBox="0 0 24 24"><path d="M12 3s6 6.5 6 11a6 6 0 01-12 0c0-4.5 6-11 6-11z"/></symbol>
+<symbol id="i-drain" viewBox="0 0 24 24"><path d="M12 4v10M8 10l4 4 4-4M5 19h14"/></symbol>
+<symbol id="i-rotate" viewBox="0 0 24 24"><path d="M20 12a8 8 0 11-3-6.2M20 4v5h-5"/></symbol>
+<symbol id="i-soak" viewBox="0 0 24 24"><path d="M3 9c3-3 6 3 9 0s6 3 9 0M3 15c3-3 6 3 9 0s6 3 9 0"/></symbol>
+<symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z"/></symbol>
+<symbol id="i-spin" viewBox="0 0 24 24"><path d="M12 12h.01M12 8a4 4 0 014 4M12 4a8 8 0 018 8M12 16a4 4 0 01-4-4M12 20a8 8 0 01-8-8"/></symbol>
+<symbol id="i-flower" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.5"/><path d="M12 9.5C10 6 11 3 12 3s2 3 0 6.5zM12 14.5c-2 3.5-1 6.5 0 6.5s2-3 0-6.5zM9.5 12C6 10 3 11 3 12s3 2 6.5 0zM14.5 12c3.5 2 6.5 1 6.5 0s-3-2-6.5 0z"/></symbol>
+<symbol id="i-timer" viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-5-5"/></symbol>
+<symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 0112 0v5l2 2H4zM10 21h4"/></symbol>
+<symbol id="i-user" viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2 20a7 7 0 0114 0M16 11l2 2 4-4"/></symbol>
+<symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 3L5 14h6l-1 7 8-11h-6z"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24"><path d="M9 9h11v11H9zM5 15V4h11"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></symbol>
+<symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20l1-4L16 5l3 3L8 19zM14 7l3 3"/></symbol>
+<symbol id="i-grip" viewBox="0 0 24 24"><path d="M9 6h.01M9 12h.01M9 18h.01M15 6h.01M15 12h.01M15 18h.01" stroke-width="3"/></symbol>
+<symbol id="i-up" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></symbol>
+<symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+<symbol id="i-right" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+<symbol id="i-left" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+<symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V5M7 10l5-5 5 5M5 20h14"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><path d="M6 11h12v9H6zM8 11V8a4 4 0 018 0v3"/></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"/></symbol>
+<symbol id="i-monitor" viewBox="0 0 24 24"><path d="M3 5h18v11H3zM8 21h8M12 16v5"/></symbol>
+<symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3v9M6.5 6.5a8 8 0 1011 0"/></symbol>
+<symbol id="i-cpu" viewBox="0 0 24 24"><path d="M7 7h10v10H7zM9 3v4M15 3v4M9 17v4M15 17v4M3 9h4M3 15h4M17 9h4M17 15h4"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></symbol>
+<symbol id="i-terminal" viewBox="0 0 24 24"><path d="M4 5h16v14H4zM8 10l3 2-3 2M13 15h4"/></symbol>
+<symbol id="i-logout" viewBox="0 0 24 24"><path d="M10 4H5v16h5M15 8l4 4-4 4M19 12H9"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+</defs></svg>
+
+<a class="skip" href="#main">Lewati ke konten</a>
+<div id="toast" role="status" aria-live="polite"></div>
 
 <section id="login" hidden>
   <form id="loginForm" class="card login">
-    <h1>🧺 Mesin Cuci</h1>
-    <input id="pw" type="password" placeholder="Password" autocomplete="current-password" required>
-    <label class="chk"><input id="remember" type="checkbox" checked> Ingat perangkat ini (tetap masuk, bisa dihapus di tab Sistem)</label>
+    <div class="logo" aria-hidden="true"><svg class="ic lg"><use href="#i-drop"/></svg></div>
+    <h1>Mesin Cuci</h1>
+    <input id="pw" type="password" placeholder="Password" autocomplete="current-password" aria-label="Password" required>
+    <label class="chk"><input id="remember" type="checkbox" checked> Ingat perangkat ini (bisa dihapus di Sistem)</label>
     <button class="btn primary" type="submit">Masuk</button>
-    <p id="loginMsg" class="muted"></p>
+    <p id="loginMsg" class="muted" role="alert"></p>
   </form>
 </section>
 
 <div id="app" hidden>
-  <header>
-    <div class="brand">🧺 <b>Mesin Cuci</b></div>
+  <nav class="nav" aria-label="Menu utama">
+    <button data-view="beranda" aria-current="page"><svg class="ic"><use href="#i-home"/></svg><span>Beranda</span><i class="badge" id="navBadge" hidden></i><span class="sr" id="navBadgeTxt"></span></button>
+    <button data-view="proses"><svg class="ic"><use href="#i-layers"/></svg><span>Proses</span></button>
+    <button data-view="manual"><svg class="ic"><use href="#i-sliders"/></svg><span>Manual</span></button>
+    <button data-view="aktivitas"><svg class="ic"><use href="#i-activity"/></svg><span>Aktivitas</span></button>
+    <button data-view="sistem"><svg class="ic"><use href="#i-settings"/></svg><span>Sistem</span></button>
+  </nav>
+
+  <div class="shell">
+  <header class="top">
+    <div class="brand"><span class="logo" aria-hidden="true"><svg class="ic"><use href="#i-drop"/></svg></span><span>Mesin Cuci</span></div>
     <div class="chips">
       <span id="chipState" class="chip">…</span>
       <span id="chipWifi" class="chip">…</span>
-      <button id="btnTheme" class="icon" title="Tema">◐</button>
-      <button id="btnLogout" class="icon" title="Keluar">⎋</button>
+      <button id="btnTheme" class="icon-btn" aria-label="Ganti tema" title="Ganti tema"><svg class="ic"><use href="#i-monitor"/></svg></button>
+      <button id="btnLogout" class="icon-btn" aria-label="Keluar" title="Keluar"><svg class="ic"><use href="#i-logout"/></svg></button>
     </div>
   </header>
 
-  <nav id="tabs">
-    <button data-tab="home" class="on">Beranda</button>
-    <button data-tab="proses">Proses</button>
-    <button data-tab="manual">Manual</button>
-    <button data-tab="relay">Relay</button>
-    <button data-tab="settings">Pengaturan</button>
-    <button data-tab="wifi" data-local>WiFi</button>
-    <button data-tab="log">Log</button>
-    <button data-tab="console" data-local>Konsol</button>
-    <button data-tab="history">Riwayat</button>
-    <button data-tab="firmware" data-local>Firmware</button>
-    <button data-tab="system">Sistem</button>
-  </nav>
+  <main id="main">
+    <div id="bannerOffline" class="callout err" role="alert" hidden><svg class="ic"><use href="#i-cloud-off"/></svg><div id="offlineTxt"></div></div>
 
-  <main>
-    <div id="bannerOffline" class="banner err" hidden></div>
-    <!-- BERANDA -->
-    <section id="tab-home" class="tab on">
-      <div id="bannerResume" class="banner warn" hidden>
-        <div>⚡ Listrik sempat padam saat <b id="resumeInfo"></b>. Mesin tidak lanjut otomatis.</div>
-        <div class="row"><button class="btn primary" data-cmd="lanjutkan">Lanjutkan</button><button class="btn" data-cmd="batalkan">Batalkan</button></div>
+    <!-- ===== BERANDA ===== -->
+    <section id="view-beranda" class="view on">
+      <div id="bannerResume" class="callout warn" hidden>
+        <svg class="ic"><use href="#i-bolt"/></svg>
+        <div><b>Listrik sempat padam</b> saat <b id="resumeInfo"></b>. Mesin tidak lanjut otomatis.
+          <div class="row"><button class="btn primary sm" data-cmd="lanjutkan">Lanjutkan</button><button class="btn sm" data-cmd="batalkan">Batalkan</button></div></div>
       </div>
-      <div id="bannerPause" class="banner err" hidden></div>
-      <div id="bannerFault" class="banner err" hidden>&#10060; <b>Relay terkunci</b>: pengaman mendeteksi pelanggaran interlock (mis. motor kiri &amp; kanan nyala bersamaan). Semua relay dimatikan. Restart mesin untuk membuka kunci.</div>
-      <div id="decisionCard" class="banner err dcard" hidden>
-        <b id="decTitle">Menunggu keputusan</b>
-        <p id="decMsg"></p>
-        <div class="row" id="decBtns"></div>
-        <p class="muted">Mesin tidak pernah melanjutkan sendiri. Pengingat dikirim tiap 10 menit.</p>
+      <div id="bannerFault" class="callout err" hidden><svg class="ic"><use href="#i-lock"/></svg>
+        <div><b>Relay terkunci.</b> Pengaman mendeteksi pelanggaran interlock (mis. motor kiri dan kanan nyala bersamaan). Semua relay dimatikan. Restart mesin dari menu Sistem untuk membuka kunci.</div></div>
+      <div id="decisionCard" class="callout warn dcard" role="alert" hidden>
+        <svg class="ic lg"><use href="#i-alert"/></svg>
+        <div><h2 id="decTitle">Menunggu keputusan</h2><p id="decMsg"></p>
+          <div class="row" id="decBtns"></div>
+          <p class="field-help">Mesin tidak pernah melanjutkan sendiri. Pengingat dikirim tiap 10 menit.</p></div>
       </div>
 
-      <div class="card hero">
-        <svg id="ring" viewBox="0 0 120 120" width="150" height="150">
-          <circle cx="60" cy="60" r="52" class="ringBg"/>
-          <circle id="ringFg" cx="60" cy="60" r="52" class="ringFg" transform="rotate(-90 60 60)"/>
-          <text id="ringText" x="60" y="66" text-anchor="middle">—</text>
-        </svg>
-        <div class="heroInfo">
-          <div id="stage" class="big">Siap</div>
-          <div id="detail" class="muted"></div>
-          <div class="kv"><span>Sisa tahap</span><b id="stepLeft">-</b></div>
-          <div class="kv"><span>Total sisa</span><b id="totalLeft">-</b></div>
-          <div class="kv"><span>Air</span><b id="water">-</b></div>
+      <div class="bento">
+        <article class="card hero idle" id="hero">
+          <div class="ringwrap"><svg id="ring" viewBox="0 0 120 120" role="img" aria-label="Kemajuan Proses">
+            <circle cx="60" cy="60" r="52" class="ringBg"/>
+            <circle id="ringFg" cx="60" cy="60" r="52" class="ringFg" transform="rotate(-90 60 60)"/>
+            <text id="ringText" x="60" y="67" text-anchor="middle">—</text></svg></div>
+          <div class="heroMain" aria-live="polite">
+            <div id="stage" class="kicker">Siap</div>
+            <h1 id="heroName" class="heroName">Mesin siap</h1>
+            <p id="detail" class="muted"></p>
+            <div class="timeblock"><span class="lbl">Sisa total</span><b id="totalLeft" class="display">-</b><span id="etaAt" class="muted"></span></div>
+            <button id="btnJob" class="stepbtn" type="button" aria-haspopup="dialog" aria-controls="jobSheet" disabled>
+              <span><small>Sisa Tahap</small><b id="stepLine">Tidak ada Proses berjalan</b></span>
+              <span id="stepLeft" class="tnum">-</span><svg class="ic"><use href="#i-right"/></svg></button>
+            <div class="ctl">
+              <button class="btn" id="btnPause" data-cmd="jeda" disabled><svg class="ic"><use href="#i-pause"/></svg><span>Jeda</span></button>
+              <button class="btn" id="btnSkip" data-cmd="lewati" disabled><svg class="ic"><use href="#i-skip"/></svg><span>Lewati</span></button>
+              <button class="btn danger" id="btnStop" disabled><svg class="ic"><use href="#i-stop"/></svg><span>Stop</span></button>
+            </div>
+          </div>
+        </article>
+
+        <article class="card railcard">
+          <header><h2>Rel Tahap</h2><button class="btn ghost sm keep" id="btnJob2" type="button" disabled>Lihat semua</button></header>
+          <div id="railMini"><p class="muted">Pilih Proses di bawah untuk memulai. Urutan Tahap tampil di sini saat berjalan.</p></div>
+        </article>
+
+        <article class="card mini" id="cardWater"><header><h3>Air</h3></header>
+          <div class="stat-big"><svg id="wdrop" class="ic wdrop"><use href="#i-drop"/></svg><span id="water">-</span></div>
+          <small id="waterNote">Sensor hanya membedakan penuh atau tidak.</small></article>
+        <article class="card mini" id="cardRelays"><header><h3>Relay</h3></header><div class="rls" id="relayMini"></div></article>
+        <article class="card mini" id="cardConn"><header><h3>Koneksi</h3></header>
+          <div class="kv"><span>WiFi</span><b id="connWifi">-</b></div>
+          <div class="kv"><span>Server</span><b id="connSrv">-</b></div>
+          <div class="kv"><span>Jam</span><b id="connTime">-</b></div></article>
+      </div>
+
+      <div class="sechead"><div><h2>Mulai Proses</h2><p id="lastUsed" class="muted" hidden></p></div></div>
+      <div id="startOpts" class="card startopts" hidden>
+        <div class="seg" id="startSeg" role="group" aria-label="Kapan mulai">
+          <button type="button" data-sm="now" class="on">Sekarang</button>
+          <button type="button" data-sm="tunda">Tunda</button>
+          <button type="button" data-sm="selesai">Selesai pada jam</button>
+        </div>
+        <input id="startMode" type="hidden" value="now">
+        <div class="tt">
+          <input id="startTunda" type="time" step="1" value="00:30:00" hidden aria-label="Lama tunda (jam:menit:detik)">
+          <input id="startSelesai" type="time" hidden aria-label="Selesai pada jam">
+        </div>
+        <p class="field-help" id="startNote"></p>
+        <p class="field-help">Berlaku untuk kartu Proses di bawah. "Selesai pada jam" memakai perkiraan durasi, jadi bisa meleset karena isi dan buang berbasis sensor.</p>
+      </div>
+      <div id="homeEmpty" class="empty" hidden>
+        <svg class="art" viewBox="0 0 64 64" aria-hidden="true"><rect x="10" y="8" width="44" height="48" rx="8"/><circle cx="32" cy="36" r="12"/><path d="M22 36c4-4 6 4 10 0s6 4 10 0M18 16h4M26 16h4"/></svg>
+        <p>Belum ada Proses. Proses disusun dari Tahap: isi air, putar, buang, spin, dan lainnya.</p>
+        <button class="btn primary" id="goProses"><svg class="ic"><use href="#i-plus"/></svg>Buat Proses pertama</button>
+      </div>
+      <div class="pgrid" id="prosesGrid"><div class="skel"></div><div class="skel"></div></div>
+      <p class="muted" id="progLock" hidden></p>
+    </section>
+
+    <!-- ===== PROSES ===== -->
+    <section id="view-proses" class="view view-proses" data-mode="list">
+      <div class="listmode">
+        <div class="sechead"><div><h1>Proses</h1><p class="muted">Urutan Tahap yang bisa dijalankan. Maksimal 10 Proses, 40 Tahap per Proses. Proses yang sedang dipakai tidak bisa diubah.</p></div>
+          <div class="row"><span id="pcCount" class="chip"></span>
+            <label class="btn ghost sm" for="pcImportFile" data-local><svg class="ic sm"><use href="#i-upload"/></svg>Impor</label><input id="pcImportFile" type="file" accept=".json,application/json" hidden></div></div>
+        <div id="pcList" class="pgrid"></div>
+      </div>
+      <div class="editmode" id="pcEditor">
+        <div class="edhead"><button class="btn ghost sm" id="pcBack" type="button"><svg class="ic sm"><use href="#i-left"/></svg>Daftar</button><h2 id="pcTitle">Proses baru</h2></div>
+        <div id="pcLock" class="callout warn" hidden></div>
+        <div class="edgrid">
+          <aside class="card edpal"><h3>Tambah Tahap</h3><div class="palette" id="pcPalette"></div></aside>
+          <div class="form">
+            <label>Nama Proses<input id="pcName" maxlength="27" placeholder="mis. Cuci harian"></label>
+            <div id="pcStack" class="stack"></div>
+            <p id="pcEmpty" class="empty">Belum ada Tahap. Pilih jenis Tahap dari daftar "Tambah Tahap".</p>
+          </div>
+          <aside class="card edsum">
+            <h3>Ringkasan</h3>
+            <div class="cpSummary" id="pcSummary"></div>
+            <div id="pcWarn" class="callout warn" hidden></div>
+            <div id="pcError" class="callout err" role="alert" hidden></div>
+            <div class="row"><button class="btn primary" id="pcSave"><svg class="ic sm"><use href="#i-check"/></svg>Simpan</button><button class="btn" id="pcSaveNew">Simpan sebagai baru</button></div>
+            <button class="btn ghost sm" id="pcReset" type="button">Kosongkan</button>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== MANUAL ===== -->
+    <section id="view-manual" class="view">
+      <div class="sechead"><div><h1>Manual</h1><p class="muted">Jalankan satu Tahap atau kendalikan relay langsung. Hanya saat mesin siap.</p></div></div>
+      <div class="mangrid">
+        <div class="card" id="manTahap">
+          <h2>Jalankan satu Tahap</h2>
+          <input id="manType" type="hidden" value="isi">
+          <div id="manGrid" class="typegrid"></div>
+          <div id="manForm"></div>
+          <div id="manHint" class="callout warn" hidden><svg class="ic"><use href="#i-alert"/></svg><div>Buang manual menarik valve buang selama waktu yang diatur <b>tanpa membaca sensor</b>. Jalan darurat bila sensor rusak.</div></div>
+          <div class="row"><button class="btn primary" id="manRun"><svg class="ic sm"><use href="#i-play"/></svg>Jalankan</button><button class="btn" data-cmd="cek_air"><svg class="ic sm"><use href="#i-search"/></svg>Cek air</button></div>
+        </div>
+        <div class="card" id="manRelay">
+          <h2>Relay</h2>
+          <div id="relayLock" class="callout err" hidden></div>
+          <div class="callout warn"><svg class="ic"><use href="#i-alert"/></svg><div>Lepas beban atau tutup kran air sebelum menguji. Motor kiri dan kanan <b>tidak pernah</b> bisa menyala bersamaan (dijaga berlapis). Kontrol manual otomatis mati setelah 60 detik.</div></div>
+          <div id="relayProgress" class="callout info" hidden><svg class="ic"><use href="#i-info"/></svg><div></div></div>
+          <div id="relayCards" class="rgrid"></div>
+          <div class="relaytools">
+            <div class="tt"><label for="seqSecs" class="sr">Lama menyala per relay (detik)</label><input id="seqSecs" type="number" min="1" max="30" value="3" aria-label="Lama menyala per relay (detik)"><span class="muted">detik per relay</span>
+              <button class="btn sm" id="btnSeq"><svg class="ic sm"><use href="#i-play"/></svg>Uji berurutan</button><button class="btn sm" id="btnSeqStop">Berhenti</button></div>
+            <button class="btn dout" id="btnAllOff"><svg class="ic sm"><use href="#i-power"/></svg>Matikan semua relay</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== AKTIVITAS ===== -->
+    <section id="view-aktivitas" class="view">
+      <div class="sechead"><h1>Aktivitas</h1>
+        <div class="seg" id="actSeg" role="group" aria-label="Bagian aktivitas">
+          <button type="button" data-seg="log" class="on">Log</button><button type="button" data-seg="riwayat">Riwayat</button><button type="button" data-seg="konsol" data-local>Konsol</button></div></div>
+      <div id="seg-log" class="segpane on">
+        <input id="logLevel" type="hidden" value="1">
+        <div class="filters" id="logFilters" role="group" aria-label="Tingkat log">
+          <button type="button" data-lv="1" aria-pressed="true">Semua</button><button type="button" data-lv="2" aria-pressed="false">Tahap</button><button type="button" data-lv="3" aria-pressed="false">Peringatan</button><button type="button" data-lv="4" aria-pressed="false">Galat</button><button type="button" data-lv="0" aria-pressed="false">Debug</button></div>
+        <div id="logBox" class="logbox" role="log"></div>
+      </div>
+      <div id="seg-riwayat" class="segpane">
+        <div class="stats" id="statsBox"></div>
+        <div class="card" id="histList"></div>
+      </div>
+      <div id="seg-konsol" class="segpane" data-local>
+        <div class="row">
+          <button class="btn sm" id="conPause">Jeda</button><button class="btn sm" id="conClear">Bersihkan</button>
+          <button class="btn sm" id="conDl"><svg class="ic sm"><use href="#i-download"/></svg>Unduh .txt</button><button class="btn sm" id="conTrace">Jejak boot lalu</button></div>
+        <div id="conBox" class="conbox" role="log"></div>
+        <form id="conForm"><input id="conIn" placeholder="ketik perintah: status, stop, heap, relay_test kiri …" autocomplete="off" autocapitalize="none" aria-label="Perintah konsol"><button class="btn primary" type="submit">Kirim</button></form>
+      </div>
+    </section>
+
+    <!-- ===== SISTEM ===== -->
+    <section id="view-sistem" class="view">
+      <div class="sechead"><h1>Sistem</h1></div>
+      <div class="toc" id="sysToc" role="navigation" aria-label="Bagian sistem">
+        <button type="button" data-go="grpKoneksi" data-local>Koneksi</button><button type="button" data-go="grpKeamanan" data-local>Keamanan</button><button type="button" data-go="grpMesin">Mesin</button><button type="button" data-go="grpPemeliharaan">Pemeliharaan</button></div>
+
+      <div class="grp" id="grpKoneksi" data-local>
+        <h2><svg class="ic"><use href="#i-wifi"/></svg>Koneksi</h2>
+        <div class="grid2">
+          <div class="card"><h3>WiFi</h3><div id="wifiInfo" class="muted"></div><div id="wifiList"></div>
+            <form id="wifiForm" class="form dpanel">
+              <label>SSID<input id="wSsid" required maxlength="32"></label>
+              <label>Password<input id="wPass" type="password" maxlength="64" placeholder="kosong bila terbuka"></label>
+              <button class="btn primary" type="submit"><svg class="ic sm"><use href="#i-plus"/></svg>Tambah WiFi</button>
+              <p class="field-help">Maksimal 5 WiFi, dicoba berurutan. Password tidak pernah ditampilkan.</p></form></div>
+          <div class="card"><h3>Kontrol jarak jauh</h3><p class="muted" id="remoteInfo"></p>
+            <div class="row"><button class="btn" data-cmd="remote" data-args="on">Aktifkan</button><button class="btn" data-cmd="remote" data-args="off">Nonaktifkan</button></div></div>
         </div>
       </div>
 
-      <div class="row ctl">
-        <button class="btn danger" id="btnStop">⏹ STOP</button>
-        <button class="btn" data-cmd="jeda">⏸ Jeda</button>
-        <button class="btn" data-cmd="lanjutkan">▶ Lanjutkan</button>
-        <button class="btn" data-cmd="lewati">⏭ Lewati</button>
+      <div class="grp" id="grpKeamanan" data-local>
+        <h2><svg class="ic"><use href="#i-shield"/></svg>Keamanan</h2>
+        <div class="grid2">
+          <div class="card form"><h3>Password web lokal</h3>
+            <p class="muted">Untuk dashboard di jaringan rumah. Minimal 12 karakter. Mengganti password mengeluarkan semua perangkat yang diingat.</p>
+            <label>Password baru<input id="lpw1" type="password" minlength="12" maxlength="64" autocomplete="new-password" placeholder="min 12 karakter"></label>
+            <label>Ulangi password<input id="lpw2" type="password" minlength="12" maxlength="64" autocomplete="new-password"></label>
+            <button class="btn" id="btnPwLocal">Ganti password lokal</button></div>
+          <div class="card form"><h3>Password jarak jauh</h3>
+            <p class="muted">Untuk dashboard di internet (berbeda dari password lokal). Minimal 12 karakter. Dikirim sekali lewat sambungan terenkripsi ke server dan tidak disimpan di mesin; semua sesi jarak jauh akan keluar. Butuh mesin sedang terhubung ke server.</p>
+            <label>Password baru<input id="rpw1" type="password" minlength="12" maxlength="64" autocomplete="new-password" placeholder="min 12 karakter"></label>
+            <label>Ulangi password<input id="rpw2" type="password" minlength="12" maxlength="64" autocomplete="new-password"></label>
+            <button class="btn" id="btnPwRemote">Ganti password jarak jauh</button>
+            <p class="muted" id="pwRemoteMsg" role="status"></p></div>
+          <div class="card"><h3>Perangkat yang diingat</h3><p class="muted" id="devHint"></p><div id="devList"></div>
+            <div class="dpanel"><button class="btn dout" id="btnDevOthers">Keluarkan semua perangkat lain</button></div></div>
+        </div>
       </div>
 
-      <h3>Mulai Proses</h3>
-      <div id="homeEmpty" class="card" hidden>
-        <p>Belum ada Proses. Proses disusun dari Tahap (isi air, putar, buang, spin, dan lain-lain).</p>
-        <button class="btn primary" id="goProses">Buat Proses</button>
+      <div class="grp" id="grpMesin">
+        <h2><svg class="ic"><use href="#i-sliders"/></svg>Mesin</h2>
+        <div class="grid2">
+          <div class="card"><h3>Notifikasi</h3>
+            <input id="sNotif" type="hidden" value="lengkap">
+            <div class="seg" id="notifSeg" role="group" aria-label="Notifikasi"><button type="button" data-notif="lengkap">Lengkap</button><button type="button" data-notif="ringkas">Ringkas</button><button type="button" data-notif="senyap">Senyap</button></div>
+            <p class="field-help">Dikirim ke Telegram lewat server. Log di web selalu lengkap. Pesan dari Tahap Notifikasi dan Minta tindakan selalu terkirim, termasuk mode Senyap.</p></div>
+          <div class="card"><h3>Kalibrasi isi air</h3><p class="muted" id="calibNote"></p>
+            <div class="row"><button class="btn" data-cmd="cek_air"><svg class="ic sm"><use href="#i-search"/></svg>Cek air</button><button class="btn dout" id="btnCalib">Reset kalibrasi</button></div></div>
+          <div class="card"><h3>Tampilan</h3>
+            <div class="seg" id="themeSeg" role="group" aria-label="Tema"><button type="button" data-theme-set="auto">Otomatis</button><button type="button" data-theme-set="light">Terang</button><button type="button" data-theme-set="dark">Gelap</button></div>
+            <p class="field-help">Variabel air, putar, dan pewangi diatur per Tahap di menu Proses dan Manual.</p></div>
+        </div>
       </div>
-      <div class="grid" id="prosesGrid"></div>
-      <p class="muted" id="progLock" hidden></p>
-      <div class="card form" id="startOpts" hidden>
-        <label>Mulai
-          <select id="startMode"><option value="now">Sekarang</option><option value="tunda">Tunda</option><option value="selesai">Selesai pada jam (perkiraan)</option></select>
-        </label>
-        <input id="startTunda" type="time" step="1" value="00:30:00" hidden aria-label="Lama tunda (jam:menit:detik)">
-        <input id="startSelesai" type="time" hidden aria-label="Selesai pada jam">
-        <p class="muted" id="startNote"></p>
-        <p class="muted">Berlaku untuk tombol Proses di atas. "Selesai pada jam" memakai perkiraan durasi, jadi bisa meleset karena isi/buang berbasis sensor.</p>
-      </div>
-    </section>
 
-    <!-- MANUAL -->
-    <section id="tab-manual" class="tab">
-      <p class="muted">Jalankan satu Tahap dengan variabelnya sendiri. Hanya bisa saat mesin siap. Untuk kontrol relay langsung dan uji relay, buka tab Relay.</p>
-      <div class="card form">
-        <label>Tahap<select id="manType"></select></label>
-        <div id="manForm"></div>
-        <p class="muted" id="manHint" hidden>Buang manual menarik valve buang selama waktu yang diatur <b>tanpa membaca sensor</b>. Jalan darurat bila sensor rusak.</p>
-        <div class="row"><button class="btn primary" id="manRun">&#9654; Jalankan</button><button class="btn" data-cmd="cek_air">Cek air</button></div>
+      <div class="grp" id="grpPemeliharaan">
+        <h2><svg class="ic"><use href="#i-cpu"/></svg>Pemeliharaan</h2>
+        <div class="grid2">
+          <div class="card"><h3>Info sistem</h3><div id="sysInfo"></div></div>
+          <div class="card" data-local><h3>Firmware</h3><div id="fwInfo" class="muted"></div>
+            <div class="form dpanel"><label>Pilih file .bin<input id="fwFile" type="file" accept=".bin"></label>
+              <button class="btn primary" id="btnFlash"><svg class="ic sm"><use href="#i-upload"/></svg>Flash firmware</button>
+              <div class="bar"><div id="fwBar"></div></div>
+              <p class="field-help" id="fwMsg">Hanya saat mesin siap (tidak mencuci / dijeda). Mesin restart otomatis setelah berhasil.</p>
+              <button class="btn dout" id="btnRollback">Kembali ke versi sebelumnya</button></div></div>
+          <div class="card" data-local><h3>Cadangkan dan pulihkan</h3>
+            <p class="muted">Pengaturan dan daftar WiFi disimpan ke satu berkas JSON (Proses diekspor satu per satu di menu Proses). Password WiFi hanya ikut bila dicentang: simpan berkasnya dengan aman.</p>
+            <label class="chk"><input type="checkbox" id="bkWifi"> Sertakan password WiFi</label>
+            <div class="row"><button class="btn" id="btnBackup"><svg class="ic sm"><use href="#i-download"/></svg>Unduh cadangan</button><label class="btn" for="restoreFile"><svg class="ic sm"><use href="#i-upload"/></svg>Pulihkan dari berkas…</label><input id="restoreFile" type="file" accept=".json,application/json" hidden></div>
+            <p class="muted" id="restoreMsg" role="status"></p></div>
+          <div class="card"><h3>Zona berbahaya</h3><p class="muted">Aksi berikut meminta konfirmasi.</p>
+            <div class="row"><button class="btn dout" id="btnResetAll">Reset pengaturan</button><button class="btn dout" id="btnRestart"><svg class="ic sm"><use href="#i-power"/></svg>Restart mesin</button></div></div>
+        </div>
       </div>
-    </section>
-
-    <!-- PROSES -->
-    <section id="tab-proses" class="tab">
-      <p class="muted">Proses disusun dari Tahap. Atur variabel tiap Tahap, geser <b>&#9776;</b> untuk menukar urutan. Maksimal 10 Proses, 40 Tahap per Proses. Proses yang sedang dipakai tidak bisa diubah atau dihapus.</p>
-      <h3>Tersimpan <span class="muted" id="pcCount"></span></h3>
-      <div id="pcList"></div>
-      <div class="row"><label class="btn" for="pcImportFile" data-local>&#11014; Impor dari berkas&hellip;</label><input id="pcImportFile" type="file" accept=".json,application/json" hidden></div>
-      <h3 id="pcTitle">Proses baru</h3>
-      <div class="card form" id="pcEditor">
-        <div id="pcLock" class="banner warn" hidden></div>
-        <label>Nama Proses<input id="pcName" maxlength="27" placeholder="mis. Cuci harian"></label>
-        <div><div class="muted">Tambah Tahap</div><div class="palette" id="pcPalette"></div></div>
-        <div id="pcStack" class="stack"></div>
-        <p id="pcEmpty" class="muted">Belum ada Tahap. Pilih dari tombol di atas.</p>
-        <div class="cpSummary" id="pcSummary"></div>
-        <div id="pcWarn" class="banner warn" hidden></div>
-        <div id="pcError" class="banner err" hidden></div>
-        <div class="row"><button class="btn primary" id="pcSave">&#128190; Simpan</button><button class="btn" id="pcSaveNew">Simpan sebagai baru</button><button class="btn" id="pcReset">Kosongkan</button></div>
-      </div>
-    </section>
-
-    <!-- RELAY -->
-    <section id="tab-relay" class="tab">
-      <div id="relayLock" class="banner err" hidden></div>
-      <div class="banner warn">&#9888; Lepas beban atau tutup kran air sebelum menguji. Motor kiri &amp; kanan <b>tidak pernah</b> bisa menyala bersamaan (dijaga berlapis). Kontrol manual hanya saat mesin siap dan otomatis mati setelah 60 detik.</div>
-      <div id="relayProgress" class="banner warn" hidden></div>
-      <div class="card form">
-        <b>Uji berurutan otomatis</b>
-        <p class="muted">Menyalakan lalu mematikan setiap relay satu per satu: kiri, kanan, isi, buang, spin, pewangi.</p>
-        <label>Lama menyala per relay (detik)<input id="seqSecs" type="number" min="1" max="30" value="3"></label>
-        <div class="row"><button class="btn primary" id="btnSeq">&#9654; Mulai uji berurutan</button><button class="btn danger" id="btnSeqStop">&#9209; Berhenti</button></div>
-      </div>
-      <h3>Kontrol per relay</h3>
-      <div id="relayCards"></div>
-      <button class="btn danger" id="btnAllOff">Matikan semua relay</button>
-    </section>
-
-    <!-- PENGATURAN -->
-    <section id="tab-settings" class="tab">
-      <div class="card form">
-        <label>Notifikasi (dikirim ke Telegram lewat server)
-          <select id="sNotif"><option value="lengkap">Lengkap</option><option value="ringkas">Ringkas</option><option value="senyap">Senyap</option></select>
-        </label>
-        <button class="btn" id="btnNotif">Simpan</button>
-        <p class="muted">Log di web selalu lengkap. Pesan dari Tahap Notifikasi dan Minta tindakan selalu terkirim, termasuk mode Senyap.</p>
-      </div>
-      <div class="card form">
-        <b>Kalibrasi isi air</b>
-        <p class="muted" id="calibNote"></p>
-        <div class="row"><button class="btn" data-cmd="cek_air">Cek air</button><button class="btn danger" id="btnCalib">Reset kalibrasi</button></div>
-      </div>
-      <p class="muted">Variabel air, putar, dan pewangi diatur per Tahap di tab Proses dan Manual.</p>
-      <button class="btn danger" id="btnResetAll">Reset pengaturan</button>
-    </section>
-
-    <!-- WIFI -->
-    <section id="tab-wifi" class="tab">
-      <div class="card"><div id="wifiInfo"></div></div>
-      <div id="wifiList"></div>
-      <form id="wifiForm" class="card form">
-        <label>SSID<input id="wSsid" required maxlength="32"></label>
-        <label>Password<input id="wPass" type="password" maxlength="64" placeholder="kosong bila terbuka"></label>
-        <button class="btn primary" type="submit">Tambah WiFi</button>
-      </form>
-      <p class="muted">Maksimal 5 WiFi, dicoba berurutan. Password tidak pernah ditampilkan.</p>
-    </section>
-
-    <!-- LOG -->
-    <section id="tab-log" class="tab">
-      <div class="row"><select id="logLevel"><option value="1">INFO+</option><option value="0">Semua (DEBUG)</option><option value="2">STEP+</option><option value="3">WARN+</option><option value="4">ERROR+</option></select></div>
-      <pre id="logBox" class="logbox"></pre>
-    </section>
-
-    <!-- KONSOL -->
-    <section id="tab-console" class="tab">
-      <div class="row">
-        <button class="btn" id="conPause">⏸ Pause</button>
-        <button class="btn" id="conClear">Bersihkan</button>
-        <button class="btn" id="conDl">⬇ Unduh .txt</button>
-        <button class="btn" id="conTrace">Jejak boot lalu</button>
-      </div>
-      <pre id="conBox" class="logbox mono"></pre>
-      <form id="conForm" class="row">
-        <input id="conIn" placeholder="ketik perintah: status, stop, heap, relay_test kiri …" autocomplete="off" autocapitalize="none">
-        <button class="btn primary" type="submit">Kirim</button>
-      </form>
-    </section>
-
-    <!-- RIWAYAT -->
-    <section id="tab-history" class="tab">
-      <div class="card" id="statsBox"></div>
-      <div id="histList"></div>
-    </section>
-
-    <!-- FIRMWARE -->
-    <section id="tab-firmware" class="tab">
-      <div class="card" id="fwInfo"></div>
-      <div class="card form">
-        <label>Pilih file .bin<input id="fwFile" type="file" accept=".bin"></label>
-        <button class="btn primary" id="btnFlash">Flash firmware</button>
-        <div class="bar"><div id="fwBar"></div></div>
-        <p class="muted" id="fwMsg">Hanya bisa saat mesin siap (tidak mencuci / dijeda). Mesin restart otomatis setelah berhasil.</p>
-      </div>
-      <button class="btn" id="btnRollback">↩ Kembali ke versi sebelumnya</button>
-    </section>
-
-    <!-- SISTEM -->
-    <section id="tab-system" class="tab">
-      <div class="card" id="sysInfo"></div>
-      <div class="card" data-local>
-        <b>Perangkat yang diingat</b>
-        <p class="muted" id="devHint"></p>
-        <div id="devList"></div>
-        <div class="row" style="margin-top:10px"><button class="btn" id="btnDevOthers">Keluarkan semua perangkat lain</button></div>
-      </div>
-      <div class="card" data-local>
-        <b>Cadangkan &amp; pulihkan</b>
-        <p class="muted">Pengaturan dan daftar WiFi disimpan ke satu berkas JSON (Proses diekspor satu per satu di tab Proses). Password WiFi hanya ikut bila dicentang: simpan berkasnya dengan aman.</p>
-        <label class="chk"><input type="checkbox" id="bkWifi"> Sertakan password WiFi</label>
-        <div class="row"><button class="btn" id="btnBackup">&#11015; Unduh cadangan</button><label class="btn" for="restoreFile">&#11014; Pulihkan dari berkas&hellip;</label><input id="restoreFile" type="file" accept=".json,application/json" hidden></div>
-        <p class="muted" id="restoreMsg"></p>
-      </div>
-      <div class="card" data-local>
-        <b>Kontrol jarak jauh</b>
-        <p class="muted" id="remoteInfo"></p>
-        <div class="row"><button class="btn" data-cmd="remote" data-args="on">Aktifkan</button><button class="btn" data-cmd="remote" data-args="off">Nonaktifkan</button></div>
-      </div>
-      <div class="card form" data-local>
-        <b>Password web lokal</b>
-        <p class="muted">Untuk dashboard di jaringan rumah. Minimal 12 karakter. Mengganti password mengeluarkan semua perangkat yang diingat.</p>
-        <label>Password baru<input id="lpw1" type="password" minlength="12" maxlength="64" autocomplete="new-password" placeholder="min 12 karakter"></label>
-        <label>Ulangi password<input id="lpw2" type="password" minlength="12" maxlength="64" autocomplete="new-password"></label>
-        <button class="btn" id="btnPwLocal">Ganti password lokal</button>
-      </div>
-      <div class="card form" data-local>
-        <b>Password jarak jauh</b>
-        <p class="muted">Untuk dashboard di internet (berbeda dari password lokal). Minimal 12 karakter. Dikirim sekali lewat sambungan terenkripsi ke server dan tidak disimpan di mesin; semua sesi jarak jauh akan keluar. Butuh mesin sedang terhubung ke server.</p>
-        <label>Password baru<input id="rpw1" type="password" minlength="12" maxlength="64" autocomplete="new-password" placeholder="min 12 karakter"></label>
-        <label>Ulangi password<input id="rpw2" type="password" minlength="12" maxlength="64" autocomplete="new-password"></label>
-        <button class="btn" id="btnPwRemote">Ganti password jarak jauh</button>
-        <p class="muted" id="pwRemoteMsg"></p>
-      </div>
-      <button class="btn danger" id="btnRestart">Restart mesin</button>
     </section>
   </main>
+  </div>
+
+  <!-- ===== SHEET REL TAHAP ===== -->
+  <div id="jobSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="jobTitle" hidden>
+    <div class="sheet-scrim" data-close></div>
+    <div class="sheet-panel" id="jobPanel" tabindex="-1">
+      <div class="sheet-grab"></div>
+      <div class="sheet-head"><div><h2 id="jobTitle">Rel Tahap</h2><p id="jobSub" class="muted"></p></div>
+        <button id="jobClose" class="icon-btn" aria-label="Tutup" type="button"><svg class="ic"><use href="#i-x"/></svg></button></div>
+      <div id="jobList" class="sheet-body"></div>
+    </div>
+  </div>
 </div>
 <script>/*JS*/</script>
 </body>

@@ -1,7 +1,7 @@
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 const root = require('path').resolve(__dirname, '../../web') + '/';
-let html = fs.readFileSync(root + 'index.html', 'utf8')
+let html = process.env.UI_BUILT ? fs.readFileSync(root + '../cloud/public/index.html', 'utf8') : fs.readFileSync(root + 'index.html', 'utf8')
   .replace('/*CSS*/', fs.readFileSync(root + 'style.css', 'utf8'))
   .replace('/*JS*/', () => fs.readFileSync(root + 'app.js', 'utf8'));
 // Katalog Tahap asli dari firmware (dibuat: test_tahap --meta). UI tidak boleh menyimpan rentang sendiri.
@@ -20,6 +20,7 @@ const S = {
   store: Array(10).fill(null),       // isi slot Proses
   locked: new Set(),
   devices: [{ id: 0, name: 'Chrome - Android', created: 1760000000, lastSeen: 1760000500, current: false }, { id: 1, name: 'Edge - Windows', created: 1760100000, lastSeen: 1760100500, current: true }],
+  job: { active: false }, jobCalls: 0, hist: { history: [], stats: { cycles: 3, motorSec: 7200, avgFillSec: 600 } },
   pwPosts: [], pwFail: false, cmds: [], posts: [], runs: [], decides: [], logQueue: [], restores: [], restoreReply: { ok: true, dry: true, msg: '1 pengaturan berubah, 2 WiFi' }, info: { remote: false, online: true }, remote: null,
 };
 const BASE_STATUS = JSON.parse(JSON.stringify(S.status));
@@ -34,6 +35,8 @@ function route(url, opt) {
   const json = (o, code = 200) => Promise.resolve({ status: code, json: () => Promise.resolve(o) });
   if (p === '/api/status') return json(S.status);
   if (p === '/api/info') return json(S.info);
+  if (p === '/api/job') { S.jobCalls++; return json(S.job); }
+  if (p === '/api/history') return json(S.hist);
   if (p === '/api/tahap/meta') return json(META);
   if (p === '/api/wifi' && m === 'GET') return json({ networks: [], max: 5, ap: 'MesinCuci-1', apOn: false, online: true, ssid: 'x', rssi: -50, ip: '1.2.3.4' });
   if (p === '/api/restore') { S.restores.push({ dry: u.searchParams.get('dry'), body }); return json(S.restoreReply); }
@@ -50,7 +53,7 @@ function route(url, opt) {
       if (!pr) return json({ ok: false, msg: 'Proses kosong atau rusak' }, 404);
       return json({ slot: +sl, locked: S.locked.has(+sl), est: 600, proses: pr, ringkas: pr.tahap.map(t => t.t), warnings: warningsOf(pr) });
     }
-    return json({ max: 10, maxTahap: 40, fs: true, slots: S.store.map((pr, i) => pr ? { slot: i + 1, locked: S.locked.has(i + 1), name: pr.name, count: pr.tahap.length, rev: pr.rev, est: 600 } : null) });
+    return json({ max: 10, maxTahap: 40, fs: true, slots: S.store.map((pr, i) => pr ? { slot: i + 1, locked: S.locked.has(i + 1), name: pr.name, count: pr.tahap.length, rev: pr.rev, est: 600, trail: pr.tahap.map(t => t.t).slice(0, 12) } : null) });
   }
   if (p === '/api/proses' && m === 'POST') {
     if (body.dry) return json({ ok: true, dry: true, est: 900, warnings: warningsOf(body) });
@@ -86,7 +89,7 @@ function route(url, opt) {
       w.matchMedia = () => ({ matches: false });
       w.Element.prototype.setPointerCapture = () => { };
       w.Element.prototype.scrollIntoView = () => { };
-      w.scrollBy = () => { };
+      w.scrollBy = () => { }; w.scrollTo = () => { };
       w.URL.createObjectURL = () => 'blob:x';
     },
   });
@@ -96,7 +99,8 @@ function route(url, opt) {
   const click = el => el.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
   const type = (el, v) => { el.value = v; el.dispatchEvent(new w.Event('input', { bubbles: true })); };
   const pick = (el, v) => { el.value = v; el.dispatchEvent(new w.Event('change', { bubbles: true })); };
-  const tab = t => { click($(`[data-tab="${t}"]`)); return sleep(120); };
+  const nav = v => { click($(`.nav [data-view="${v}"]`)); return sleep(120); };
+  const seg = s => { click($(`#actSeg [data-seg="${s}"]`)); return sleep(60); };
   const addStep = t => click($(`[data-add="${t}"]`));
   const rowOf = i => $$('#pcStack .crow')[i];
   const fieldOf = (i, k) => $(`[data-f="${k}"]`, rowOf(i));
@@ -104,11 +108,15 @@ function route(url, opt) {
   console.log('[U1] Start, login, Beranda kosong');
   ok(!$('#app').hidden && $('#login').hidden, 'dashboard tampil setelah status OK');
   ok($('#remember').checked, 'centang ingat perangkat aktif secara default');
-  ok(!$('#homeEmpty').hidden && $('#startOpts').hidden && $$('#prosesGrid .prog').length === 0, 'tanpa Proses: pesan kosong + "Buat Proses", tanpa program bawaan');
-  ok(!/Normal|Gentle|Hijab|Cepat/.test($('#tab-home').textContent), 'tidak ada program bawaan (Normal/Gentle/Hijab/Cepat)');
-  ok(!$('[data-tab="water"]') && !$('[data-tab="custom"]') && !!$('[data-tab="proses"]'), 'tab Air & Custom hilang, tab Proses ada');
+  ok(!$('#homeEmpty').hidden && $('#startOpts').hidden && $$('#prosesGrid .prog').length === 0 && $$('#prosesGrid .skel').length === 0, 'tanpa Proses: pesan kosong + "Buat Proses", tanpa program bawaan');
+  ok(!/Normal|Gentle|Hijab|Cepat/.test($('#view-beranda').textContent), 'tidak ada program bawaan (Normal/Gentle/Hijab/Cepat)');
+  ok($$('.nav [data-view]').map(b => b.dataset.view).join(',') === 'beranda,proses,manual,aktivitas,sistem', 'navigasi tepat 5 menu');
+  ok($('.nav [data-view="beranda"]').getAttribute('aria-current') === 'page' && $('#view-beranda').classList.contains('on'), 'Beranda aktif awal (aria-current)');
   click($('#goProses')); await sleep(120);
-  ok($('#tab-proses').classList.contains('on'), 'tombol Buat Proses membuka tab Proses');
+  ok($('#view-proses').classList.contains('on') && $('.nav [data-view="proses"]').getAttribute('aria-current') === 'page' && w.location.hash === '#proses', 'tombol Buat Proses membuka menu Proses (hash #proses)');
+  ok(w.document.documentElement.lang === 'id' && !!$('main#main') && !!$('.skip'), 'lang=id, landmark main, tautan lewati konten');
+  click($('#pcNew')); await sleep(40);
+  ok($('#view-proses').dataset.mode === 'edit', 'kartu "Proses baru" membuka editor');
 
   console.log('[U2] Editor Proses: palet dari katalog firmware, field per mode');
   ok($$('#pcPalette [data-add]').length === META.types.filter(t => !t.manual).length && !$('[data-add="buang_manual"]'), 'palet = jenis Tahap dari firmware (tanpa Buang manual)');
@@ -164,31 +172,32 @@ function route(url, opt) {
   ok(post && post.name === 'Cuci harian' && post.tahap.map(t => t.t).join(',') === 'isi,putar,soak,buang,pewangi,spin', 'payload: nama & urutan Tahap benar');
   ok(post.tahap[0].mode === 'sensor' && post.tahap[0].batas === 1800 && post.tahap[0].coba === 3 && post.tahap[0].pra === 'buang' && post.tahap[0].lama === undefined, 'Isi: hanya variabel yang berlaku untuk mode (batas 1800, tanpa lama)');
   ok(post.tahap[2].ulangi === 2 && post.tahap[2].putar === 1 && post.tahap[2].rendam === 4 && post.tahap[4].cup === 0.5, 'Soak & Pewangi (0,5 cup) benar di payload');
-  ok($$('#pcList .cpcard').length === 1 && $('#pcList').textContent.includes('Cuci harian') && $('#pcCount').textContent === '1/10', 'daftar tersimpan menampilkan Proses (1/10)');
+  ok($$('#pcList .cpcard').length === 1 && !!$('#pcNew') && $('#pcList').textContent.includes('Cuci harian') && $('#pcCount').textContent === '1/10', 'daftar tersimpan menampilkan Proses (1/10)');
   ok($$('#prosesGrid .prog').length === 1 && !$('#homeEmpty').hidden === false && !$('#startOpts').hidden, 'Beranda menampilkan Proses + opsi mulai');
+  ok($$('#prosesGrid .prog .trail span').length === 6 && $('#pcList .cpcard .trail') !== null, 'kartu Proses memuat jejak ikon 6 Tahap (isi,putar,soak,buang,pewangi,spin)');
 
   console.log('[U5] Mulai dari Beranda: sekarang / tunda / selesai jam');
-  await tab('home');
+  await nav('beranda');
   click($('#prosesGrid [data-run="1"]')); await sleep(60);
   ok(S.runs.length === 1 && S.runs[0].slot === 1 && S.runs[0].tunda === undefined && S.runs[0].selesai === undefined, 'mulai sekarang: {slot:1}');
-  pick($('#startMode'), 'tunda');
-  ok(!$('#startTunda').hidden && $('#startSelesai').hidden, 'pilih Tunda menampilkan input waktu tunda');
+  click($('#startSeg [data-sm="tunda"]'));
+  ok(!$('#startTunda').hidden && $('#startSelesai').hidden, 'pilih Tunda (segmented) menampilkan input waktu tunda');
   type($('#startTunda'), '01:15:30');
   click($('#prosesGrid [data-run="1"]')); await sleep(60);
   ok(S.runs[1].tunda === '01:15:30', 'tunda dikirim sebagai HH:MM:SS');
-  pick($('#startMode'), 'selesai');
+  click($('#startSeg [data-sm="selesai"]'));
   click($('#prosesGrid [data-run="1"]')); await sleep(60);
   ok(S.runs.length === 2 && /jam selesai/.test($('#toast').textContent), 'selesai pada jam tanpa jam: ditolak di UI');
   type($('#startSelesai'), '07:30');
   click($('#prosesGrid [data-run="1"]')); await sleep(60);
   ok(S.runs[2].selesai === '07:30', 'selesai pada jam dikirim HH:MM');
   S.settings = { ...S.settings, timeSynced: false }; await w.loadSettings();
-  ok($('#startMode').querySelector('option[value=selesai]').disabled && /Jam belum sinkron/.test($('#startNote').textContent), 'jam belum sinkron: opsi Selesai pada jam dinonaktifkan');
+  ok($('[data-sm="selesai"]').disabled && /Jam belum sinkron/.test($('#startNote').textContent), 'jam belum sinkron: opsi Selesai pada jam dinonaktifkan');
   S.settings = { ...S.settings, timeSynced: true }; await w.loadSettings();
-  pick($('#startMode'), 'now');
+  click($('#startSeg [data-sm="now"]'));
 
   console.log('[U6] Edit, salin, ekspor, hapus, kunci saat dipakai');
-  await tab('proses');
+  await nav('proses');
   click($('[data-pedit="1"]')); await sleep(150);
   ok($('#pcName').value === 'Cuci harian' && $$('#pcStack .crow').length === 6, 'Edit memuat Proses tersimpan');
   ok($('input[data-k="cup"]', rowOf(4)).value === '0.5' && $$('input[data-hms]', rowOf(0)).map(i => i.value).join(':') === '0:30:0', 'nilai tersimpan tampil benar');
@@ -218,15 +227,16 @@ function route(url, opt) {
   ok($$('#pcStack .crow b').map(b => b.textContent).join(',').startsWith('Putar mesin,Soak,Isi air'), 'seret baris 1 ke bawah: Isi air pindah ke posisi 3');
 
   console.log('[U8] Manual: satu Tahap dengan variabelnya');
-  await tab('manual');
-  ok($$('#manType option').length === META.types.length && /Buang manual/.test($('#manType').textContent), 'daftar Tahap dari firmware + Buang manual (hanya Manual)');
+  await nav('manual');
+  ok($$('#manGrid [data-mt]').length === META.types.length && /Buang manual/.test($('#manGrid').textContent) && /hanya Manual/.test($('#manGrid').textContent), 'kisi jenis Tahap dari firmware + Buang manual (hanya Manual)');
   ok(!!$('#manForm [data-k="mode"]') && $('#manRun').disabled === false, 'form Isi air tampil, tombol aktif saat siap');
-  pick($('#manType'), 'buang_manual'); await sleep(40);
+  click($('#manGrid [data-mt="buang_manual"]')); await sleep(40);
+  ok($('#manGrid [data-mt="buang_manual"]').getAttribute('aria-pressed') === 'true', 'kartu jenis Tahap terpilih (aria-pressed)');
   ok(!$('#manHint').hidden && $('#manForm input[data-k="lama"]').value === '5', 'Buang manual: petunjuk darurat & lama 5 mnt');
   confirmAnswer = true; type($('#manForm input[data-k="lama"]'), '2'); click($('#manRun')); await sleep(80);
   ok(S.runs[S.runs.length - 1].manual && S.runs[S.runs.length - 1].manual.t === 'buang_manual' && S.runs[S.runs.length - 1].manual.lama === 2, 'Manual dikirim: {manual:{t:buang_manual, lama:2}}');
   ok(/Buang manual menarik valve/.test(lastConfirm), 'Buang manual meminta konfirmasi');
-  pick($('#manType'), 'putar'); await sleep(40);
+  click($('#manGrid [data-mt="putar"]')); await sleep(40);
   type($('#manForm input[data-k="lama"]'), '0'); const nRuns = S.runs.length; click($('#manRun')); await sleep(60);
   ok(S.runs.length === nRuns && /Lama putar harus/.test($('#toast').textContent), 'nilai di luar rentang ditolak di UI dengan pesan');
   S.status = { ...S.status, state: 'running', proses: 'X', stage: 'Tahap 1/2: Isi air', slot: 1 }; await w.pollOnce();
@@ -235,10 +245,11 @@ function route(url, opt) {
 
   console.log('[U9] Kartu keputusan');
   const dec = (code, opts, labels, msg) => { S.status = { ...S.status, state: 'decide', proses: 'Cuci harian', slot: 1, stage: 'Tahap 1/6: Isi air', decision: { code, msg, opts, labels } }; return w.pollOnce(); };
-  await tab('home');
+  await nav('beranda');
   await dec('isi_gagal', ['ulang', 'lanjut', 'batal'], ['Ulang', 'Lanjut', 'Batal'], 'Air tidak terisi setelah 4 percobaan');
   ok(!$('#decisionCard').hidden && /Air tidak terisi/.test($('#decMsg').textContent) && $$('#decBtns button').map(b => b.textContent).join(',') === 'Ulang,Lanjut,Batal', 'keputusan ISI_GAGAL: pesan + tombol Ulang/Lanjut/Batal');
   ok($('#chipState').textContent === 'Menunggu keputusan', 'chip status: Menunggu keputusan');
+  ok(!$('#navBadge').hidden && /keputusan/.test($('#navBadgeTxt').textContent), 'badge keputusan di menu Beranda (dengan teks untuk pembaca layar)');
   confirmAnswer = false; click($('#decBtns [data-dec="lanjut"]')); await sleep(60);
   ok(/Air mungkin belum cukup/.test(lastConfirm) && S.decides.length === 0, 'Lanjut: dialog peringatan; dibatalkan -> tidak dikirim');
   confirmAnswer = true; click($('#decBtns [data-dec="lanjut"]')); await sleep(60);
@@ -258,10 +269,10 @@ function route(url, opt) {
   lastConfirm = ''; click($('#decBtns [data-dec="batal"]')); await sleep(60);
   ok(/Batalkan Proses/.test(lastConfirm), 'Batal meminta konfirmasi');
   S.status = { ...S.status, state: 'idle', proses: '', slot: 0, decision: undefined }; await w.pollOnce();
-  ok($('#decisionCard').hidden, 'kartu keputusan hilang setelah selesai');
+  ok($('#decisionCard').hidden && $('#navBadge').hidden, 'kartu keputusan & badge hilang setelah selesai');
 
   console.log('[U10] Relay: dikunci saat Proses berjalan & konflik');
-  await tab('relay');
+  await nav('manual');
   const onBtn = k => $(`[data-rl="${k}"][data-on="1"]`);
   ok(!onBtn('kiri').disabled && !$('#btnSeq').disabled, 'saat siap: ON kiri & uji berurutan aktif');
   S.status = { ...S.status, relays: { ...S.status.relays, kiri: true } }; await w.pollOnce();
@@ -279,19 +290,23 @@ function route(url, opt) {
   S.logQueue.push({ s: 5, t: 1, e: 0, l: 4, m: 'Interlock menolak relay kanan' }); await w.pollOnce();
   ok(/Interlock menolak relay kanan/.test($('#toast').textContent), 'log ERROR dari mesin muncul sebagai toast');
   S.logQueue.push({ s: 6, t: 2, e: 0, l: 6, m: 'Tambahkan deterjen' }); await w.pollOnce();
-  ok(/📣 Tambahkan deterjen/.test($('#toast').textContent), 'log NOTIF muncul sebagai toast');
-  await tab('log'); $('#logLevel').value = '0'; pick($('#logLevel'), '0');
-  ok(/NOTIF Tambahkan deterjen/.test($('#logBox').textContent), 'baris NOTIF tampil di tab Log');
+  ok(/Tambahkan deterjen/.test($('#toast').textContent), 'log NOTIF muncul sebagai toast');
+  await nav('aktivitas'); await seg('log');
+  click($('#logFilters [data-lv="0"]'));
+  ok(/Tambahkan deterjen/.test($('#logBox').textContent) && !!$('#logBox .lr.l-6') && !!$('#logBox .lr.l-4'), 'baris NOTIF & ERROR tampil di Log (timeline)');
+  click($('#logFilters [data-lv="4"]'));
+  ok(/Interlock/.test($('#logBox').textContent) && !$('#logBox .lr.l-1') && !$('#logBox .lr.l-0'), 'filter Galat menyembunyikan INFO/DEBUG, ERROR tetap tampil');
+  click($('#logFilters [data-lv="1"]'));
 
   console.log('[U12] Pengaturan ringkas');
-  await tab('settings');
-  ok($('#sNotif').value === 'lengkap' && !$('#numSettings') && !$('#waterSettings') && !$('#sPola'), 'Pengaturan hanya notifikasi & kalibrasi (variabel global dihapus)');
+  await nav('sistem');
+  ok($('#sNotif').value === 'lengkap' && !$('#numSettings') && !$('#waterSettings') && !$('#sPola'), 'Sistem: notifikasi & kalibrasi (variabel global dihapus)');
   ok(/Rata-rata isi penuh/.test($('#calibNote').textContent), 'catatan kalibrasi tampil');
-  pick($('#sNotif'), 'senyap'); click($('#btnNotif')); await sleep(40);
+  click($('#notifSeg [data-notif="senyap"]')); await sleep(40);
   ok(S.cmds.some(c => c.cmd === 'notif' && c.args === 'senyap'), 'notifikasi dikirim sebagai perintah notif');
 
   console.log('[U13] Perangkat diingat');
-  await tab('system');
+  await nav('sistem');
   ok($$('#devList .wifirow').length === 2 && $('#devList').textContent.includes('Perangkat ini'), 'daftar 2 perangkat, penanda "Perangkat ini"');
   click($('#devList [data-dev="0"]')); await sleep(100);
   ok($$('#devList .wifirow').length === 1, 'hapus perangkat lain');
@@ -301,7 +316,7 @@ function route(url, opt) {
 
   console.log('[U13b] Dua password terpisah, diatur dari lokal');
   d.querySelector('#login').hidden = true; d.querySelector('#app').hidden = false;
-  await tab('system');
+  await nav('sistem');
   ok(!!$('#lpw1') && !!$('#rpw1') && !$('#newPw'), 'dua kartu password (lokal & jarak jauh) tampil');
   type($('#lpw1'), 'pendek'); type($('#lpw2'), 'pendek'); click($('#btnPwLocal')); await sleep(40);
   ok(/minimal 12/.test($('#toast').textContent) && S.pwPosts.length === 0, 'password < 12 karakter ditolak di UI');
@@ -325,11 +340,12 @@ function route(url, opt) {
 
   console.log('[U14] Mode jarak jauh: fitur sensitif disembunyikan, banner offline');
   d.querySelector('#login').hidden = true; d.querySelector('#app').hidden = false;
-  ok(!$('[data-tab="wifi"]').hidden && !$('[data-tab="firmware"]').hidden, 'mode lokal: tab WiFi/Firmware tampil');
+  ok(!$('#grpKoneksi').hidden && !$('#grpKeamanan').hidden && !$('[data-seg="konsol"]').hidden, 'mode lokal: grup Koneksi/Keamanan & Konsol tampil');
   S.info = { remote: true, online: false }; S.remote = { online: false, lastSeen: Date.now() - 600000 };
   await w.start(); await sleep(80);
-  ok($('[data-tab="wifi"]').hidden && $('[data-tab="console"]').hidden && $('[data-tab="firmware"]').hidden, 'jarak jauh: tab WiFi/Konsol/Firmware disembunyikan');
-  ok($$('#tab-system [data-local]').every(e => e.hidden) && $$('#tab-proses [data-local]').every(e => e.hidden), 'jarak jauh: password, perangkat, backup, impor Proses disembunyikan');
+  ok($('#grpKoneksi').hidden && $('#grpKeamanan').hidden && $('[data-seg="konsol"]').hidden && $('#seg-konsol').hidden, 'jarak jauh: Koneksi, Keamanan, Konsol disembunyikan');
+  ok($$('#view-sistem [data-local]').every(e => e.hidden) && $$('#view-proses [data-local]').every(e => e.hidden), 'jarak jauh: password, perangkat, firmware, backup, impor Proses disembunyikan');
+  ok($$('#sysToc [data-go]').filter(b => !b.hidden).map(b => b.dataset.go).join(',') === 'grpMesin,grpPemeliharaan', 'daftar isi Sistem hanya memuat grup yang tersedia');
   ok(!$('#bannerOffline').hidden && /offline sejak/.test($('#bannerOffline').textContent) && d.body.classList.contains('offline'), 'banner "Mesin offline sejak ..." + kontrol dinonaktifkan');
   S.remote = { online: true, lastSeen: Date.now() }; await w.pollOnce();
   ok($('#bannerOffline').hidden && !d.body.classList.contains('offline'), 'tersambung kembali: banner hilang');
@@ -340,7 +356,7 @@ function route(url, opt) {
   S.info = { remote: false, online: true }; S.remote = null;
   S.status = { ...BASE_STATUS, remote: { configured: true, enabled: true, connected: false } };
   await w.start(); await sleep(60);
-  await tab('system');
+  await nav('sistem');
   ok(/Mencoba menyambung/.test($('#remoteInfo').textContent), 'status jarak jauh: mencoba menyambung');
   S.status = { ...BASE_STATUS, remote: { configured: true, enabled: true, connected: true } }; await w.pollOnce(); await sleep(30);
   ok(/Terhubung ke server/.test($('#remoteInfo').textContent), 'status jarak jauh: terhubung');
@@ -352,7 +368,7 @@ function route(url, opt) {
   console.log('[U16] Backup & restore');
   S.status = { ...BASE_STATUS }; S.info = { remote: false, online: true };
   await w.start(); await sleep(60);
-  await tab('system');
+  await nav('sistem');
   ok(!!$('#btnBackup') && !!$('#restoreFile') && !!$('#bkWifi'), 'kartu cadangkan & pulihkan tampil');
   const mkFile = (text) => new w.File([text], 'cadangan.json', { type: 'application/json' });
   const fire = async (text) => { const inp = $('#restoreFile'); Object.defineProperty(inp, 'files', { value: [mkFile(text)], configurable: true }); inp.dispatchEvent(new w.Event('change')); await sleep(150); };
@@ -368,6 +384,79 @@ function route(url, opt) {
   S.restoreReply = { ok: false, msg: 'Versi cadangan tidak didukung.' };
   await fire(JSON.stringify({ app: 'mesin-cuci', version: 9 }));
   ok(/tidak didukung/.test($('#restoreMsg').textContent), 'penolakan server ditampilkan apa adanya');
+
+  console.log('[U17] Rel Tahap: sheet berisi semua Tahap dengan variabelnya');
+  S.info = { remote: false, online: true }; S.remote = null; S.status = { ...BASE_STATUS };
+  await w.start(); await sleep(60);
+  await nav('beranda');
+  ok($('#btnJob').disabled && /Pilih Proses/.test($('#railMini').textContent) && $('#hero').classList.contains('idle'), 'siap: tombol Sisa Tahap nonaktif, rel mini memberi petunjuk');
+  const jobT = [{ t: 'isi', mode: 'sensor', batas: 1800, coba: 3, tunggu: 15, pra: 'buang', ringkas: 'Isi air', est: 612 },
+    { t: 'putar', lama: 15, pola: 'normal', ringkas: 'Putar', est: 900 },
+    { t: 'soak', ulangi: 2, putar: 1, rendam: 4, pola: 'gentle', ringkas: 'Soak', est: 600 },
+    { t: 'pewangi', cup: 0.5, ringkas: 'Pewangi', est: 10 },
+    { t: 'tindakan', pesan: 'Tambahkan deterjen', ringkas: 'Minta tindakan', est: 0 }];
+  S.job = { active: true, name: 'Cuci harian', slot: 1, manual: false, test: false, waiting: false, waitLeft: 0, idx: 1, count: 5, state: 'running', detail: 'Agitasi (kanan)', stepLeft: 190, tahap: jobT };
+  S.status = { ...BASE_STATUS, state: 'running', proses: 'Cuci harian', slot: 1, stage: 'Tahap 2/5: Putar mesin', step: 2, steps: 5, stepLeft: 190, totalLeft: 2400, progress: 40, detail: 'Agitasi (kanan)' };
+  const jc0 = S.jobCalls;
+  await w.pollOnce(); await sleep(80);
+  ok(S.jobCalls === jc0 + 1, '/api/job dimuat sekali saat Proses mulai (bukan tiap poll)');
+  await w.pollOnce(); await w.pollOnce(); await sleep(40);
+  ok(S.jobCalls === jc0 + 1, 'poll berikutnya tanpa perubahan Tahap tidak memuat ulang /api/job');
+  ok(!$('#btnJob').disabled && /Tahap 2\/5/.test($('#stepLine').textContent) && $('#stepLeft').textContent === '03:10' && $('#hero').classList.contains('live'), 'hero: Tahap 2/5, sisa Tahap 03:10, mode berjalan');
+  ok($$('#railMini .rail li').length === 5 && $('#railMini li.run .tl').textContent === 'Putar mesin' && $$('#railMini li.done').length === 1, 'rel mini: 5 simpul, 1 selesai, Putar mesin berjalan');
+  ok(/±40 mnt/.test($('#totalLeft').textContent) && /selesai sekitar/.test($('#etaAt').textContent), 'sisa total tampil sebagai perkiraan (±) + jam selesai');
+  $('#btnJob').focus(); click($('#btnJob')); await sleep(120);
+  ok(!$('#jobSheet').hidden && $('#jobSheet').classList.contains('open'), 'klik Sisa Tahap membuka sheet Rel Tahap');
+  ok($('#jobTitle').textContent === 'Cuci harian' && /Tahap 2 dari 5/.test($('#jobSub').textContent), 'kepala sheet: nama Proses & posisi Tahap');
+  const cards = $$('#jobList .tcard');
+  ok(cards.length === 5 && cards.map(c => c.classList.contains('done') ? 'D' : c.classList.contains('run') ? 'R' : 'Q').join('') === 'DRQQQ', 'kartu: 1 selesai, 1 berjalan, 3 antre');
+  ok($$('.badge-st', cards[0])[0].textContent === 'Selesai' && $('.badge-st', cards[1]).textContent === 'Berjalan' && $('.badge-st', cards[2]).textContent === 'Antre', 'badge status per kartu');
+  const dd = (c, label) => { const dt = $$('dt', c).find(x => x.textContent === label); return dt ? dt.nextElementSibling.textContent : null; };
+  ok(dd(cards[0], 'Mode pengisian') === 'Sensor (sampai penuh)' && dd(cards[0], 'Batas waktu isi') === '00:30:00' && dd(cards[0], 'Coba ulang bila batas habis') === '3 kali' && dd(cards[0], 'Tunggu antar coba ulang') === '15 mnt', 'kartu Isi: semua variabel mode sensor (label & satuan dari meta)');
+  ok(dd(cards[0], 'Level') === null && dd(cards[0], 'Lama isi') === null, 'variabel yang tidak berlaku untuk mode tidak ditampilkan');
+  ok(dd(cards[2], 'Ulangi') === '2 sesi' && dd(cards[2], 'Pola putar') === 'Gentle (5,3 / 7)' && dd(cards[3], 'Jumlah pewangi') === '0,5 cup' && dd(cards[4], 'Pesan') === 'Tambahkan deterjen', 'Soak, Pewangi (0,5 cup), Minta tindakan: variabel lengkap');
+  ok(/Agitasi \(kanan\)/.test($('.tlive', cards[1]).textContent) && /sisa 03:10/.test($('.tlive', cards[1]).textContent), 'kartu berjalan: detail fase + sisa Tahap');
+  ok($$('.tfields', cards[0]).length === 1 && $('.tfields', cards[0]).textContent.includes('Sensor'), 'kartu selesai tetap berisi variabel (diringkas lewat CSS, bisa dibuka)');
+  click($('.thead', cards[0])); ok(cards[0].classList.contains('open'), 'klik kartu selesai membukanya');
+  S.job = { ...S.job, idx: 2 }; S.status = { ...S.status, step: 3, stage: 'Tahap 3/5: Soak', stepLeft: 100 };
+  await w.pollOnce(); await sleep(100);
+  ok(S.jobCalls > jc0 + 1 && $$('#jobList .tcard').map(c => c.classList.contains('done') ? 'D' : c.classList.contains('run') ? 'R' : 'Q').join('') === 'DDRQQ', 'Tahap berganti: job dimuat ulang & sheet ikut diperbarui');
+  $('#jobSheet').dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await sleep(260);
+  ok($('#jobSheet').hidden && d.activeElement === $('#btnJob'), 'Esc menutup sheet & fokus kembali ke pemicu');
+  click($('#btnJob2')); await sleep(80);
+  ok(!$('#jobSheet').hidden, 'tombol "Lihat semua" di rel mini juga membuka sheet');
+  click($('#jobClose')); await sleep(260);
+  ok($('#jobSheet').hidden, 'tombol tutup menutup sheet');
+  S.job = { ...S.job, waiting: true, idx: 0, waitLeft: 600 }; S.status = { ...S.status, step: 0, stage: 'Menunggu mulai', stepLeft: 600 };
+  await w.pollOnce(); await sleep(60);
+  click($('#btnJob')); await sleep(100);
+  ok(/Menunggu mulai/.test($('#jobSub').textContent) && $$('#jobList .tcard.wait').length === 1 && $$('#jobList .tcard.run:not(.wait)').length === 0, 'menunggu mulai: simpul "Menunggu mulai" di atas, semua Tahap antre');
+  click($('#jobClose')); await sleep(260);
+  S.job = { active: true, name: 'Manual: Tunggu', slot: 0, manual: true, test: false, waiting: false, waitLeft: 0, idx: 0, count: 1, state: 'running', detail: '', stepLeft: 3, tahap: [{ t: 'tunggu', detik: 3, ringkas: 'Tunggu', est: 3 }] };
+  S.status = { ...S.status, step: 1, stage: 'Manual: Tunggu', proses: 'Manual: Tunggu', slot: 0, manual: true, stepLeft: 3 };
+  await w.pollOnce(); await sleep(80);
+  ok($$('#railMini .rail li').length === 1 && /Tunggu/.test($('#railMini').textContent), 'Manual: rel mini 1 Tahap');
+  S.job = { active: true, name: 'Kalibrasi relay', slot: 0, manual: false, test: true, waiting: false, waitLeft: 0, idx: 0, count: 2, state: 'running', detail: '', stepLeft: 3, tahap: [{ t: 'uji', relay: 'kiri', detik: 3, ringkas: 'Uji relay kiri', est: 3 }, { t: 'uji', relay: 'kanan', detik: 3, ringkas: 'Uji relay kanan', est: 3 }] };
+  S.status = { ...S.status, proses: 'Kalibrasi relay', manual: false, step: 1, stage: 'Tahap 1/2' };
+  await w.pollOnce(); await sleep(80);
+  click($('#btnJob')); await sleep(100);
+  ok($$('#jobList .tcard').length === 2 && dd($$('#jobList .tcard')[0], 'Relay') === 'kiri' && dd($$('#jobList .tcard')[0], 'Lama') === '3 dtk', 'uji relay tampil sebagai kartu "Uji relay" dengan relay & lama');
+  click($('#jobClose')); await sleep(260);
+  S.status = { ...BASE_STATUS }; await w.pollOnce(); await sleep(60);
+  ok($('#btnJob').disabled && /Pilih Proses/.test($('#railMini').textContent), 'selesai: rel mini kembali ke keadaan siap');
+
+  console.log('[U18] Tema & aksesibilitas dasar');
+  click($('[data-theme-set="dark"]'));
+  ok(d.documentElement.dataset.theme === 'dark' && $('[data-theme-set="dark"]').getAttribute('aria-pressed') === 'true', 'tema Gelap diterapkan & tersimpan');
+  click($('[data-theme-set="light"]'));
+  ok(d.documentElement.dataset.theme === 'light', 'tema Terang diterapkan');
+  click($('#btnTheme')); ok(d.documentElement.dataset.theme === 'dark', 'tombol header berganti tema (terang -> gelap)');
+  click($('[data-theme-set="auto"]'));
+  ok(d.documentElement.dataset.theme === undefined && w.localStorage.getItem('theme') === null, 'tema Otomatis mengikuti sistem');
+  const noName = $$('button').filter(b => !b.textContent.trim() && !b.getAttribute('aria-label') && !b.title);
+  ok(noName.length === 0, 'semua tombol punya nama (teks/aria-label): ' + noName.map(b => b.id || b.className).join(','));
+  ok($$('.view').length === 5 && $$('svg[aria-hidden="true"]').length > 10, '5 view, ikon dekoratif aria-hidden');
+  ok(!/[\u{1F300}-\u{1FAFF}☀-➿]/u.test(html.replace(/<svg[\s\S]*?<\/svg>/g, '').replace(/<style>[\s\S]*?<\/style>/, '')), 'tanpa emoji di markup & skrip');
 
   console.log(`\n${pass + fail} pemeriksaan UI, ${fail} gagal`);
   process.exit(fail ? 1 : 0);
