@@ -411,3 +411,10 @@ body.dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
 .card>.seg{align-self:flex-start}
 .fields>label>span:first-child{display:block;min-height:24px;line-height:24px}
 .fields>label>.optlab{display:flex;align-items:center}
+/* ===== Tombol mata password ===== */
+.pwf{position:relative;display:flex;width:100%}
+.pwf input{padding-right:46px}
+.pwf input::-ms-reveal,.pwf input::-ms-clear{display:none}
+.eye{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:36px;height:36px;border:0;border-radius:var(--r-sm);background:transparent;color:var(--text-2);display:grid;place-items:center;cursor:pointer}
+.eye:hover{background:var(--surface-3);color:var(--text)}
+.eye[aria-pressed=true]{color:var(--accent-text)}

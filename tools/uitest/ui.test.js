@@ -509,6 +509,16 @@ function route(url, opt) {
   d.dispatchEvent(pev('pointerup', 160));
   ok(!/[A-Za-z]\(/.test($$('#pcStack .crow label > span:first-child').map(x => x.textContent).join('|')), 'ada spasi sebelum kurung buka pada semua label (J : M : D, satuan)');
 
+  console.log('[U20] Tombol mata pada semua kolom password');
+  const pwIds = ['pw', 'wPass', 'lpw1', 'lpw2', 'rpw1', 'rpw2'];
+  ok(pwIds.every(id => $('#' + id).parentElement.classList.contains('pwf') && !!$('.eye', $('#' + id).parentElement)), 'semua 6 kolom password punya tombol mata');
+  ok($$('input[type=password], .pwf input').length === 6 && $$('.eye svg use').length === 6, 'tombol memakai ikon SVG sendiri');
+  const eye0 = $('.eye', $('#lpw1').parentElement);
+  ok(eye0.getAttribute('aria-label') === 'Tampilkan password' && $('#lpw1').type === 'password', 'awal: tersembunyi, label "Tampilkan password"');
+  click(eye0);
+  ok($('#lpw1').type === 'text' && eye0.getAttribute('aria-label') === 'Sembunyikan password' && eye0.getAttribute('aria-pressed') === 'true' && $('use', eye0).getAttribute('href') === '#i-eye-off', 'klik: terlihat, ikon mata dicoret');
+  click(eye0); ok($('#lpw1').type === 'password' && $('use', eye0).getAttribute('href') === '#i-eye', 'klik lagi: tersembunyi lagi');
+
   console.log(`\n${pass + fail} pemeriksaan UI, ${fail} gagal`);
   process.exit(fail ? 1 : 0);
 })();
