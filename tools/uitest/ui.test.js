@@ -502,6 +502,12 @@ function route(url, opt) {
   ok(!$('.crow-ph'), 'bergerak sebelum selesai menahan dianggap menggulir, bukan drag');
   d.dispatchEvent(pev('pointerup', 200));
 
+  const lbRow = $$('#pcStack .crow')[1]; lbRow.getBoundingClientRect = () => ({ top: 100, left: 0, width: 300, height: 90, bottom: 190 });
+  $('label', lbRow).dispatchEvent(pev('pointerdown', 120)); await sleep(350);
+  ok(!!$('.crow-ph'), 'menahan pada label/area kosong di dalam kartu juga memulai drag');
+  d.dispatchEvent(pev('pointerup', 120));
+  ok(!/[A-Za-z]\(/.test($$('#pcStack .crow label > span:first-child').map(x => x.textContent).join('|')), 'ada spasi sebelum kurung buka pada semua label (J : M : D, satuan)');
+
   console.log(`\n${pass + fail} pemeriksaan UI, ${fail} gagal`);
   process.exit(fail ? 1 : 0);
 })();

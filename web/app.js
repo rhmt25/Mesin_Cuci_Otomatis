@@ -770,7 +770,7 @@ stackEl.addEventListener('pointerdown', e => {
   if (ed.locked || (e.button && e.button !== 0)) return;
   const row = e.target.closest('.crow'); if (!row) return;
   const onHandle = !!e.target.closest('.handle');
-  if (!onHandle && e.target.closest('input,select,button,label,textarea,a')) return;
+  if (!onHandle && e.target.closest('input,select,button,textarea,a,.sw')) return;
   cancelDrag(false);
   dragSt = { row, x: e.clientX || 0, y: e.clientY || 0, on: false };
   document.addEventListener('pointermove', dragMove); document.addEventListener('pointerup', dragUp); document.addEventListener('pointercancel', dragCancel);

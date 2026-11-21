@@ -371,7 +371,8 @@ h1,h2,h3,label:not(.chk):not(.drop),dt,.nav button,.seg button,.filters button,.
 .danger-item>div{min-width:0;flex:1}.danger-item b{font-size:.9375rem}
 .danger-item .btn{flex:0 0 auto}
 .crow{cursor:grab;touch-action:pan-y}
-.crow input,.crow select,.crow label{cursor:auto}
+.crow input,.crow select{cursor:auto;user-select:auto;-webkit-user-select:auto}
+.crow{user-select:none;-webkit-user-select:none}
 .crow .handle{touch-action:none}
 .crow-head{user-select:none;-webkit-user-select:none}
 .crow.drag{box-shadow:0 14px 34px -10px rgba(0,0,0,.45);opacity:.96}
@@ -386,7 +387,8 @@ body.dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
 .tri input{text-align:center}
 #grpKoneksi .grid2{align-items:start}
 .card>.seg{align-self:flex-start}
-.fields>label>span:first-child{min-height:24px;display:flex;align-items:center}</style>
+.fields>label>span:first-child{display:block;min-height:24px;line-height:24px}
+.fields>label>.optlab{display:flex;align-items:center}</style>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
@@ -1450,7 +1452,7 @@ stackEl.addEventListener('pointerdown', e => {
 if (ed.locked || (e.button && e.button !== 0)) return;
 const row = e.target.closest('.crow'); if (!row) return;
 const onHandle = !!e.target.closest('.handle');
-if (!onHandle && e.target.closest('input,select,button,label,textarea,a')) return;
+if (!onHandle && e.target.closest('input,select,button,textarea,a,.sw')) return;
 cancelDrag(false);
 dragSt = { row, x: e.clientX || 0, y: e.clientY || 0, on: false };
 document.addEventListener('pointermove', dragMove); document.addEventListener('pointerup', dragUp); document.addEventListener('pointercancel', dragCancel);
