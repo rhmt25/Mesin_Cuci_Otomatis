@@ -576,7 +576,7 @@ function fieldHtml(f, it) {
     ctl = '<span class="tri">' + [['h', Math.floor(val / 3600), 23, 'jam'], ['m', Math.floor(val % 3600 / 60), 59, 'mnt'], ['s', val % 60, 59, 'dtk']]
       .map(([p, x, mx, cap]) => `<span><input type="number" ${base} data-hms="${p}" min="0" max="${mx}" inputmode="numeric" value="${x}" aria-label="${f.label} (${cap})"><em>${cap}</em></span>`).join('') + '</span>';
   } else { ctl = `<input type="number" ${base} min="${f.min}" max="${f.max}" inputmode="numeric" value="${val}">`; unit = f.unit ? ` (${f.unit})` : ''; }
-  return `<label data-f="${f.k}"${applies(f, it) ? '' : ' hidden'}>${esc(f.label)}${unit}${ctl}</label>`;
+  return `<label data-f="${f.k}"${applies(f, it) ? '' : ' hidden'}><span>${esc(f.label)}<span class="u">${unit}</span></span>${ctl}</label>`;
 }
 const fieldsHtml = it => typeMeta(it.t).fields.map(f => fieldHtml(f, it)).join('');
 
@@ -882,6 +882,21 @@ $('#btnDevOthers').onclick = async () => {
   if (!confirm('Keluarkan semua perangkat lain?')) return;
   const d = await api('/api/devices?others=1', 'DELETE'); toast(d.msg, 'ok'); loadDevices();
 };
+
+// ============================================== zona seret-dan-lepas ====
+// Klik membuka pemilih berkas (label untuk input); seret berkas ke zona ini memicu "change" yang sama.
+$$('.drop').forEach(z => {
+  const inp = $('input', z), dn = $('.dn', z);
+  ['dragenter', 'dragover'].forEach(ev => z.addEventListener(ev, e => { e.preventDefault(); z.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(ev => z.addEventListener(ev, e => { e.preventDefault(); z.classList.remove('over'); }));
+  z.addEventListener('drop', e => {
+    const f = e.dataTransfer && e.dataTransfer.files;
+    if (!f || !f.length) return;
+    try { inp.files = f; } catch { }
+    inp.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  inp.addEventListener('change', () => { const f = inp.files && inp.files[0]; dn.textContent = f ? f.name : ''; z.classList.toggle('has', !!f); });
+});
 
 // ======================================================= koneksi ====
 // Tanpa WebSocket (hemat memori ESP32): polling status + log tiap 2 dtk, 10 dtk saat tab tersembunyi.
