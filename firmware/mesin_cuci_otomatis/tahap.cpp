@@ -33,7 +33,7 @@ static const Field FIELDS[] = {
     {TH_ISI, "persen", "Level", "%", FK_CHOICE, OFF(persen), 1, 25, 75, 50, "25|50|75", "", 0x02, ""},
     {TH_ISI, "lama", "Lama isi", "mnt", FK_INT, OFF(lama), 2, 1, 120, 30, "", "", 0x04, ""},
     {TH_ISI, "coba", "Batas Ulang", "kali", FK_INT, OFF(coba), 1, 0, 10, 3, "", "", 0x03, ""},
-    {TH_ISI, "tunggu", "Jeda Percobaan", "mnt", FK_INT, OFF(tunggu), 2, 1, 60, 15, "", "", 0x03, ""},
+    {TH_ISI, "tunggu", "Jeda Percobaan", "mnt", FK_INT, OFF(tunggu), 2, 0, 60, 15, "", "", 0x03, ""},
     {TH_ISI, "pra", "Air Penuh Sebelum Isi", "", FK_ENUM, OFF(pra), 1, 0, 2, 0, "buang|jeda|pakai",
      "Buang dulu otomatis|Jeda dan tanya|Pakai air yang ada", 0, ""},
     // ---- Buang air
