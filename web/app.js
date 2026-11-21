@@ -937,6 +937,16 @@ $('#btnDevOthers').onclick = async () => {
   const d = await api('/api/devices?others=1', 'DELETE'); toast(d.msg, 'ok'); loadDevices();
 };
 
+// ================================================= tombol mata (password) ====
+// Semua kolom password dibungkus dan diberi tombol tampil/sembunyi berikon sendiri (bukan bawaan peramban).
+$$('input[type=password]').forEach(inp => {
+  const wrap = document.createElement('span'); wrap.className = 'pwf';
+  inp.parentNode.insertBefore(wrap, inp); wrap.appendChild(inp);
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'eye';
+  const sync = () => { const sh = inp.type === 'text'; b.innerHTML = ic(sh ? 'eye-off' : 'eye'); b.setAttribute('aria-label', sh ? 'Sembunyikan password' : 'Tampilkan password'); b.setAttribute('aria-pressed', String(sh)); };
+  b.onclick = e => { e.preventDefault(); inp.type = inp.type === 'password' ? 'text' : 'password'; sync(); inp.focus(); };
+  sync(); wrap.appendChild(b);
+});
 // ============================================== zona seret-dan-lepas ====
 // Klik membuka pemilih berkas (label untuk input); seret berkas ke zona ini memicu "change" yang sama.
 $$('.drop').forEach(z => {

@@ -388,11 +388,19 @@ body.dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
 #grpKoneksi .grid2{align-items:start}
 .card>.seg{align-self:flex-start}
 .fields>label>span:first-child{display:block;min-height:24px;line-height:24px}
-.fields>label>.optlab{display:flex;align-items:center}</style>
+.fields>label>.optlab{display:flex;align-items:center}
+.pwf{position:relative;display:flex;width:100%}
+.pwf input{padding-right:46px}
+.pwf input::-ms-reveal,.pwf input::-ms-clear{display:none}
+.eye{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:36px;height:36px;border:0;border-radius:var(--r-sm);background:transparent;color:var(--text-2);display:grid;place-items:center;cursor:pointer}
+.eye:hover{background:var(--surface-3);color:var(--text)}
+.eye[aria-pressed=true]{color:var(--accent-text)}</style>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
 <symbol id="i-washer" viewBox="0 0 64 64"><g stroke-width="3.6"><rect x="10" y="8" width="44" height="48" rx="8"/><circle cx="32" cy="36" r="12"/><path d="M22 36c4-4 6 4 10 0s6 4 10 0M18 16h4M26 16h4"/></g></symbol>
+<symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M9.9 5.2A9.6 9.6 0 0112 5c6 0 10 7 10 7a17 17 0 01-3.2 3.9M6.1 6.1A17 17 0 002 12s4 7 10 7a9.7 9.700 0 004-.9M9.9 9.9a3 3 0 004.2 4.2M3 3l18 18"/></symbol>
 <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10"/></symbol>
 <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5"/></symbol>
 <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 6h8M18 6h2M4 12h2M12 12h8M4 18h10M20 18h0"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></symbol>
@@ -1613,6 +1621,14 @@ $('#btnDevOthers').onclick = async () => {
 if (!confirm('Keluarkan semua perangkat lain?')) return;
 const d = await api('/api/devices?others=1', 'DELETE'); toast(d.msg, 'ok'); loadDevices();
 };
+$$('input[type=password]').forEach(inp => {
+const wrap = document.createElement('span'); wrap.className = 'pwf';
+inp.parentNode.insertBefore(wrap, inp); wrap.appendChild(inp);
+const b = document.createElement('button'); b.type = 'button'; b.className = 'eye';
+const sync = () => { const sh = inp.type === 'text'; b.innerHTML = ic(sh ? 'eye-off' : 'eye'); b.setAttribute('aria-label', sh ? 'Sembunyikan password' : 'Tampilkan password'); b.setAttribute('aria-pressed', String(sh)); };
+b.onclick = e => { e.preventDefault(); inp.type = inp.type === 'password' ? 'text' : 'password'; sync(); inp.focus(); };
+sync(); wrap.appendChild(b);
+});
 $$('.drop').forEach(z => {
 const inp = $('input', z), dn = $('.dn', z);
 ['dragenter', 'dragover'].forEach(ev => z.addEventListener(ev, e => { e.preventDefault(); z.classList.add('over'); }));
