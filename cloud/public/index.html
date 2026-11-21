@@ -2,1080 +2,1553 @@
 <html lang="id">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101517">
 <title>Mesin Cuci</title>
-<style>:root{--bg:#f4f6f9;--card:#fff;--ink:#14202e;--muted:#6a7787;--line:#dde3ea;--pri:#1f7ae0;--pri-ink:#fff;--ok:#1a9a5b;--warn:#c98a00;--err:#d23b3b;--ring:#e5ebf2}
-:root[data-theme=dark]{--bg:#0f1620;--card:#18222f;--ink:#e6edf5;--muted:#8a99ab;--line:#26323f;--pri:#4a9bff;--pri-ink:#07121f;--ok:#37c283;--warn:#e0aa2f;--err:#ff6b6b;--ring:#26323f}
-@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0f1620;--card:#18222f;--ink:#e6edf5;--muted:#8a99ab;--line:#26323f;--pri:#4a9bff;--pri-ink:#07121f;--ok:#37c283;--warn:#e0aa2f;--err:#ff6b6b;--ring:#26323f}}
+<style>:root{
+--s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:24px;--s6:32px;--s7:48px;
+--r-sm:8px;--r-md:14px;--r-lg:22px;--r-pill:999px;
+--ease:cubic-bezier(.2,.8,.2,1);
+--font:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+--mono:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;
+--bg:#EEF3F2;--surface:#F8FBFA;--surface-2:#FFFFFF;--surface-3:#E3EBEA;--line:#D3DEDC;
+--text:#14201E;--text-2:#4A5C59;--text-3:#5C6E6B;
+--accent:#00E5C3;--accent-ink:#04201B;--accent-soft:rgba(0,179,152,.12);--accent-text:#00796B;
+--ok:#1E9E6A;--warn:#B86E00;--err:#D64545;--info:#2F6FB5;
+--ok-soft:rgba(30,158,106,.12);--warn-soft:rgba(184,110,0,.12);--err-soft:rgba(214,69,69,.1);
+--shadow:0 1px 2px rgba(16,24,22,.06),0 8px 24px -12px rgba(16,24,22,.18);
+--glass:rgba(248,251,250,.82);--scrim:rgba(10,18,17,.5);
+--term-bg:#0F1618;--term-fg:#CFE7E3;
+color-scheme:light;
+}
+:root[data-theme=dark]{
+--bg:#101517;--surface:#161D20;--surface-2:#1D262A;--surface-3:#253136;--line:#2A363B;
+--text:#E8EFEE;--text-2:#9FB0AF;--text-3:#7C8D8C;
+--accent-soft:rgba(0,229,195,.12);--accent-text:#3FF0D3;
+--ok:#3DDC97;--warn:#FFB547;--err:#FF6B6B;--info:#7AB8FF;
+--ok-soft:rgba(61,220,151,.12);--warn-soft:rgba(255,181,71,.12);--err-soft:rgba(255,107,107,.12);
+--shadow:0 0 0 1px rgba(255,255,255,.03),0 10px 28px -14px rgba(0,0,0,.6);
+--glass:rgba(22,29,32,.8);color-scheme:dark;
+}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){
+--bg:#101517;--surface:#161D20;--surface-2:#1D262A;--surface-3:#253136;--line:#2A363B;
+--text:#E8EFEE;--text-2:#9FB0AF;--text-3:#7C8D8C;
+--accent-soft:rgba(0,229,195,.12);--accent-text:#3FF0D3;
+--ok:#3DDC97;--warn:#FFB547;--err:#FF6B6B;--info:#7AB8FF;
+--ok-soft:rgba(61,220,151,.12);--warn-soft:rgba(255,181,71,.12);--err-soft:rgba(255,107,107,.12);
+--shadow:0 0 0 1px rgba(255,255,255,.03),0 10px 28px -14px rgba(0,0,0,.6);
+--glass:rgba(22,29,32,.8);color-scheme:dark}}
 *{box-sizing:border-box}
 html,body{margin:0}
-body{background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,Segoe UI,Roboto,sans-serif;-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--text);font:400 1rem/1.5 var(--font);-webkit-text-size-adjust:100%;font-variant-numeric:tabular-nums;padding-bottom:calc(72px + env(safe-area-inset-bottom))}
 [hidden]{display:none!important}
-header{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 14px;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
-.chips{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
-.chip{padding:2px 9px;border-radius:99px;background:var(--ring);font-size:12px;white-space:nowrap}
-.chip.run{background:var(--ok);color:#fff}.chip.pause{background:var(--warn);color:#fff}.chip.off{background:var(--err);color:#fff}
-.icon{border:0;background:transparent;color:var(--ink);font-size:18px;cursor:pointer;padding:4px 6px}
-nav{display:flex;overflow-x:auto;background:var(--card);border-bottom:1px solid var(--line);scrollbar-width:none}
-nav button{flex:0 0 auto;border:0;background:transparent;color:var(--muted);padding:10px 14px;font:inherit;cursor:pointer;border-bottom:3px solid transparent}
-nav button.on{color:var(--pri);border-color:var(--pri);font-weight:600}
-main{max-width:760px;margin:0 auto;padding:14px 16px 60px}
-.tab{display:none}.tab.on{display:block}
-h3{margin:18px 0 8px;font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
-.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin:0 0 12px}
-.hero{display:flex;gap:16px;align-items:center}
-.heroInfo{flex:1;min-width:0}
-.big{font-size:22px;font-weight:700}
-.muted{color:var(--muted);font-size:13px}
-.kv{display:flex;justify-content:space-between;border-top:1px solid var(--line);padding:5px 0;margin-top:5px}
-.ringBg{fill:none;stroke:var(--ring);stroke-width:10}
-.ringFg{fill:none;stroke:var(--pri);stroke-width:10;stroke-linecap:round;stroke-dasharray:327;stroke-dashoffset:327;transition:stroke-dashoffset .6s}
-#ringText{fill:var(--ink);font-size:20px;font-weight:700}
-.row{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px;align-items:center}
-.ctl .btn{flex:1 1 90px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:12px}
-.btn{border:1px solid var(--line);background:var(--card);color:var(--ink);padding:10px 14px;border-radius:10px;font:inherit;cursor:pointer;min-height:44px}
+h1,h2,h3,p{margin:0}
+h1{font-size:1.375rem;line-height:1.75rem;font-weight:700}
+h2{font-size:1.125rem;line-height:1.5rem;font-weight:600}
+h3{font-size:.9375rem;font-weight:600}
+small,.muted{font-size:.875rem;line-height:1.4;color:var(--text-2)}
+b{font-weight:600}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent-text);outline-offset:2px;border-radius:var(--r-sm)}
+.skip{position:absolute;left:-999px;top:8px;background:var(--surface-2);padding:8px 12px;border-radius:var(--r-sm);z-index:99}
+.skip:focus{left:8px}
+.ic{width:20px;height:20px;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+.ic.sm{width:16px;height:16px}.ic.lg{width:28px;height:28px}
+.tnum{font-variant-numeric:tabular-nums}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.spacer{flex:1}
+.top{position:sticky;top:0;z-index:20;display:flex;justify-content:space-between;align-items:center;gap:var(--s2);padding:10px var(--s4);background:var(--glass);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700}
+.logo{width:30px;height:30px;border-radius:9px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center}
+.chips{display:flex;gap:var(--s2);align-items:center;min-width:0}
+.ell{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.chip{min-width:0;max-width:46vw;display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:var(--r-pill);background:var(--surface-3);font-size:.8125rem;white-space:nowrap;color:var(--text)}
+.chip .ic{width:14px;height:14px}
+.chip.run{background:var(--accent-soft);color:var(--accent-text)}.chip.warn{background:var(--warn-soft);color:var(--warn)}.chip.err{background:var(--err-soft);color:var(--err)}.chip.ok{background:var(--ok-soft);color:var(--ok)}
+.chip.dot::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.chip.run.dot::before{animation:pulse 2s infinite}
+.icon-btn{width:40px;height:40px;border:0;border-radius:var(--r-sm);background:transparent;display:grid;place-items:center;cursor:pointer;color:var(--text-2)}
+.icon-btn:hover{background:var(--surface-3);color:var(--text)}
+.nav{position:fixed;left:0;right:0;bottom:0;z-index:25;display:flex;background:var(--glass);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-top:1px solid var(--line);padding:6px 6px calc(6px + env(safe-area-inset-bottom))}
+.nav button{flex:1;min-height:52px;border:0;background:transparent;color:var(--text-2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:.6875rem;font-weight:600;border-radius:var(--r-md);cursor:pointer;position:relative}
+.nav button[aria-current=page]{color:var(--accent-text);background:var(--accent-soft)}
+.nav .badge{position:absolute;top:6px;left:calc(50% + 6px);width:10px;height:10px;border-radius:50%;background:var(--warn);border:2px solid var(--surface)}
+main{max-width:1200px;margin:0 auto;padding:var(--s4) var(--s4) var(--s6)}
+.view{display:none}.view.on{display:block;animation:fade .22s var(--ease)}
+.sechead{display:flex;justify-content:space-between;align-items:flex-end;gap:var(--s3);flex-wrap:wrap;margin:var(--s5) 0 var(--s3)}
+.sechead:first-child{margin-top:var(--s2)}
+.row{display:flex;gap:var(--s2);flex-wrap:wrap;align-items:center}
+@media(max-width:480px){.brand span:not(.logo){display:none}.chips{gap:4px}.chip{padding:0 8px}}
+@media(min-width:900px){
+body{padding-bottom:0}
+.shell{margin-left:76px}
+.nav{top:0;bottom:0;right:auto;width:76px;flex-direction:column;justify-content:flex-start;gap:6px;padding:14px 8px;border-top:0;border-right:1px solid var(--line)}
+.nav button{flex:0 0 auto;min-height:60px}
+main{padding:var(--s5) var(--s5) var(--s7)}
+}
+@media(min-width:1280px){
+.shell{margin-left:208px}.nav{width:208px;align-items:stretch}
+.nav button{flex-direction:row;justify-content:flex-start;gap:12px;padding:0 16px;font-size:.9375rem;min-height:48px}
+.nav .badge{top:14px;left:34px}
+}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:var(--s4);box-shadow:var(--shadow)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 var(--s4);border:1px solid var(--line);border-radius:10px;background:var(--surface-3);color:var(--text);font-weight:600;cursor:pointer;transition:transform .12s var(--ease),background .15s}
+.btn:hover{background:var(--line)}
 .btn:active{transform:scale(.98)}
-.btn.primary{background:var(--pri);color:var(--pri-ink);border-color:var(--pri)}
-.btn.danger{background:var(--err);color:#fff;border-color:var(--err)}
-.btn:disabled{opacity:.5}
-.prog{text-align:left;display:flex;flex-direction:column;gap:2px;cursor:pointer;margin:0}
-.prog small{color:var(--muted)}
-.form{display:flex;flex-direction:column;gap:10px}
-label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
-input,select{font:inherit;padding:9px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);min-width:0}
-.tri{display:flex;gap:6px}.tri input{flex:1;width:0}
-.numrow{display:flex;gap:8px;align-items:flex-end}.numrow label{flex:1}
-.banner{border-radius:10px;padding:12px;margin-bottom:12px}
-.banner.warn{background:color-mix(in srgb,var(--warn) 18%,var(--card));border:1px solid var(--warn)}
-.banner.err{background:color-mix(in srgb,var(--err) 16%,var(--card));border:1px solid var(--err)}
-.banner .row{margin:8px 0 0}
-.logbox{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;height:55vh;overflow:auto;margin:0 0 10px;font:12px/1.5 ui-monospace,Consolas,monospace;white-space:pre-wrap;word-break:break-word}
-.l-6{color:var(--pri);font-weight:600}.l-2{color:var(--pri)}.l-3{color:var(--warn)}.l-4{color:var(--err)}.l-5{color:var(--ok)}.l-0{color:var(--muted)}
-#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;max-width:92vw;opacity:0;pointer-events:none;transition:opacity .2s;z-index:20;white-space:pre-wrap}
-#toast.show{opacity:1}
-.chk{flex-direction:row;align-items:center;gap:8px;justify-content:center}.chk input{width:auto}
-.relayCard{display:flex;align-items:center;gap:12px;justify-content:space-between}
-.led{width:14px;height:14px;border-radius:50%;background:var(--ring);border:1px solid var(--line);flex:0 0 auto}.led.on{background:var(--ok);box-shadow:0 0 8px var(--ok)}
-.relayCard .info{display:flex;align-items:center;gap:10px;min-width:0}
-.login{max-width:320px;margin:20vh auto;display:flex;flex-direction:column;gap:12px;text-align:center}
-.bar{height:10px;background:var(--ring);border-radius:99px;overflow:hidden}.bar div{height:100%;width:0;background:var(--pri);transition:width .2s}
-.wifirow{display:flex;gap:6px;align-items:center;justify-content:space-between}
-.wifirow .btn{min-height:36px;padding:4px 10px}
-.hist{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid var(--line);padding:8px 0}
-@media(max-width:480px){.hero{flex-direction:column;text-align:center}.kv{text-align:left}}
-
-.palette{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
-.palette .btn{min-height:38px;padding:6px 10px;font-size:14px}
-.stack{display:flex;flex-direction:column;gap:8px}
-.crow{display:flex;gap:8px;align-items:center;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px}
-.crow.drag{opacity:.55;border-color:var(--pri);box-shadow:0 4px 14px rgba(0,0,0,.25)}
-.handle{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;padding:8px 6px;font-size:20px;color:var(--muted)}
-.cbody{flex:1;min-width:0}
-.ctitle{margin-bottom:4px}
-.num{display:inline-block;min-width:22px;text-align:center;border-radius:99px;background:var(--pri);color:var(--pri-ink);font-size:12px;padding:1px 6px;margin-right:4px}
-.fields{display:flex;flex-wrap:wrap;gap:8px}
-.fields label{flex:1 1 110px}
-.cacts{display:flex;flex-direction:column;gap:2px}
-.cacts button{border:0;background:transparent;color:var(--ink);font-size:16px;cursor:pointer;padding:2px 6px}
-.cpSummary{font-size:13px;color:var(--muted)}
-.cpcard{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
-.cpcard .info{flex:1 1 200px;min-width:0}
-.cpcard .row{margin:0}
-body.offline main .btn,body.offline main .prog,body.offline main input,body.offline main select{opacity:.45;pointer-events:none}
-.lockhint{font-size:12px;color:var(--err)}
-.btn.sm{min-height:34px;padding:4px 10px}
-
-.dcard{border-width:2px}.dcard p{margin:6px 0}.dcard .row{margin:8px 0}
-#pcWarn ul{margin:6px 0 0 18px;padding:0}
-#startOpts input[type=time]{width:100%;margin-top:6px}
-</style>
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.06);background:var(--accent)}
+.btn.ghost{background:transparent}
+.btn.danger{background:var(--err);border-color:var(--err);color:var(--bg)}
+.btn.dout{background:transparent;border-color:var(--err);color:var(--err)}
+.btn.sm{min-height:36px;padding:0 var(--s3);font-size:.875rem}
+.btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+.btn.load::after{content:"";width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .7s linear infinite}
+.seg{display:inline-flex;background:var(--surface-3);border-radius:var(--r-pill);padding:3px;gap:2px;max-width:100%;overflow-x:auto;scrollbar-width:none}
+.seg button{min-height:36px;padding:0 14px;border:0;border-radius:var(--r-pill);background:transparent;color:var(--text-2);font-weight:600;font-size:.875rem;cursor:pointer;white-space:nowrap;transition:background .15s}
+.seg button.on,.seg button[aria-pressed=true]{background:var(--surface-2);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.15)}
+.seg button:disabled{opacity:.4;cursor:not-allowed}
+label{display:flex;flex-direction:column;gap:6px;font-size:.875rem;font-weight:600;color:var(--text-2)}
+input,select{min-height:44px;padding:0 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);color:var(--text);min-width:0;width:100%}
+input:disabled,select:disabled{opacity:.5}
+input[type=checkbox]{width:18px;min-height:18px;accent-color:var(--accent)}
+.chk{flex-direction:row;align-items:center;gap:8px;font-weight:400}
+.field-help{font-size:.8125rem;font-weight:400;color:var(--text-3)}
+.form{display:flex;flex-direction:column;gap:var(--s3)}
+.callout{display:flex;gap:var(--s3);align-items:flex-start;padding:var(--s3) var(--s4);border-radius:var(--r-md);border:1px solid var(--line);border-left-width:4px;background:var(--surface);margin-bottom:var(--s3)}
+.callout .ic{margin-top:2px}.callout>div{flex:1;min-width:0}
+.callout.warn{border-color:var(--warn);background:var(--warn-soft)}.callout.warn>.ic{color:var(--warn)}
+.callout.err{border-color:var(--err);background:var(--err-soft)}.callout.err>.ic{color:var(--err)}
+.callout.info>.ic{color:var(--accent-text)}
+.callout .row{margin-top:var(--s2)}
+.callout ul{margin:6px 0 0 18px;padding:0}
+.skel{background:linear-gradient(90deg,var(--surface-3),var(--surface-2),var(--surface-3));background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:var(--r-md);min-height:96px}
+.empty{display:flex;flex-direction:column;align-items:center;text-align:center;gap:var(--s3);padding:var(--s6) var(--s4);border:1.5px dashed var(--line);border-radius:var(--r-md);color:var(--text-2)}
+.empty svg.art{width:84px;height:84px;color:var(--accent-text);fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+#toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom));transform:translate(-50%,12px);display:flex;gap:10px;align-items:center;background:var(--surface-2);color:var(--text);border:1px solid var(--line);box-shadow:var(--shadow);padding:10px 16px;border-radius:var(--r-md);max-width:min(92vw,460px);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s var(--ease);z-index:60;white-space:pre-wrap}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+#toast.warn .ic{color:var(--warn)}#toast.err .ic{color:var(--err)}#toast.ok .ic{color:var(--ok)}#toast.info .ic{color:var(--accent-text)}
+@media(min-width:900px){#toast{left:auto;right:24px;bottom:24px;transform:translateY(12px)}#toast.show{transform:none}}
+.bar{height:8px;background:var(--surface-3);border-radius:var(--r-pill);overflow:hidden}.bar div{height:100%;width:0;background:var(--accent);transition:width .2s}
+.kv{display:flex;justify-content:space-between;gap:var(--s3);padding:7px 0;border-top:1px solid var(--line);font-size:.9375rem}.kv:first-child{border-top:0}.kv span{color:var(--text-2)}
+.bento{display:grid;gap:var(--s3);grid-template-columns:1fr 1fr}
+.bento>*{min-width:0}
+.hero{grid-column:1/-1;display:grid;gap:var(--s4);grid-template-columns:1fr;justify-items:center;padding:var(--s5) var(--s4);border-radius:var(--r-lg);background:linear-gradient(160deg,var(--surface-2),var(--surface));position:relative;overflow:hidden}
+.hero::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:var(--accent);opacity:0}
+.hero.live::before{opacity:1}
+.ringwrap{width:168px;height:168px}
+#ring{width:100%;height:100%}
+.ringBg{fill:none;stroke:var(--surface-3);stroke-width:10}
+.ringFg{fill:none;stroke:var(--accent);stroke-width:10;stroke-linecap:round;stroke-dasharray:327;stroke-dashoffset:327;transition:stroke-dashoffset .6s var(--ease)}
+#ringText{fill:var(--text);font-size:22px;font-weight:700;font-family:var(--font)}
+.heroMain{width:100%;display:flex;flex-direction:column;gap:var(--s2);min-width:0}
+.kicker{font-size:.75rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent-text)}
+.heroName{font-size:1.375rem;font-weight:700;line-height:1.75rem;overflow-wrap:anywhere}
+.display{font-size:2.5rem;line-height:2.75rem;font-weight:700;letter-spacing:-.02em}
+.timeblock{display:flex;flex-direction:column;gap:2px;margin:var(--s2) 0}
+.timeblock .lbl{font-size:.75rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3)}
+.stepbtn{display:flex;align-items:center;gap:var(--s3);width:100%;text-align:left;padding:var(--s3) var(--s4);border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface-2);cursor:pointer;transition:border-color .15s,transform .12s}
+.stepbtn:hover:not(:disabled){border-color:var(--accent-text);transform:translateY(-1px)}
+.stepbtn:disabled{cursor:default;opacity:.6}
+.stepbtn>span:first-child{flex:1;min-width:0;display:flex;flex-direction:column}
+.stepbtn small{font-size:.75rem;color:var(--text-3);font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.stepbtn b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stepbtn .tnum{font-weight:700;color:var(--accent-text)}
+.ctl{display:flex;gap:var(--s2);margin-top:var(--s2)}.ctl .btn{flex:1}
+.hero.idle .ringFg{opacity:.25}
+.railcard{grid-column:1/-1;display:flex;flex-direction:column;gap:var(--s3)}
+.railcard header,.mini header{display:flex;justify-content:space-between;align-items:center;gap:var(--s2)}
+.mini{display:flex;flex-direction:column;gap:var(--s3)}
+.mini h3,.railcard h2{font-size:.75rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3)}
+#cardRelays{grid-column:1/-1}
+.stat-big{font-size:1.25rem;font-weight:700;display:flex;align-items:center;gap:10px}
+.wdrop{width:34px;height:34px;color:var(--text-3)}.wdrop.full{color:var(--accent);fill:var(--accent-soft)}.wdrop.meas{color:var(--info)}
+.bars{display:inline-flex;align-items:flex-end;gap:2px;height:18px}.bars i{width:4px;background:var(--surface-3);border-radius:2px}.bars i:nth-child(1){height:5px}.bars i:nth-child(2){height:9px}.bars i:nth-child(3){height:13px}.bars i:nth-child(4){height:18px}.bars i.on{background:var(--accent-text)}
+.rls{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s2)}
+.rl{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line);font-size:.8125rem;color:var(--text-2)}
+.rl .ic{width:16px;height:16px}
+.rl.on{border-color:var(--accent-text);color:var(--text);background:var(--accent-soft)}
+.rl.on .ic{color:var(--accent-text)}.rl.on.motor .ic{animation:spin 1.2s linear infinite}
+.led{width:12px;height:12px;border-radius:50%;background:var(--surface-3);border:1px solid var(--line);flex:0 0 auto}.led.on{background:var(--accent);border-color:var(--accent);box-shadow:0 0 10px var(--accent)}
+.rail{display:flex;flex-direction:column;position:relative;margin:0;padding:0;list-style:none}
+.rail li{display:flex;gap:var(--s3);align-items:center;min-height:38px;position:relative;font-size:.9375rem}
+.rail li::before{content:"";position:absolute;left:6px;top:-50%;bottom:50%;width:2px;background:var(--line)}
+.rail li:first-child::before{display:none}
+.node{width:14px;height:14px;border-radius:50%;border:2px solid var(--line);background:var(--surface);flex:0 0 auto;position:relative;z-index:1}
+.done .node{background:var(--ok);border-color:var(--ok)}
+.run .node{border-color:var(--accent);background:var(--accent);box-shadow:0 0 0 4px var(--accent-soft);animation:pulse 2s infinite}
+.rail .tl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rail .st{font-size:.75rem;color:var(--text-3)}.run .st{color:var(--accent-text);font-weight:700}.run .tl{font-weight:600}
+.more{font-size:.8125rem;color:var(--text-3);padding-left:30px}
+.startsec .startopts{margin-bottom:var(--s3);display:flex;flex-direction:column;gap:var(--s3)}
+.startopts .tt{display:flex;gap:var(--s2);align-items:center;flex-wrap:wrap}
+.startopts input[type=time]{width:auto;min-width:150px}
+.pgrid{display:grid;gap:var(--s3);grid-template-columns:1fr}
+@media(min-width:560px){.pgrid{grid-template-columns:repeat(2,1fr)}}
+@media(min-width:900px){.pgrid{grid-template-columns:repeat(3,1fr)}}
+.pcard{display:flex;flex-direction:column;gap:10px;text-align:left;padding:var(--s4);border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface);box-shadow:var(--shadow);min-width:0;cursor:default}
+button.pcard{cursor:pointer;transition:transform .15s var(--ease),border-color .15s}
+button.pcard:hover:not(:disabled){transform:translateY(-2px);border-color:var(--accent-text)}
+button.pcard:disabled{opacity:.55;cursor:not-allowed}
+.pcard .nm{font-weight:700;font-size:1.0625rem;overflow-wrap:anywhere}
+.pcard .meta{font-size:.8125rem;color:var(--text-2);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pcard .go{margin-top:auto;display:flex;align-items:center;gap:6px;color:var(--accent-text);font-weight:700;font-size:.875rem}
+.pcard.new{border:1.5px dashed var(--line);box-shadow:none;align-items:center;justify-content:center;min-height:132px;color:var(--text-2);background:transparent;font-weight:600}
+.trail{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.trail span{width:28px;height:28px;border-radius:8px;background:var(--surface-3);display:grid;place-items:center;color:var(--text-2)}
+.trail span .ic{width:16px;height:16px}.trail em{font-style:normal;font-size:.75rem;color:var(--text-3)}
+.pcacts{display:flex;gap:6px;align-items:center;margin-top:auto}.pcacts .btn:first-child{flex:1}
+.pcacts .btn.sq{width:36px;padding:0}
+.sheet{position:fixed;inset:0;z-index:50}
+.sheet-scrim{position:absolute;inset:0;background:var(--scrim);opacity:0;transition:opacity .22s}
+.sheet.open .sheet-scrim{opacity:1}
+.sheet-panel{position:absolute;left:0;right:0;bottom:0;height:90vh;max-height:90dvh;display:flex;flex-direction:column;background:var(--surface-2);border-radius:var(--r-lg) var(--r-lg) 0 0;border:1px solid var(--line);box-shadow:var(--shadow);transform:translateY(100%);transition:transform .22s var(--ease)}
+.sheet.open .sheet-panel{transform:none}
+.sheet-panel:focus{outline:none}
+.sheet-grab{width:44px;height:4px;border-radius:2px;background:var(--line);margin:8px auto 0}
+.sheet-head{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--s3);padding:var(--s3) var(--s4) var(--s3)}
+.sheet-head p{margin-top:2px}
+.sheet-body{overflow-y:auto;padding:0 var(--s4) calc(var(--s5) + env(safe-area-inset-bottom));flex:1;overscroll-behavior:contain}
+@media(min-width:900px){
+.sheet-panel{left:auto;top:0;width:440px;height:100%;max-height:none;border-radius:var(--r-lg) 0 0 var(--r-lg);transform:translateX(100%)}
+.sheet-grab{display:none}
+}
+.tl-rail{position:relative;display:flex;flex-direction:column;gap:var(--s3);padding-left:30px}
+.tl-rail::before{content:"";position:absolute;left:9px;top:12px;bottom:12px;width:2px;background:var(--line)}
+.tcard{position:relative;border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface);padding:var(--s3) var(--s4)}
+.tcard::before{content:"";position:absolute;left:-27px;top:16px;width:14px;height:14px;border-radius:50%;border:2px solid var(--line);background:var(--surface-2)}
+.tcard.done::before{background:var(--ok);border-color:var(--ok)}
+.tcard.run{border-color:var(--accent-text);background:var(--accent-soft)}
+.tcard.run::before{background:var(--accent);border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-soft);animation:pulse 2s infinite}
+.tcard.wait{border-style:dashed}
+.thead{display:flex;align-items:center;gap:10px;cursor:pointer;min-height:32px}
+.thead .tico{width:32px;height:32px;border-radius:9px;background:var(--surface-3);display:grid;place-items:center;color:var(--text-2);flex:0 0 auto}
+.run .thead .tico{background:var(--accent);color:var(--accent-ink)}
+.thead .tt{flex:1;min-width:0;display:flex;flex-direction:column}
+.thead .tt b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.thead .tt small{font-size:.75rem;color:var(--text-3)}
+.badge-st{font-size:.75rem;font-weight:700;padding:2px 8px;border-radius:var(--r-pill);background:var(--surface-3);color:var(--text-2);white-space:nowrap}
+.done .badge-st{background:var(--ok-soft);color:var(--ok)}.run .badge-st{background:var(--accent);color:var(--accent-ink)}
+.tfields{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;margin:10px 0 0}
+.tfields div{display:flex;flex-direction:column;min-width:0}
+.tfields dt{font-size:.75rem;color:var(--text-3)}.tfields dd{margin:0;font-weight:600;font-size:.9375rem;overflow-wrap:anywhere}
+.tfields .wide{grid-column:1/-1}
+.tcard.done:not(.open) .tfields{display:none}
+.tlive{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:var(--s3);font-size:.875rem}
+.tlive b{color:var(--accent-text)}
+.view-proses .editmode{display:none}
+#view-proses[data-mode=edit] .listmode{display:none}
+#view-proses[data-mode=edit] .editmode{display:block}
+.edhead{display:flex;align-items:center;gap:var(--s3);margin-bottom:var(--s3)}
+.edgrid{display:grid;gap:var(--s3);grid-template-columns:1fr}
+.edpal h3,.edsum h3{margin-bottom:var(--s2)}
+.palette{display:flex;gap:var(--s2);overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}
+.palette .btn{flex:0 0 auto;min-height:40px;padding:0 12px;font-size:.875rem;justify-content:flex-start}
+.edsum{display:flex;flex-direction:column;gap:var(--s3)}
+.stack{display:flex;flex-direction:column;gap:var(--s2)}
+.crow{border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface);padding:var(--s3);transition:border-color .15s}
+.crow.bad{border-color:var(--err)}
+.crow.drag{opacity:.6;border-color:var(--accent-text);box-shadow:var(--shadow)}
+.crow-head{display:flex;align-items:center;gap:10px;margin-bottom:var(--s2)}
+.handle{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;display:grid;place-items:center;width:32px;height:36px;color:var(--text-3);border-radius:var(--r-sm)}
+.handle:hover{background:var(--surface-3)}
+.crow .tico{width:30px;height:30px;border-radius:8px;background:var(--surface-3);display:grid;place-items:center;color:var(--text-2)}
+.num{min-width:24px;height:24px;border-radius:var(--r-pill);background:var(--accent);color:var(--accent-ink);font-size:.75rem;font-weight:700;display:grid;place-items:center;padding:0 6px}
+.cacts{display:flex;gap:2px;margin-left:auto}
+.cacts button{width:36px;height:36px;border:0;border-radius:var(--r-sm);background:transparent;color:var(--text-2);cursor:pointer;display:grid;place-items:center}
+.cacts button:hover:not(:disabled){background:var(--surface-3);color:var(--text)}
+.cacts button[data-act=del]:hover:not(:disabled){color:var(--err)}
+.cacts button:disabled{opacity:.4;cursor:not-allowed}
+.fields{display:grid;gap:var(--s3);grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+.fields label[hidden]{display:none}
+.tri{display:flex;gap:6px}
+.tri>span{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0}
+.tri input{text-align:center;padding:0 4px}.tri em{font-style:normal;font-size:.6875rem;color:var(--text-3);font-weight:600}
+.ferr{color:var(--err);font-size:.8125rem;font-weight:600;margin-top:var(--s2)}
+.cpSummary{font-size:.9375rem;color:var(--text-2)}
+.edsum .row{flex-direction:column;align-items:stretch}
+@media(min-width:900px){
+.edgrid{grid-template-columns:230px minmax(0,1fr) 270px;align-items:start}
+.edpal,.edsum{position:sticky;top:76px}
+.palette{flex-direction:column;overflow:visible}.palette .btn{width:100%}
+}
+.mangrid{display:grid;gap:var(--s3);grid-template-columns:1fr}
+@media(min-width:900px){.mangrid{grid-template-columns:1fr 1fr;align-items:start}}
+.typegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:var(--s2);margin:var(--s3) 0}
+.typegrid button{display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 6px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface-2);cursor:pointer;font-size:.8125rem;font-weight:600;text-align:center;color:var(--text-2);min-height:72px}
+.typegrid button[aria-pressed=true]{border-color:var(--accent-text);background:var(--accent-soft);color:var(--text)}
+.typegrid .dar{font-size:.6875rem;color:var(--err)}
+.rgrid{display:grid;grid-template-columns:1fr 1fr;gap:var(--s2);margin:var(--s3) 0}
+.rcard{display:flex;flex-direction:column;gap:10px;padding:var(--s3);border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface-2)}
+.rcard .top2{display:flex;align-items:center;gap:10px}
+.rcard b{font-size:.9375rem;line-height:1.2}.rcard small{font-size:.75rem;color:var(--text-3)}
+.rcard .seg{align-self:stretch}.rcard .seg button{flex:1;padding:0}
+.lockhint{font-size:.75rem;color:var(--err);min-height:1em}
+.relaytools{display:flex;flex-direction:column;gap:var(--s3);margin-bottom:var(--s3)}
+.relaytools .tt{display:flex;gap:var(--s2);align-items:center;flex-wrap:wrap}.relaytools input{width:84px}
+.segpane{display:none;margin-top:var(--s3)}.segpane.on{display:block}
+.filters{display:flex;gap:var(--s2);flex-wrap:wrap;margin-bottom:var(--s3)}
+.filters button{height:32px;padding:0 12px;border-radius:var(--r-pill);border:1px solid var(--line);background:transparent;color:var(--text-2);font-size:.8125rem;font-weight:600;cursor:pointer}
+.filters button[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent-text);color:var(--accent-text)}
+.logbox{border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface);max-height:62vh;min-height:160px;overflow:auto;padding:var(--s2) 0}
+.lr{display:grid;grid-template-columns:68px 52px 1fr;gap:8px;padding:6px var(--s3);font-size:.8125rem;border-left:3px solid transparent;overflow-wrap:anywhere}
+.lr time{color:var(--text-3);font-variant-numeric:tabular-nums}.lr i{font-style:normal;font-weight:700;font-size:.6875rem;letter-spacing:.04em;color:var(--text-3)}
+.lr.l-2{border-left-color:var(--accent)}.lr.l-3{border-left-color:var(--warn);background:var(--warn-soft)}.lr.l-4{border-left-color:var(--err);background:var(--err-soft)}.lr.l-5{border-left-color:var(--ok)}.lr.l-6{border-left-color:var(--info)}
+.lr.l-3 i{color:var(--warn)}.lr.l-4 i{color:var(--err)}.lr.l-5 i{color:var(--ok)}.lr.l-6 i{color:var(--info)}.lr.l-2 i{color:var(--accent-text)}
+.conbox{background:var(--term-bg);color:var(--term-fg);border-radius:var(--r-md);padding:var(--s3);height:50vh;overflow:auto;font:.75rem/1.55 var(--mono);white-space:pre-wrap;word-break:break-word;margin:var(--s3) 0}
+.conbox .l-4{color:#FF8A8A}.conbox .l-3{color:#FFC56B}.conbox .l-2,.conbox .l-6{color:#5FF0D8}.conbox .l-5{color:#7CE6B0}.conbox .l-0{color:#7C8D8C}
+#conForm{display:flex;gap:var(--s2)}#conForm input{font-family:var(--mono)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s2);margin-bottom:var(--s3)}
+.stat{padding:var(--s3);border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface)}
+.stat b{display:block;font-size:1.375rem;font-weight:700}.stat small{font-size:.75rem}
+.hist{display:flex;justify-content:space-between;gap:var(--s3);padding:var(--s3) 0;border-bottom:1px solid var(--line)}
+.hist:last-child{border-bottom:0}
+.res{font-size:.75rem;font-weight:700;padding:2px 8px;border-radius:var(--r-pill);background:var(--surface-3)}
+.res.done{background:var(--ok-soft);color:var(--ok)}.res.err{background:var(--err-soft);color:var(--err)}.res.stop{background:var(--warn-soft);color:var(--warn)}
+.toc{display:flex;gap:var(--s2);overflow-x:auto;scrollbar-width:none;margin:var(--s3) 0}
+.toc button{flex:0 0 auto;height:34px;padding:0 14px;border-radius:var(--r-pill);border:1px solid var(--line);background:var(--surface);color:var(--text-2);font-weight:600;font-size:.875rem;cursor:pointer}
+.grp{margin-top:var(--s5);scroll-margin-top:72px}.grp:first-of-type{margin-top:var(--s2)}
+.grp>h2{margin-bottom:var(--s3);display:flex;align-items:center;gap:8px}
+.grid2{display:grid;gap:var(--s3);grid-template-columns:1fr}
+@media(min-width:900px){.grid2{grid-template-columns:1fr 1fr;align-items:start}}
+.card h3{margin-bottom:6px}.card>p+*{margin-top:var(--s3)}.card .form>p{margin:0}
+.wifirow{display:flex;gap:var(--s2);align-items:center;justify-content:space-between;padding:var(--s2) 0;border-bottom:1px solid var(--line)}
+.wifirow:last-child{border-bottom:0}
+.dpanel{margin-top:var(--s3);padding-top:var(--s3);border-top:1px solid var(--line)}
+.login{max-width:360px;margin:16vh auto 0;display:flex;flex-direction:column;gap:var(--s3);text-align:center;align-items:stretch;padding:var(--s5)}
+.login .logo{width:52px;height:52px;border-radius:16px;margin:0 auto}
+.login .chk{justify-content:center}
+body.offline main .btn:not(.keep),body.offline main .pcard,body.offline main .seg button,body.offline main input,body.offline main select{opacity:.45;pointer-events:none}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 var(--accent-soft)}50%{box-shadow:0 0 0 6px transparent}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes shimmer{to{background-position:-200% 0}}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media(min-width:560px){
+.hero{grid-template-columns:auto 1fr;justify-items:stretch;align-items:center;gap:var(--s5)}
+.ringwrap{width:190px;height:190px}
+.railcard{grid-column:1/-1}
+}
+@media(min-width:900px){
+.bento{grid-template-columns:repeat(12,1fr)}
+.hero{grid-column:span 8}.railcard{grid-column:span 4}
+#cardWater{grid-column:span 3}#cardRelays{grid-column:span 5}#cardConn{grid-column:span 4}
+.display{font-size:2.75rem;line-height:3rem}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+#manForm{margin:var(--s3) 0}</style>
 </head>
 <body>
-<div id="toast"></div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+<symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10"/></symbol>
+<symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5"/></symbol>
+<symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 6h8M18 6h2M4 12h2M12 12h8M4 18h10M20 18h0"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></symbol>
+<symbol id="i-activity" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></symbol>
+<symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+<symbol id="i-stop" viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></symbol>
+<symbol id="i-skip" viewBox="0 0 24 24"><path d="M5 5l10 7-10 7zM19 5v14"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 10-2.3 5.7M20 4v7h-7"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3l10 18H2zM12 10v5M12 18h0"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5h0"/></symbol>
+<symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2 9a15 15 0 0120 0M5.5 12.5a10 10 0 0113 0M9 16a5 5 0 016 0M12 19.5h0"/></symbol>
+<symbol id="i-wifi-off" viewBox="0 0 24 24"><path d="M3 3l18 18M8.5 16a5 5 0 017 0M5.5 12.5a10 10 0 012-1.4M2 9a15 15 0 015-3M12 19.5h0"/></symbol>
+<symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18a4 4 0 010-8 5.5 5.5 0 0110.7 1.5A3.3 3.3 0 0117 18z"/></symbol>
+<symbol id="i-cloud-off" viewBox="0 0 24 24"><path d="M3 3l18 18M7 18a4 4 0 01-1.5-7.7M10 6a5.5 5.5 0 017.7 5.5A3.3 3.3 0 0119 17"/></symbol>
+<symbol id="i-drop" viewBox="0 0 24 24"><path d="M12 3s6 6.5 6 11a6 6 0 01-12 0c0-4.5 6-11 6-11z"/></symbol>
+<symbol id="i-drain" viewBox="0 0 24 24"><path d="M12 4v10M8 10l4 4 4-4M5 19h14"/></symbol>
+<symbol id="i-rotate" viewBox="0 0 24 24"><path d="M20 12a8 8 0 11-3-6.2M20 4v5h-5"/></symbol>
+<symbol id="i-soak" viewBox="0 0 24 24"><path d="M3 9c3-3 6 3 9 0s6 3 9 0M3 15c3-3 6 3 9 0s6 3 9 0"/></symbol>
+<symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z"/></symbol>
+<symbol id="i-spin" viewBox="0 0 24 24"><path d="M12 12h.01M12 8a4 4 0 014 4M12 4a8 8 0 018 8M12 16a4 4 0 01-4-4M12 20a8 8 0 01-8-8"/></symbol>
+<symbol id="i-flower" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.5"/><path d="M12 9.5C10 6 11 3 12 3s2 3 0 6.5zM12 14.5c-2 3.5-1 6.5 0 6.5s2-3 0-6.5zM9.5 12C6 10 3 11 3 12s3 2 6.5 0zM14.5 12c3.5 2 6.5 1 6.5 0s-3-2-6.5 0z"/></symbol>
+<symbol id="i-timer" viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-5-5"/></symbol>
+<symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 0112 0v5l2 2H4zM10 21h4"/></symbol>
+<symbol id="i-user" viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2 20a7 7 0 0114 0M16 11l2 2 4-4"/></symbol>
+<symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 3L5 14h6l-1 7 8-11h-6z"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24"><path d="M9 9h11v11H9zM5 15V4h11"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></symbol>
+<symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20l1-4L16 5l3 3L8 19zM14 7l3 3"/></symbol>
+<symbol id="i-grip" viewBox="0 0 24 24"><path d="M9 6h.01M9 12h.01M9 18h.01M15 6h.01M15 12h.01M15 18h.01" stroke-width="3"/></symbol>
+<symbol id="i-up" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></symbol>
+<symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+<symbol id="i-right" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+<symbol id="i-left" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+<symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V5M7 10l5-5 5 5M5 20h14"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><path d="M6 11h12v9H6zM8 11V8a4 4 0 018 0v3"/></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"/></symbol>
+<symbol id="i-monitor" viewBox="0 0 24 24"><path d="M3 5h18v11H3zM8 21h8M12 16v5"/></symbol>
+<symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3v9M6.5 6.5a8 8 0 1011 0"/></symbol>
+<symbol id="i-cpu" viewBox="0 0 24 24"><path d="M7 7h10v10H7zM9 3v4M15 3v4M9 17v4M15 17v4M3 9h4M3 15h4M17 9h4M17 15h4"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></symbol>
+<symbol id="i-terminal" viewBox="0 0 24 24"><path d="M4 5h16v14H4zM8 10l3 2-3 2M13 15h4"/></symbol>
+<symbol id="i-logout" viewBox="0 0 24 24"><path d="M10 4H5v16h5M15 8l4 4-4 4M19 12H9"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+</defs></svg>
+
+<a class="skip" href="#main">Lewati ke konten</a>
+<div id="toast" role="status" aria-live="polite"></div>
 
 <section id="login" hidden>
   <form id="loginForm" class="card login">
-    <h1>🧺 Mesin Cuci</h1>
-    <input id="pw" type="password" placeholder="Password" autocomplete="current-password" required>
-    <label class="chk"><input id="remember" type="checkbox" checked> Ingat perangkat ini (tetap masuk, bisa dihapus di tab Sistem)</label>
+    <div class="logo" aria-hidden="true"><svg class="ic lg"><use href="#i-drop"/></svg></div>
+    <h1>Mesin Cuci</h1>
+    <input id="pw" type="password" placeholder="Password" autocomplete="current-password" aria-label="Password" required>
+    <label class="chk"><input id="remember" type="checkbox" checked> Ingat perangkat ini (bisa dihapus di Sistem)</label>
     <button class="btn primary" type="submit">Masuk</button>
-    <p id="loginMsg" class="muted"></p>
+    <p id="loginMsg" class="muted" role="alert"></p>
   </form>
 </section>
 
 <div id="app" hidden>
-  <header>
-    <div class="brand">🧺 <b>Mesin Cuci</b></div>
+  <nav class="nav" aria-label="Menu utama">
+    <button data-view="beranda" aria-current="page"><svg class="ic"><use href="#i-home"/></svg><span>Beranda</span><i class="badge" id="navBadge" hidden></i><span class="sr" id="navBadgeTxt"></span></button>
+    <button data-view="proses"><svg class="ic"><use href="#i-layers"/></svg><span>Proses</span></button>
+    <button data-view="manual"><svg class="ic"><use href="#i-sliders"/></svg><span>Manual</span></button>
+    <button data-view="aktivitas"><svg class="ic"><use href="#i-activity"/></svg><span>Aktivitas</span></button>
+    <button data-view="sistem"><svg class="ic"><use href="#i-settings"/></svg><span>Sistem</span></button>
+  </nav>
+
+  <div class="shell">
+  <header class="top">
+    <div class="brand"><span class="logo" aria-hidden="true"><svg class="ic"><use href="#i-drop"/></svg></span><span>Mesin Cuci</span></div>
     <div class="chips">
       <span id="chipState" class="chip">…</span>
       <span id="chipWifi" class="chip">…</span>
-      <button id="btnTheme" class="icon" title="Tema">◐</button>
-      <button id="btnLogout" class="icon" title="Keluar">⎋</button>
+      <button id="btnTheme" class="icon-btn" aria-label="Ganti tema" title="Ganti tema"><svg class="ic"><use href="#i-monitor"/></svg></button>
+      <button id="btnLogout" class="icon-btn" aria-label="Keluar" title="Keluar"><svg class="ic"><use href="#i-logout"/></svg></button>
     </div>
   </header>
 
-  <nav id="tabs">
-    <button data-tab="home" class="on">Beranda</button>
-    <button data-tab="proses">Proses</button>
-    <button data-tab="manual">Manual</button>
-    <button data-tab="relay">Relay</button>
-    <button data-tab="settings">Pengaturan</button>
-    <button data-tab="wifi" data-local>WiFi</button>
-    <button data-tab="log">Log</button>
-    <button data-tab="console" data-local>Konsol</button>
-    <button data-tab="history">Riwayat</button>
-    <button data-tab="firmware" data-local>Firmware</button>
-    <button data-tab="system">Sistem</button>
-  </nav>
+  <main id="main">
+    <div id="bannerOffline" class="callout err" role="alert" hidden><svg class="ic"><use href="#i-cloud-off"/></svg><div id="offlineTxt"></div></div>
 
-  <main>
-    <div id="bannerOffline" class="banner err" hidden></div>
-    <!-- BERANDA -->
-    <section id="tab-home" class="tab on">
-      <div id="bannerResume" class="banner warn" hidden>
-        <div>⚡ Listrik sempat padam saat <b id="resumeInfo"></b>. Mesin tidak lanjut otomatis.</div>
-        <div class="row"><button class="btn primary" data-cmd="lanjutkan">Lanjutkan</button><button class="btn" data-cmd="batalkan">Batalkan</button></div>
+    <!-- ===== BERANDA ===== -->
+    <section id="view-beranda" class="view on">
+      <div id="bannerResume" class="callout warn" hidden>
+        <svg class="ic"><use href="#i-bolt"/></svg>
+        <div><b>Listrik sempat padam</b> saat <b id="resumeInfo"></b>. Mesin tidak lanjut otomatis.
+          <div class="row"><button class="btn primary sm" data-cmd="lanjutkan">Lanjutkan</button><button class="btn sm" data-cmd="batalkan">Batalkan</button></div></div>
       </div>
-      <div id="bannerPause" class="banner err" hidden></div>
-      <div id="bannerFault" class="banner err" hidden>&#10060; <b>Relay terkunci</b>: pengaman mendeteksi pelanggaran interlock (mis. motor kiri &amp; kanan nyala bersamaan). Semua relay dimatikan. Restart mesin untuk membuka kunci.</div>
-      <div id="decisionCard" class="banner err dcard" hidden>
-        <b id="decTitle">Menunggu keputusan</b>
-        <p id="decMsg"></p>
-        <div class="row" id="decBtns"></div>
-        <p class="muted">Mesin tidak pernah melanjutkan sendiri. Pengingat dikirim tiap 10 menit.</p>
+      <div id="bannerFault" class="callout err" hidden><svg class="ic"><use href="#i-lock"/></svg>
+        <div><b>Relay terkunci.</b> Pengaman mendeteksi pelanggaran interlock (mis. motor kiri dan kanan nyala bersamaan). Semua relay dimatikan. Restart mesin dari menu Sistem untuk membuka kunci.</div></div>
+      <div id="decisionCard" class="callout warn dcard" role="alert" hidden>
+        <svg class="ic lg"><use href="#i-alert"/></svg>
+        <div><h2 id="decTitle">Menunggu keputusan</h2><p id="decMsg"></p>
+          <div class="row" id="decBtns"></div>
+          <p class="field-help">Mesin tidak pernah melanjutkan sendiri. Pengingat dikirim tiap 10 menit.</p></div>
       </div>
 
-      <div class="card hero">
-        <svg id="ring" viewBox="0 0 120 120" width="150" height="150">
-          <circle cx="60" cy="60" r="52" class="ringBg"/>
-          <circle id="ringFg" cx="60" cy="60" r="52" class="ringFg" transform="rotate(-90 60 60)"/>
-          <text id="ringText" x="60" y="66" text-anchor="middle">—</text>
-        </svg>
-        <div class="heroInfo">
-          <div id="stage" class="big">Siap</div>
-          <div id="detail" class="muted"></div>
-          <div class="kv"><span>Sisa tahap</span><b id="stepLeft">-</b></div>
-          <div class="kv"><span>Total sisa</span><b id="totalLeft">-</b></div>
-          <div class="kv"><span>Air</span><b id="water">-</b></div>
+      <div class="bento">
+        <article class="card hero idle" id="hero">
+          <div class="ringwrap"><svg id="ring" viewBox="0 0 120 120" role="img" aria-label="Kemajuan Proses">
+            <circle cx="60" cy="60" r="52" class="ringBg"/>
+            <circle id="ringFg" cx="60" cy="60" r="52" class="ringFg" transform="rotate(-90 60 60)"/>
+            <text id="ringText" x="60" y="67" text-anchor="middle">—</text></svg></div>
+          <div class="heroMain" aria-live="polite">
+            <div id="stage" class="kicker">Siap</div>
+            <h1 id="heroName" class="heroName">Mesin siap</h1>
+            <p id="detail" class="muted"></p>
+            <div class="timeblock"><span class="lbl">Sisa total</span><b id="totalLeft" class="display">-</b><span id="etaAt" class="muted"></span></div>
+            <button id="btnJob" class="stepbtn" type="button" aria-haspopup="dialog" aria-controls="jobSheet" disabled>
+              <span><small>Sisa Tahap</small><b id="stepLine">Tidak ada Proses berjalan</b></span>
+              <span id="stepLeft" class="tnum">-</span><svg class="ic"><use href="#i-right"/></svg></button>
+            <div class="ctl">
+              <button class="btn" id="btnPause" data-cmd="jeda" disabled><svg class="ic"><use href="#i-pause"/></svg><span>Jeda</span></button>
+              <button class="btn" id="btnSkip" data-cmd="lewati" disabled><svg class="ic"><use href="#i-skip"/></svg><span>Lewati</span></button>
+              <button class="btn danger" id="btnStop" disabled><svg class="ic"><use href="#i-stop"/></svg><span>Stop</span></button>
+            </div>
+          </div>
+        </article>
+
+        <article class="card railcard">
+          <header><h2>Rel Tahap</h2><button class="btn ghost sm keep" id="btnJob2" type="button" disabled>Lihat semua</button></header>
+          <div id="railMini"><p class="muted">Pilih Proses di bawah untuk memulai. Urutan Tahap tampil di sini saat berjalan.</p></div>
+        </article>
+
+        <article class="card mini" id="cardWater"><header><h3>Air</h3></header>
+          <div class="stat-big"><svg id="wdrop" class="ic wdrop"><use href="#i-drop"/></svg><span id="water">-</span></div>
+          <small id="waterNote">Sensor hanya membedakan penuh atau tidak.</small></article>
+        <article class="card mini" id="cardRelays"><header><h3>Relay</h3></header><div class="rls" id="relayMini"></div></article>
+        <article class="card mini" id="cardConn"><header><h3>Koneksi</h3></header>
+          <div class="kv"><span>WiFi</span><b id="connWifi">-</b></div>
+          <div class="kv"><span>Server</span><b id="connSrv">-</b></div>
+          <div class="kv"><span>Jam</span><b id="connTime">-</b></div></article>
+      </div>
+
+      <div class="sechead"><div><h2>Mulai Proses</h2><p id="lastUsed" class="muted" hidden></p></div></div>
+      <div id="startOpts" class="card startopts" hidden>
+        <div class="seg" id="startSeg" role="group" aria-label="Kapan mulai">
+          <button type="button" data-sm="now" class="on">Sekarang</button>
+          <button type="button" data-sm="tunda">Tunda</button>
+          <button type="button" data-sm="selesai">Selesai pada jam</button>
+        </div>
+        <input id="startMode" type="hidden" value="now">
+        <div class="tt">
+          <input id="startTunda" type="time" step="1" value="00:30:00" hidden aria-label="Lama tunda (jam:menit:detik)">
+          <input id="startSelesai" type="time" hidden aria-label="Selesai pada jam">
+        </div>
+        <p class="field-help" id="startNote"></p>
+        <p class="field-help">Berlaku untuk kartu Proses di bawah. "Selesai pada jam" memakai perkiraan durasi, jadi bisa meleset karena isi dan buang berbasis sensor.</p>
+      </div>
+      <div id="homeEmpty" class="empty" hidden>
+        <svg class="art" viewBox="0 0 64 64" aria-hidden="true"><rect x="10" y="8" width="44" height="48" rx="8"/><circle cx="32" cy="36" r="12"/><path d="M22 36c4-4 6 4 10 0s6 4 10 0M18 16h4M26 16h4"/></svg>
+        <p>Belum ada Proses. Proses disusun dari Tahap: isi air, putar, buang, spin, dan lainnya.</p>
+        <button class="btn primary" id="goProses"><svg class="ic"><use href="#i-plus"/></svg>Buat Proses pertama</button>
+      </div>
+      <div class="pgrid" id="prosesGrid"><div class="skel"></div><div class="skel"></div></div>
+      <p class="muted" id="progLock" hidden></p>
+    </section>
+
+    <!-- ===== PROSES ===== -->
+    <section id="view-proses" class="view view-proses" data-mode="list">
+      <div class="listmode">
+        <div class="sechead"><div><h1>Proses</h1><p class="muted">Urutan Tahap yang bisa dijalankan. Maksimal 10 Proses, 40 Tahap per Proses. Proses yang sedang dipakai tidak bisa diubah.</p></div>
+          <div class="row"><span id="pcCount" class="chip"></span>
+            <label class="btn ghost sm" for="pcImportFile" data-local><svg class="ic sm"><use href="#i-upload"/></svg>Impor</label><input id="pcImportFile" type="file" accept=".json,application/json" hidden></div></div>
+        <div id="pcList" class="pgrid"></div>
+      </div>
+      <div class="editmode" id="pcEditor">
+        <div class="edhead"><button class="btn ghost sm" id="pcBack" type="button"><svg class="ic sm"><use href="#i-left"/></svg>Daftar</button><h2 id="pcTitle">Proses baru</h2></div>
+        <div id="pcLock" class="callout warn" hidden></div>
+        <div class="edgrid">
+          <aside class="card edpal"><h3>Tambah Tahap</h3><div class="palette" id="pcPalette"></div></aside>
+          <div class="form">
+            <label>Nama Proses<input id="pcName" maxlength="27" placeholder="mis. Cuci harian"></label>
+            <div id="pcStack" class="stack"></div>
+            <p id="pcEmpty" class="empty">Belum ada Tahap. Pilih jenis Tahap dari daftar "Tambah Tahap".</p>
+          </div>
+          <aside class="card edsum">
+            <h3>Ringkasan</h3>
+            <div class="cpSummary" id="pcSummary"></div>
+            <div id="pcWarn" class="callout warn" hidden></div>
+            <div id="pcError" class="callout err" role="alert" hidden></div>
+            <div class="row"><button class="btn primary" id="pcSave"><svg class="ic sm"><use href="#i-check"/></svg>Simpan</button><button class="btn" id="pcSaveNew">Simpan sebagai baru</button></div>
+            <button class="btn ghost sm" id="pcReset" type="button">Kosongkan</button>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== MANUAL ===== -->
+    <section id="view-manual" class="view">
+      <div class="sechead"><div><h1>Manual</h1><p class="muted">Jalankan satu Tahap atau kendalikan relay langsung. Hanya saat mesin siap.</p></div></div>
+      <div class="mangrid">
+        <div class="card" id="manTahap">
+          <h2>Jalankan satu Tahap</h2>
+          <input id="manType" type="hidden" value="isi">
+          <div id="manGrid" class="typegrid"></div>
+          <div id="manForm"></div>
+          <div id="manHint" class="callout warn" hidden><svg class="ic"><use href="#i-alert"/></svg><div>Buang manual menarik valve buang selama waktu yang diatur <b>tanpa membaca sensor</b>. Jalan darurat bila sensor rusak.</div></div>
+          <div class="row"><button class="btn primary" id="manRun"><svg class="ic sm"><use href="#i-play"/></svg>Jalankan</button><button class="btn" data-cmd="cek_air"><svg class="ic sm"><use href="#i-search"/></svg>Cek air</button></div>
+        </div>
+        <div class="card" id="manRelay">
+          <h2>Relay</h2>
+          <div id="relayLock" class="callout err" hidden></div>
+          <div class="callout warn"><svg class="ic"><use href="#i-alert"/></svg><div>Lepas beban atau tutup kran air sebelum menguji. Motor kiri dan kanan <b>tidak pernah</b> bisa menyala bersamaan (dijaga berlapis). Kontrol manual otomatis mati setelah 60 detik.</div></div>
+          <div id="relayProgress" class="callout info" hidden><svg class="ic"><use href="#i-info"/></svg><div></div></div>
+          <div id="relayCards" class="rgrid"></div>
+          <div class="relaytools">
+            <div class="tt"><label for="seqSecs" class="sr">Lama menyala per relay (detik)</label><input id="seqSecs" type="number" min="1" max="30" value="3" aria-label="Lama menyala per relay (detik)"><span class="muted">detik per relay</span>
+              <button class="btn sm" id="btnSeq"><svg class="ic sm"><use href="#i-play"/></svg>Uji berurutan</button><button class="btn sm" id="btnSeqStop">Berhenti</button></div>
+            <button class="btn dout" id="btnAllOff"><svg class="ic sm"><use href="#i-power"/></svg>Matikan semua relay</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== AKTIVITAS ===== -->
+    <section id="view-aktivitas" class="view">
+      <div class="sechead"><h1>Aktivitas</h1>
+        <div class="seg" id="actSeg" role="group" aria-label="Bagian aktivitas">
+          <button type="button" data-seg="log" class="on">Log</button><button type="button" data-seg="riwayat">Riwayat</button><button type="button" data-seg="konsol" data-local>Konsol</button></div></div>
+      <div id="seg-log" class="segpane on">
+        <input id="logLevel" type="hidden" value="1">
+        <div class="filters" id="logFilters" role="group" aria-label="Tingkat log">
+          <button type="button" data-lv="1" aria-pressed="true">Semua</button><button type="button" data-lv="2" aria-pressed="false">Tahap</button><button type="button" data-lv="3" aria-pressed="false">Peringatan</button><button type="button" data-lv="4" aria-pressed="false">Galat</button><button type="button" data-lv="0" aria-pressed="false">Debug</button></div>
+        <div id="logBox" class="logbox" role="log"></div>
+      </div>
+      <div id="seg-riwayat" class="segpane">
+        <div class="stats" id="statsBox"></div>
+        <div class="card" id="histList"></div>
+      </div>
+      <div id="seg-konsol" class="segpane" data-local>
+        <div class="row">
+          <button class="btn sm" id="conPause">Jeda</button><button class="btn sm" id="conClear">Bersihkan</button>
+          <button class="btn sm" id="conDl"><svg class="ic sm"><use href="#i-download"/></svg>Unduh .txt</button><button class="btn sm" id="conTrace">Jejak boot lalu</button></div>
+        <div id="conBox" class="conbox" role="log"></div>
+        <form id="conForm"><input id="conIn" placeholder="ketik perintah: status, stop, heap, relay_test kiri …" autocomplete="off" autocapitalize="none" aria-label="Perintah konsol"><button class="btn primary" type="submit">Kirim</button></form>
+      </div>
+    </section>
+
+    <!-- ===== SISTEM ===== -->
+    <section id="view-sistem" class="view">
+      <div class="sechead"><h1>Sistem</h1></div>
+      <div class="toc" id="sysToc" role="navigation" aria-label="Bagian sistem">
+        <button type="button" data-go="grpKoneksi" data-local>Koneksi</button><button type="button" data-go="grpKeamanan" data-local>Keamanan</button><button type="button" data-go="grpMesin">Mesin</button><button type="button" data-go="grpPemeliharaan">Pemeliharaan</button></div>
+
+      <div class="grp" id="grpKoneksi" data-local>
+        <h2><svg class="ic"><use href="#i-wifi"/></svg>Koneksi</h2>
+        <div class="grid2">
+          <div class="card"><h3>WiFi</h3><div id="wifiInfo" class="muted"></div><div id="wifiList"></div>
+            <form id="wifiForm" class="form dpanel">
+              <label>SSID<input id="wSsid" required maxlength="32"></label>
+              <label>Password<input id="wPass" type="password" maxlength="64" placeholder="kosong bila terbuka"></label>
+              <button class="btn primary" type="submit"><svg class="ic sm"><use href="#i-plus"/></svg>Tambah WiFi</button>
+              <p class="field-help">Maksimal 5 WiFi, dicoba berurutan. Password tidak pernah ditampilkan.</p></form></div>
+          <div class="card"><h3>Kontrol jarak jauh</h3><p class="muted" id="remoteInfo"></p>
+            <div class="row"><button class="btn" data-cmd="remote" data-args="on">Aktifkan</button><button class="btn" data-cmd="remote" data-args="off">Nonaktifkan</button></div></div>
         </div>
       </div>
 
-      <div class="row ctl">
-        <button class="btn danger" id="btnStop">⏹ STOP</button>
-        <button class="btn" data-cmd="jeda">⏸ Jeda</button>
-        <button class="btn" data-cmd="lanjutkan">▶ Lanjutkan</button>
-        <button class="btn" data-cmd="lewati">⏭ Lewati</button>
+      <div class="grp" id="grpKeamanan" data-local>
+        <h2><svg class="ic"><use href="#i-shield"/></svg>Keamanan</h2>
+        <div class="grid2">
+          <div class="card form"><h3>Password web lokal</h3>
+            <p class="muted">Untuk dashboard di jaringan rumah. Minimal 12 karakter. Mengganti password mengeluarkan semua perangkat yang diingat.</p>
+            <label>Password baru<input id="lpw1" type="password" minlength="12" maxlength="64" autocomplete="new-password" placeholder="min 12 karakter"></label>
+            <label>Ulangi password<input id="lpw2" type="password" minlength="12" maxlength="64" autocomplete="new-password"></label>
+            <button class="btn" id="btnPwLocal">Ganti password lokal</button></div>
+          <div class="card form"><h3>Password jarak jauh</h3>
+            <p class="muted">Untuk dashboard di internet (berbeda dari password lokal). Minimal 12 karakter. Dikirim sekali lewat sambungan terenkripsi ke server dan tidak disimpan di mesin; semua sesi jarak jauh akan keluar. Butuh mesin sedang terhubung ke server.</p>
+            <label>Password baru<input id="rpw1" type="password" minlength="12" maxlength="64" autocomplete="new-password" placeholder="min 12 karakter"></label>
+            <label>Ulangi password<input id="rpw2" type="password" minlength="12" maxlength="64" autocomplete="new-password"></label>
+            <button class="btn" id="btnPwRemote">Ganti password jarak jauh</button>
+            <p class="muted" id="pwRemoteMsg" role="status"></p></div>
+          <div class="card"><h3>Perangkat yang diingat</h3><p class="muted" id="devHint"></p><div id="devList"></div>
+            <div class="dpanel"><button class="btn dout" id="btnDevOthers">Keluarkan semua perangkat lain</button></div></div>
+        </div>
       </div>
 
-      <h3>Mulai Proses</h3>
-      <div id="homeEmpty" class="card" hidden>
-        <p>Belum ada Proses. Proses disusun dari Tahap (isi air, putar, buang, spin, dan lain-lain).</p>
-        <button class="btn primary" id="goProses">Buat Proses</button>
+      <div class="grp" id="grpMesin">
+        <h2><svg class="ic"><use href="#i-sliders"/></svg>Mesin</h2>
+        <div class="grid2">
+          <div class="card"><h3>Notifikasi</h3>
+            <input id="sNotif" type="hidden" value="lengkap">
+            <div class="seg" id="notifSeg" role="group" aria-label="Notifikasi"><button type="button" data-notif="lengkap">Lengkap</button><button type="button" data-notif="ringkas">Ringkas</button><button type="button" data-notif="senyap">Senyap</button></div>
+            <p class="field-help">Dikirim ke Telegram lewat server. Log di web selalu lengkap. Pesan dari Tahap Notifikasi dan Minta tindakan selalu terkirim, termasuk mode Senyap.</p></div>
+          <div class="card"><h3>Kalibrasi isi air</h3><p class="muted" id="calibNote"></p>
+            <div class="row"><button class="btn" data-cmd="cek_air"><svg class="ic sm"><use href="#i-search"/></svg>Cek air</button><button class="btn dout" id="btnCalib">Reset kalibrasi</button></div></div>
+          <div class="card"><h3>Tampilan</h3>
+            <div class="seg" id="themeSeg" role="group" aria-label="Tema"><button type="button" data-theme-set="auto">Otomatis</button><button type="button" data-theme-set="light">Terang</button><button type="button" data-theme-set="dark">Gelap</button></div>
+            <p class="field-help">Variabel air, putar, dan pewangi diatur per Tahap di menu Proses dan Manual.</p></div>
+        </div>
       </div>
-      <div class="grid" id="prosesGrid"></div>
-      <p class="muted" id="progLock" hidden></p>
-      <div class="card form" id="startOpts" hidden>
-        <label>Mulai
-          <select id="startMode"><option value="now">Sekarang</option><option value="tunda">Tunda</option><option value="selesai">Selesai pada jam (perkiraan)</option></select>
-        </label>
-        <input id="startTunda" type="time" step="1" value="00:30:00" hidden aria-label="Lama tunda (jam:menit:detik)">
-        <input id="startSelesai" type="time" hidden aria-label="Selesai pada jam">
-        <p class="muted" id="startNote"></p>
-        <p class="muted">Berlaku untuk tombol Proses di atas. "Selesai pada jam" memakai perkiraan durasi, jadi bisa meleset karena isi/buang berbasis sensor.</p>
-      </div>
-    </section>
 
-    <!-- MANUAL -->
-    <section id="tab-manual" class="tab">
-      <p class="muted">Jalankan satu Tahap dengan variabelnya sendiri. Hanya bisa saat mesin siap. Untuk kontrol relay langsung dan uji relay, buka tab Relay.</p>
-      <div class="card form">
-        <label>Tahap<select id="manType"></select></label>
-        <div id="manForm"></div>
-        <p class="muted" id="manHint" hidden>Buang manual menarik valve buang selama waktu yang diatur <b>tanpa membaca sensor</b>. Jalan darurat bila sensor rusak.</p>
-        <div class="row"><button class="btn primary" id="manRun">&#9654; Jalankan</button><button class="btn" data-cmd="cek_air">Cek air</button></div>
+      <div class="grp" id="grpPemeliharaan">
+        <h2><svg class="ic"><use href="#i-cpu"/></svg>Pemeliharaan</h2>
+        <div class="grid2">
+          <div class="card"><h3>Info sistem</h3><div id="sysInfo"></div></div>
+          <div class="card" data-local><h3>Firmware</h3><div id="fwInfo" class="muted"></div>
+            <div class="form dpanel"><label>Pilih file .bin<input id="fwFile" type="file" accept=".bin"></label>
+              <button class="btn primary" id="btnFlash"><svg class="ic sm"><use href="#i-upload"/></svg>Flash firmware</button>
+              <div class="bar"><div id="fwBar"></div></div>
+              <p class="field-help" id="fwMsg">Hanya saat mesin siap (tidak mencuci / dijeda). Mesin restart otomatis setelah berhasil.</p>
+              <button class="btn dout" id="btnRollback">Kembali ke versi sebelumnya</button></div></div>
+          <div class="card" data-local><h3>Cadangkan dan pulihkan</h3>
+            <p class="muted">Pengaturan dan daftar WiFi disimpan ke satu berkas JSON (Proses diekspor satu per satu di menu Proses). Password WiFi hanya ikut bila dicentang: simpan berkasnya dengan aman.</p>
+            <label class="chk"><input type="checkbox" id="bkWifi"> Sertakan password WiFi</label>
+            <div class="row"><button class="btn" id="btnBackup"><svg class="ic sm"><use href="#i-download"/></svg>Unduh cadangan</button><label class="btn" for="restoreFile"><svg class="ic sm"><use href="#i-upload"/></svg>Pulihkan dari berkas…</label><input id="restoreFile" type="file" accept=".json,application/json" hidden></div>
+            <p class="muted" id="restoreMsg" role="status"></p></div>
+          <div class="card"><h3>Zona berbahaya</h3><p class="muted">Aksi berikut meminta konfirmasi.</p>
+            <div class="row"><button class="btn dout" id="btnResetAll">Reset pengaturan</button><button class="btn dout" id="btnRestart"><svg class="ic sm"><use href="#i-power"/></svg>Restart mesin</button></div></div>
+        </div>
       </div>
-    </section>
-
-    <!-- PROSES -->
-    <section id="tab-proses" class="tab">
-      <p class="muted">Proses disusun dari Tahap. Atur variabel tiap Tahap, geser <b>&#9776;</b> untuk menukar urutan. Maksimal 10 Proses, 40 Tahap per Proses. Proses yang sedang dipakai tidak bisa diubah atau dihapus.</p>
-      <h3>Tersimpan <span class="muted" id="pcCount"></span></h3>
-      <div id="pcList"></div>
-      <div class="row"><label class="btn" for="pcImportFile" data-local>&#11014; Impor dari berkas&hellip;</label><input id="pcImportFile" type="file" accept=".json,application/json" hidden></div>
-      <h3 id="pcTitle">Proses baru</h3>
-      <div class="card form" id="pcEditor">
-        <div id="pcLock" class="banner warn" hidden></div>
-        <label>Nama Proses<input id="pcName" maxlength="27" placeholder="mis. Cuci harian"></label>
-        <div><div class="muted">Tambah Tahap</div><div class="palette" id="pcPalette"></div></div>
-        <div id="pcStack" class="stack"></div>
-        <p id="pcEmpty" class="muted">Belum ada Tahap. Pilih dari tombol di atas.</p>
-        <div class="cpSummary" id="pcSummary"></div>
-        <div id="pcWarn" class="banner warn" hidden></div>
-        <div id="pcError" class="banner err" hidden></div>
-        <div class="row"><button class="btn primary" id="pcSave">&#128190; Simpan</button><button class="btn" id="pcSaveNew">Simpan sebagai baru</button><button class="btn" id="pcReset">Kosongkan</button></div>
-      </div>
-    </section>
-
-    <!-- RELAY -->
-    <section id="tab-relay" class="tab">
-      <div id="relayLock" class="banner err" hidden></div>
-      <div class="banner warn">&#9888; Lepas beban atau tutup kran air sebelum menguji. Motor kiri &amp; kanan <b>tidak pernah</b> bisa menyala bersamaan (dijaga berlapis). Kontrol manual hanya saat mesin siap dan otomatis mati setelah 60 detik.</div>
-      <div id="relayProgress" class="banner warn" hidden></div>
-      <div class="card form">
-        <b>Uji berurutan otomatis</b>
-        <p class="muted">Menyalakan lalu mematikan setiap relay satu per satu: kiri, kanan, isi, buang, spin, pewangi.</p>
-        <label>Lama menyala per relay (detik)<input id="seqSecs" type="number" min="1" max="30" value="3"></label>
-        <div class="row"><button class="btn primary" id="btnSeq">&#9654; Mulai uji berurutan</button><button class="btn danger" id="btnSeqStop">&#9209; Berhenti</button></div>
-      </div>
-      <h3>Kontrol per relay</h3>
-      <div id="relayCards"></div>
-      <button class="btn danger" id="btnAllOff">Matikan semua relay</button>
-    </section>
-
-    <!-- PENGATURAN -->
-    <section id="tab-settings" class="tab">
-      <div class="card form">
-        <label>Notifikasi (dikirim ke Telegram lewat server)
-          <select id="sNotif"><option value="lengkap">Lengkap</option><option value="ringkas">Ringkas</option><option value="senyap">Senyap</option></select>
-        </label>
-        <button class="btn" id="btnNotif">Simpan</button>
-        <p class="muted">Log di web selalu lengkap. Pesan dari Tahap Notifikasi dan Minta tindakan selalu terkirim, termasuk mode Senyap.</p>
-      </div>
-      <div class="card form">
-        <b>Kalibrasi isi air</b>
-        <p class="muted" id="calibNote"></p>
-        <div class="row"><button class="btn" data-cmd="cek_air">Cek air</button><button class="btn danger" id="btnCalib">Reset kalibrasi</button></div>
-      </div>
-      <p class="muted">Variabel air, putar, dan pewangi diatur per Tahap di tab Proses dan Manual.</p>
-      <button class="btn danger" id="btnResetAll">Reset pengaturan</button>
-    </section>
-
-    <!-- WIFI -->
-    <section id="tab-wifi" class="tab">
-      <div class="card"><div id="wifiInfo"></div></div>
-      <div id="wifiList"></div>
-      <form id="wifiForm" class="card form">
-        <label>SSID<input id="wSsid" required maxlength="32"></label>
-        <label>Password<input id="wPass" type="password" maxlength="64" placeholder="kosong bila terbuka"></label>
-        <button class="btn primary" type="submit">Tambah WiFi</button>
-      </form>
-      <p class="muted">Maksimal 5 WiFi, dicoba berurutan. Password tidak pernah ditampilkan.</p>
-    </section>
-
-    <!-- LOG -->
-    <section id="tab-log" class="tab">
-      <div class="row"><select id="logLevel"><option value="1">INFO+</option><option value="0">Semua (DEBUG)</option><option value="2">STEP+</option><option value="3">WARN+</option><option value="4">ERROR+</option></select></div>
-      <pre id="logBox" class="logbox"></pre>
-    </section>
-
-    <!-- KONSOL -->
-    <section id="tab-console" class="tab">
-      <div class="row">
-        <button class="btn" id="conPause">⏸ Pause</button>
-        <button class="btn" id="conClear">Bersihkan</button>
-        <button class="btn" id="conDl">⬇ Unduh .txt</button>
-        <button class="btn" id="conTrace">Jejak boot lalu</button>
-      </div>
-      <pre id="conBox" class="logbox mono"></pre>
-      <form id="conForm" class="row">
-        <input id="conIn" placeholder="ketik perintah: status, stop, heap, relay_test kiri …" autocomplete="off" autocapitalize="none">
-        <button class="btn primary" type="submit">Kirim</button>
-      </form>
-    </section>
-
-    <!-- RIWAYAT -->
-    <section id="tab-history" class="tab">
-      <div class="card" id="statsBox"></div>
-      <div id="histList"></div>
-    </section>
-
-    <!-- FIRMWARE -->
-    <section id="tab-firmware" class="tab">
-      <div class="card" id="fwInfo"></div>
-      <div class="card form">
-        <label>Pilih file .bin<input id="fwFile" type="file" accept=".bin"></label>
-        <button class="btn primary" id="btnFlash">Flash firmware</button>
-        <div class="bar"><div id="fwBar"></div></div>
-        <p class="muted" id="fwMsg">Hanya bisa saat mesin siap (tidak mencuci / dijeda). Mesin restart otomatis setelah berhasil.</p>
-      </div>
-      <button class="btn" id="btnRollback">↩ Kembali ke versi sebelumnya</button>
-    </section>
-
-    <!-- SISTEM -->
-    <section id="tab-system" class="tab">
-      <div class="card" id="sysInfo"></div>
-      <div class="card" data-local>
-        <b>Perangkat yang diingat</b>
-        <p class="muted" id="devHint"></p>
-        <div id="devList"></div>
-        <div class="row" style="margin-top:10px"><button class="btn" id="btnDevOthers">Keluarkan semua perangkat lain</button></div>
-      </div>
-      <div class="card" data-local>
-        <b>Cadangkan &amp; pulihkan</b>
-        <p class="muted">Pengaturan dan daftar WiFi disimpan ke satu berkas JSON (Proses diekspor satu per satu di tab Proses). Password WiFi hanya ikut bila dicentang: simpan berkasnya dengan aman.</p>
-        <label class="chk"><input type="checkbox" id="bkWifi"> Sertakan password WiFi</label>
-        <div class="row"><button class="btn" id="btnBackup">&#11015; Unduh cadangan</button><label class="btn" for="restoreFile">&#11014; Pulihkan dari berkas&hellip;</label><input id="restoreFile" type="file" accept=".json,application/json" hidden></div>
-        <p class="muted" id="restoreMsg"></p>
-      </div>
-      <div class="card" data-local>
-        <b>Kontrol jarak jauh</b>
-        <p class="muted" id="remoteInfo"></p>
-        <div class="row"><button class="btn" data-cmd="remote" data-args="on">Aktifkan</button><button class="btn" data-cmd="remote" data-args="off">Nonaktifkan</button></div>
-      </div>
-      <div class="card form" data-local>
-        <b>Password web lokal</b>
-        <p class="muted">Untuk dashboard di jaringan rumah. Minimal 12 karakter. Mengganti password mengeluarkan semua perangkat yang diingat.</p>
-        <label>Password baru<input id="lpw1" type="password" minlength="12" maxlength="64" autocomplete="new-password" placeholder="min 12 karakter"></label>
-        <label>Ulangi password<input id="lpw2" type="password" minlength="12" maxlength="64" autocomplete="new-password"></label>
-        <button class="btn" id="btnPwLocal">Ganti password lokal</button>
-      </div>
-      <div class="card form" data-local>
-        <b>Password jarak jauh</b>
-        <p class="muted">Untuk dashboard di internet (berbeda dari password lokal). Minimal 12 karakter. Dikirim sekali lewat sambungan terenkripsi ke server dan tidak disimpan di mesin; semua sesi jarak jauh akan keluar. Butuh mesin sedang terhubung ke server.</p>
-        <label>Password baru<input id="rpw1" type="password" minlength="12" maxlength="64" autocomplete="new-password" placeholder="min 12 karakter"></label>
-        <label>Ulangi password<input id="rpw2" type="password" minlength="12" maxlength="64" autocomplete="new-password"></label>
-        <button class="btn" id="btnPwRemote">Ganti password jarak jauh</button>
-        <p class="muted" id="pwRemoteMsg"></p>
-      </div>
-      <button class="btn danger" id="btnRestart">Restart mesin</button>
     </section>
   </main>
+  </div>
+
+  <!-- ===== SHEET REL TAHAP ===== -->
+  <div id="jobSheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="jobTitle" hidden>
+    <div class="sheet-scrim" data-close></div>
+    <div class="sheet-panel" id="jobPanel" tabindex="-1">
+      <div class="sheet-grab"></div>
+      <div class="sheet-head"><div><h2 id="jobTitle">Rel Tahap</h2><p id="jobSub" class="muted"></p></div>
+        <button id="jobClose" class="icon-btn" aria-label="Tutup" type="button"><svg class="ic"><use href="#i-x"/></svg></button></div>
+      <div id="jobList" class="sheet-body"></div>
+    </div>
+  </div>
 </div>
 <script>'use strict';
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
-let last = null, settings = null, lastState = 'idle';
-let conPaused = false, conLines = [], logLines = [], lastSeq = 0;
-
-// ---------------------------------------------------------------- util ----
-function toast(msg) {
-  const t = $('#toast');
-  t.textContent = msg; t.classList.add('show');
-  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 3200);
+let last = null, settings = null, REMOTE = false;
+let conPaused = false, conLines = [], logLines = [], lastSeq = 0, pollFails = 0;
+const ic = (n, c = '') => `<svg class="ic ${c}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const TOAST_IC = { ok: 'check', warn: 'alert', err: 'alert', info: 'info' };
+function toast(msg, kind = 'info') {
+const t = $('#toast');
+t.className = kind;
+t.innerHTML = ic(TOAST_IC[kind] || 'info') + '<span></span>';
+t.lastChild.textContent = msg;
+void t.offsetWidth; t.classList.add('show');
+clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 3200);
 }
+const toastR = r => toast(r.msg || (r.ok ? 'Berhasil' : 'Gagal'), r.ok ? 'ok' : 'warn');
 async function api(path, method = 'GET', body) {
-  const opt = { method, headers: {} };
-  if (body !== undefined) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
-  let r, lastErr;
-  // GET aman diulang bila koneksi tersendat sesaat; POST/DELETE tidak diulang (bisa terkirim dua kali)
-  for (let i = 0; i < (method === 'GET' ? 3 : 1); i++) {
-    try { r = await fetch(path, opt); break; } catch (e) { lastErr = e; await new Promise(res => setTimeout(res, 500)); }
-  }
-  if (!r) throw new Error('Koneksi ke mesin terputus. Coba lagi sebentar.');
-  if (r.status === 401 && path !== '/api/login') { showLogin(); throw new Error('login'); }
-  return r.json();
+const opt = { method, headers: {} };
+if (body !== undefined) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
+let r;
+for (let i = 0; i < (method === 'GET' ? 3 : 1); i++) {
+try { r = await fetch(path, opt); break; } catch (e) { await new Promise(res => setTimeout(res, 500)); }
+}
+if (!r) throw new Error('Koneksi ke mesin terputus. Coba lagi sebentar.');
+if (r.status === 401 && path !== '/api/login') { showLogin(); throw new Error('login'); }
+return r.json();
 }
 async function cmd(name, args = '') {
-  try {
-    const r = await api('/api/cmd', 'POST', { cmd: name, args: String(args) });
-    toast((r.ok ? '' : '⚠ ') + r.msg);
-    if (r.ok) setTimeout(loadSettings, 300);
-    return r;
-  } catch (e) { if (e.message !== 'login') toast('Gagal: ' + e.message); }
+try {
+const r = await api('/api/cmd', 'POST', { cmd: name, args: String(args) });
+toastR(r);
+if (r.ok) setTimeout(loadSettings, 300);
+return r;
+} catch (e) { if (e.message !== 'login') toast('Gagal: ' + e.message, 'err'); }
 }
+const pad = n => String(n).padStart(2, '0');
 const fmt = s => s >= 3600 ? `${Math.floor(s / 3600)}j ${Math.floor(s % 3600 / 60)}m` : s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}d` : `${s}d`;
-const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const clock = (ms, epoch) => {
-  if (epoch) { const d = new Date(epoch * 1000); return d.toTimeString().slice(0, 8); }
-  const s = Math.floor(ms / 1000); return `+${s}s`;
-};
 const fmtMin = s => s >= 3600 ? `${Math.floor(s / 3600)} j ${Math.round(s % 3600 / 60)} mnt` : `${Math.max(1, Math.round(s / 60))} mnt`;
-
-// -------------------------------------------------------------- tema/tab ----
-(function theme() {
-  const t = localStorage.getItem('theme'); if (t) document.documentElement.dataset.theme = t;
-  $('#btnTheme').onclick = () => {
-    const cur = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light');
-    const n = cur === 'dark' ? 'light' : 'dark';
-    document.documentElement.dataset.theme = n; localStorage.setItem('theme', n);
-  };
-})();
-$$('#tabs button').forEach(b => b.onclick = () => {
-  $$('#tabs button').forEach(x => x.classList.toggle('on', x === b));
-  $$('.tab').forEach(x => x.classList.toggle('on', x.id === 'tab-' + b.dataset.tab));
-  onTab(b.dataset.tab);
-});
-function onTab(t) {
-  if (t === 'settings') loadSettings();
-  if (t === 'wifi') loadWifi();
-  if (t === 'relay') renderRelays();
-  if (t === 'proses') loadMeta().then(() => { loadSettings(); loadProses(); renderPalette(); });
-  if (t === 'manual') loadMeta().then(renderManual);
-  if (t === 'history') loadHistory();
-  if (t === 'firmware') loadFw();
-  if (t === 'system') { renderSys(); loadDevices(); }
-  if (t === 'log') renderLog();
-  if (t === 'console') renderCon();
+const fmtClock = s => s >= 3600 ? `${Math.floor(s / 3600)}:${pad(Math.floor(s % 3600 / 60))}:${pad(s % 60)}` : `${pad(Math.floor(s / 60))}:${pad(s % 60)}`;
+const fmtApprox = s => s >= 600 ? '±' + fmtMin(s) : fmtClock(s);   // detik hanya untuk < 10 menit; sisanya perkiraan
+const hms = s => `${pad(Math.floor(s / 3600))}:${pad(Math.floor(s % 3600 / 60))}:${pad(s % 60)}`;
+const clock = (ms, epoch) => epoch ? new Date(epoch * 1000).toTimeString().slice(0, 8) : `+${Math.floor(ms / 1000)}s`;
+const fmtDate = e => e ? new Date(e * 1000).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '-';
+const setCallout = (el, icon, html) => { el.innerHTML = ic(icon) + '<div>' + html + '</div>'; };
+const guard = e => { if (e && e.message !== 'login') toast('Gagal: ' + e.message, 'err'); };
+function themeMode() { try { return localStorage.getItem('theme') || 'auto'; } catch { return 'auto'; } }
+function setTheme(m) {
+try { m === 'auto' ? localStorage.removeItem('theme') : localStorage.setItem('theme', m); } catch { }
+const el = document.documentElement;
+if (m === 'auto') delete el.dataset.theme; else el.dataset.theme = m;
+$$('[data-theme-set]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.themeSet === m)));
+$('#btnTheme').innerHTML = ic(m === 'light' ? 'sun' : m === 'dark' ? 'moon' : 'monitor');
 }
-
-// --------------------------------------------------------------- login ----
+$('#btnTheme').onclick = () => setTheme({ auto: 'light', light: 'dark', dark: 'auto' }[themeMode()]);
+$$('[data-theme-set]').forEach(b => b.onclick = () => setTheme(b.dataset.themeSet));
+setTheme(themeMode());
+const VIEWS = ['beranda', 'proses', 'manual', 'aktivitas', 'sistem'];
+let curView = 'beranda', curSeg = 'log';
+function show(v, seg) {
+if (!VIEWS.includes(v)) v = 'beranda';
+const changed = v !== curView;
+curView = v;
+$$('.view').forEach(x => x.classList.toggle('on', x.id === 'view-' + v));
+$$('.nav [data-view]').forEach(b => { if (b.dataset.view === v) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
+if (changed) { try { window.scrollTo({ top: 0 }); } catch { } }
+onView(v, seg);
+}
+function onView(v, seg) {
+if (v === 'beranda') renderHomeProses();
+if (v === 'proses') loadMeta().then(() => { loadSettings(); loadProses(); renderPalette(); });
+if (v === 'manual') { loadMeta().then(renderManual); renderRelays(); }
+if (v === 'aktivitas') actSeg(seg || curSeg);
+if (v === 'sistem') { loadSettings(); renderSys(); if (!REMOTE) { loadWifi(); loadDevices(); loadFw(); } }
+}
+$$('.nav [data-view]').forEach(b => b.onclick = () => { location.hash = '#' + b.dataset.view; show(b.dataset.view); });
+window.addEventListener('hashchange', () => { const [v, sg] = location.hash.slice(1).split('/'); if (VIEWS.includes(v)) show(v, sg); });
+function actSeg(seg) {
+if (seg === 'konsol' && REMOTE) seg = 'log';
+if (!['log', 'riwayat', 'konsol'].includes(seg)) seg = 'log';
+curSeg = seg;
+$$('#actSeg [data-seg]').forEach(b => b.classList.toggle('on', b.dataset.seg === seg));
+$$('.segpane').forEach(p => p.classList.toggle('on', p.id === 'seg-' + seg));
+if (seg === 'log') renderLog();
+if (seg === 'riwayat') loadHistory();
+if (seg === 'konsol') renderCon();
+}
+$$('#actSeg [data-seg]').forEach(b => b.onclick = () => actSeg(b.dataset.seg));
+$('#sysToc').addEventListener('click', e => { const b = e.target.closest('[data-go]'); if (b) $('#' + b.dataset.go).scrollIntoView({ behavior: 'smooth', block: 'start' }); });
 function showLogin() { $('#login').hidden = false; $('#app').hidden = true; clearTimeout(pollTimer); }
 $('#loginForm').onsubmit = async e => {
-  e.preventDefault();
-  const r = await api('/api/login', 'POST', { password: $('#pw').value, remember: $('#remember').checked }).catch(() => ({ ok: false, msg: 'Gagal terhubung' }));
-  if (r.ok) { $('#pw').value = ''; start(); } else $('#loginMsg').textContent = r.msg || 'Gagal';
+e.preventDefault();
+const r = await api('/api/login', 'POST', { password: $('#pw').value, remember: $('#remember').checked }).catch(() => ({ ok: false, msg: 'Gagal terhubung' }));
+if (r.ok) { $('#pw').value = ''; $('#loginMsg').textContent = ''; start(); } else $('#loginMsg').textContent = r.msg || 'Gagal';
 };
 $('#btnLogout').onclick = async () => { await api('/api/logout', 'POST'); showLogin(); };
-
-// ---------------------------------------------------------- data-cmd btn ----
 document.addEventListener('click', e => {
-  const b = e.target.closest('[data-cmd]'); if (!b) return;
-  cmd(b.dataset.cmd, b.dataset.args || '');
+const b = e.target.closest('[data-cmd]'); if (!b) return;
+cmd(b.dataset.cmd, b.dataset.args || '');
 });
 $('#btnStop').onclick = () => {
-  if (last && last.state !== 'idle' && !confirm('Hentikan Proses dan matikan semua relay?')) return;
-  cmd('stop');
+if (last && last.state !== 'idle' && !confirm('Hentikan Proses dan matikan semua relay?')) return;
+cmd('stop');
 };
-
-// ------------------------------------------------------------- status UI ----
 const STATE_TXT = { idle: 'Siap', running: 'Berjalan', paused: 'Dijeda', decide: 'Menunggu keputusan' };
-function renderStatus(s) {
-  last = s;
-  $('#app').hidden = false; $('#login').hidden = true;
-  const st = $('#chipState');
-  st.textContent = STATE_TXT[s.state] || s.state;
-  st.className = 'chip ' + (s.state === 'running' ? 'run' : s.state === 'paused' || s.state === 'decide' ? 'pause' : '');
-  const w = $('#chipWifi');
-  w.textContent = s.wifi.online ? `📶 ${s.wifi.ssid}` : '📴 offline';
-  w.className = 'chip' + (s.wifi.online ? '' : ' off');
-  const idle = s.state === 'idle';
-  $('#stage').textContent = idle ? 'Siap' : s.stage;
-  $('#detail').textContent = idle ? 'Pilih Proses di bawah' : (s.proses ? s.proses + ' · ' : '') + s.detail;
-  $('#stepLeft').textContent = idle ? '-' : fmt(s.stepLeft);
-  $('#totalLeft').textContent = idle ? '-' : '±' + fmt(s.totalLeft);
-  $('#water').textContent = s.water;
-  const p = idle ? 0 : s.progress;
-  $('#ringFg').style.strokeDashoffset = 327 * (1 - p / 100);
-  $('#ringText').textContent = idle ? '—' : p + '%';
-  $('#bannerResume').hidden = !s.resume.pending;
-  $('#resumeInfo').textContent = s.resume.info;
-  const bp = $('#bannerPause');
-  bp.hidden = s.state !== 'paused';
-  bp.textContent = '⏸ Dijeda oleh pengguna. Tekan Lanjutkan untuk meneruskan.';
-  renderDecision(s);
-  $('#bannerFault').hidden = !s.fault;
-  updateRelays(s);
-  $$('.prog, .cpRun').forEach(b => { b.disabled = !idle; });
-  const pl = $('#progLock'); pl.hidden = idle;
-  pl.textContent = idle ? '' : `Proses baru hanya bisa dimulai saat mesin siap. Sekarang: ${s.proses} (${s.stage}).`;
-  lastState = s.state;
-  if ($('#tab-system').classList.contains('on')) renderSys();
-  if ($('#tab-manual').classList.contains('on')) $('#manRun').disabled = !idle || s.fault;
-  if (s.otaBusy) { $('#fwBar').style.width = s.otaProgress + '%'; }
-  const key = s.state + '|' + (s.slot || 0);
-  if (renderStatus.key !== key) { renderStatus.key = key; if (prosesList) renderHomeProses(); }
+const RELAY_UI = { kiri: ['rotate', 1], kanan: ['rotate', 1], isi: ['drop', 0], buang: ['drain', 0], spin: ['spin', 1], pewangi: ['flower', 0] };
+const bars = r => r > -55 ? 4 : r > -65 ? 3 : r > -75 ? 2 : 1;
+function renderChips(s) {
+const st = $('#chipState');
+const run = s.state === 'running', hold = s.state === 'paused' || s.state === 'decide';
+st.className = 'chip' + (run ? ' run dot' : hold ? ' warn' : '');
+st.innerHTML = (run ? '' : ic(hold ? (s.state === 'decide' ? 'alert' : 'pause') : 'check')) + esc(STATE_TXT[s.state] || s.state);
+const w = $('#chipWifi');
+if (pollFails >= 2) { w.className = 'chip warn'; w.innerHTML = ic('refresh') + 'Menyambung ulang…'; }
+else if (s.wifi.online) { w.className = 'chip'; w.innerHTML = ic('wifi') + '<span class="ell">' + esc(s.wifi.ssid) + '</span>'; }
+else { w.className = 'chip err'; w.innerHTML = ic('wifi-off') + 'offline'; }
 }
-
-// Peringatan sebelum "Lanjut" (pemilik mungkin sedang di lokasi dan mengisi/membuang air sendiri)
+function renderStatus(s) {
+last = s;
+$('#app').hidden = false; $('#login').hidden = true;
+const idle = s.state === 'idle', waitStart = s.state === 'running' && s.step === 0;
+renderChips(s);
+const hero = $('#hero');
+hero.classList.toggle('idle', idle); hero.classList.toggle('live', !idle);
+$('#stage').textContent = waitStart ? 'Menunggu mulai' : STATE_TXT[s.state] || s.state;
+$('#heroName').textContent = idle ? 'Mesin siap' : (s.proses || 'Proses');
+$('#detail').textContent = idle ? 'Pilih Proses di bawah untuk mulai mencuci.' : s.detail || '';
+$('#totalLeft').textContent = idle ? '-' : fmtApprox(s.totalLeft);
+$('#etaAt').textContent = !idle && s.totalLeft > 0 ? 'selesai sekitar ' + new Date(Date.now() + s.totalLeft * 1000).toTimeString().slice(0, 5) : '';
+$('#stepLine').textContent = idle ? 'Tidak ada Proses berjalan' : s.stage || '';
+$('#stepLeft').textContent = idle ? '-' : waitStart ? fmtApprox(s.stepLeft) : fmtClock(s.stepLeft);
+const p = idle ? 0 : s.progress;
+$('#ringFg').style.strokeDashoffset = 327 * (1 - p / 100);
+$('#ringText').textContent = idle ? '—' : p + '%';
+const pb = $('#btnPause');
+const paused = s.state === 'paused';
+pb.dataset.cmd = paused ? 'lanjutkan' : 'jeda';
+pb.innerHTML = ic(paused ? 'play' : 'pause') + `<span>${paused ? 'Lanjutkan' : 'Jeda'}</span>`;
+pb.disabled = idle || s.state === 'decide';
+$('#btnSkip').disabled = idle; $('#btnStop').disabled = idle;
+$('#btnJob').disabled = idle; $('#btnJob2').disabled = idle;
+$('#bannerResume').hidden = !s.resume.pending;
+$('#resumeInfo').textContent = s.resume.info;
+$('#bannerFault').hidden = !s.fault;
+renderDecision(s);
+const nb = $('#navBadge'); nb.hidden = s.state !== 'decide';
+$('#navBadgeTxt').textContent = s.state === 'decide' ? 'Menunggu keputusan' : '';
+const wl = { penuh: 'Penuh', kosong: 'Tidak penuh', mengukur: 'Mengukur…' }[s.water] || s.water;
+$('#water').textContent = wl;
+$('#wdrop').setAttribute('class', 'ic wdrop' + (s.water === 'penuh' ? ' full' : s.water === 'mengukur' ? ' meas' : ''));
+const rl = s.relays || {};
+$('#relayMini').innerHTML = Object.keys(RELAY_UI).map(k => `<span class="rl${rl[k] ? ' on' : ''}${RELAY_UI[k][1] ? ' motor' : ''}">${ic(RELAY_UI[k][0])}${k}<span class="sr">${rl[k] ? 'menyala' : 'mati'}</span></span>`).join('');
+$('#connWifi').innerHTML = s.wifi.online ? `${esc(s.wifi.ssid)} <span class="bars" aria-label="sinyal ${bars(s.wifi.rssi)} dari 4">${[1, 2, 3, 4].map(i => `<i class="${i <= bars(s.wifi.rssi) ? 'on' : ''}"></i>`).join('')}</span>` : 'Offline';
+const rm = s.remote || {};
+$('#connSrv').textContent = !rm.configured ? 'Tidak diatur' : !rm.enabled ? 'Nonaktif' : rm.connected ? 'Terhubung' : 'Menyambung…';
+$('#connTime').textContent = s.wifi.time || '-';
+updateRelays(s);
+$$('.prog, .cpRun').forEach(b => { b.disabled = !idle; });
+const pl = $('#progLock'); pl.hidden = idle;
+pl.textContent = idle ? '' : `Proses baru hanya bisa dimulai saat mesin siap. Sekarang: ${s.proses} (${s.stage}).`;
+if (curView === 'sistem') renderSys();
+if (curView === 'manual') $('#manRun').disabled = !idle || s.fault;
+if (s.otaBusy) $('#fwBar').style.width = s.otaProgress + '%';
+const key = s.state + '|' + (s.slot || 0);
+if (renderStatus.key !== key) { renderStatus.key = key; if (prosesList) renderHomeProses(); }
+const jk = key + '|' + s.step + '|' + (s.manual ? 1 : 0);
+if (renderStatus.jk !== jk) {
+renderStatus.jk = jk;
+if (idle) { JOB = { active: false }; renderRail(); if (sheetOpen) renderJobSheet(); } else loadJob();
+}
+}
 const LANJUT_WARN = {
-  isi_gagal: 'Air mungkin belum cukup. Motor bisa berputar dengan air sedikit. Lanjut hanya bila Anda sudah mengisi air secara manual.',
-  buang_gagal: 'Air masih ada di tabung. Tahap berikutnya (mis. Spin) dengan air berat bisa merusak mesin. Lanjut hanya bila Anda sudah membuang air secara manual.',
-  spin_penuh: 'Air masih ada di tabung. Spin dengan air berat bisa merusak mesin. Lanjut hanya bila Anda yakin tabung sudah aman.',
-  cek_gagal: 'Syarat air belum terpenuhi. Lanjut hanya bila Anda yakin kondisi air sudah aman.',
+isi_gagal: 'Air mungkin belum cukup. Motor bisa berputar dengan air sedikit. Lanjut hanya bila Anda sudah mengisi air secara manual.',
+buang_gagal: 'Air masih ada di tabung. Tahap berikutnya (mis. Spin) dengan air berat bisa merusak mesin. Lanjut hanya bila Anda sudah membuang air secara manual.',
+spin_penuh: 'Air masih ada di tabung. Spin dengan air berat bisa merusak mesin. Lanjut hanya bila Anda yakin tabung sudah aman.',
+cek_gagal: 'Syarat air belum terpenuhi. Lanjut hanya bila Anda yakin kondisi air sudah aman.',
 };
 function renderDecision(s) {
-  const card = $('#decisionCard');
-  const d = s.state === 'decide' ? s.decision : null;
-  card.hidden = !d;
-  if (!d) { renderDecision.key = ''; return; }
-  const key = d.code + '|' + d.opts.join(',');
-  if (renderDecision.key === key) { $('#decMsg').textContent = d.msg; return; }
-  renderDecision.key = key;
-  $('#decMsg').textContent = d.msg;
-  $('#decTitle').textContent = `Menunggu keputusan · ${s.proses}`;
-  $('#decBtns').innerHTML = d.opts.map((o, i) => `<button class="btn ${o === 'batal' ? 'danger' : o === 'lanjut' || o === 'ulang' || o === 'buang' ? 'primary' : ''}" data-dec="${o}">${esc(d.labels[i])}</button>`).join('');
-  $$('#decBtns [data-dec]').forEach(b => b.onclick = async () => {
-    const o = b.dataset.dec;
-    if (o === 'lanjut' && LANJUT_WARN[d.code] && !confirm('⚠ ' + LANJUT_WARN[d.code] + '\n\nTetap lanjutkan?')) return;
-    if (o === 'batal' && !confirm('Batalkan Proses ini dan matikan semua relay?')) return;
-    try {
-      const r = await api('/api/decide', 'POST', { pilih: o });
-      toast((r.ok ? '' : '⚠ ') + r.msg);
-      pollOnce();
-    } catch (e) { if (e.message !== 'login') toast('Gagal: ' + e.message); }
-  });
+const card = $('#decisionCard');
+const d = s.state === 'decide' ? s.decision : null;
+card.hidden = !d;
+if (!d) { renderDecision.key = ''; return; }
+const key = d.code + '|' + d.opts.join(',');
+$('#decMsg').textContent = d.msg;
+if (renderDecision.key === key) return;
+renderDecision.key = key;
+$('#decTitle').textContent = `Menunggu keputusan · ${s.proses}`;
+$('#decBtns').innerHTML = d.opts.map((o, i) => `<button class="btn ${o === 'batal' ? 'dout' : o === 'lanjut' || o === 'ulang' || o === 'buang' ? 'primary' : ''}" data-dec="${o}">${esc(d.labels[i])}</button>`).join('');
+$$('#decBtns [data-dec]').forEach(b => b.onclick = async () => {
+const o = b.dataset.dec;
+if (o === 'lanjut' && LANJUT_WARN[d.code] && !confirm('Peringatan: ' + LANJUT_WARN[d.code] + '\n\nTetap lanjutkan?')) return;
+if (o === 'batal' && !confirm('Batalkan Proses ini dan matikan semua relay?')) return;
+try { toastR(await api('/api/decide', 'POST', { pilih: o })); pollOnce(); } catch (e) { guard(e); }
+});
 }
-
-// ------------------------------------------------------------- pengaturan ----
+let JOB = null, jobBusy = false, jobRetry = null;
+const TAHAP_ICON = { isi: 'drop', buang: 'drain', putar: 'rotate', soak: 'soak', rendam: 'moon', spin: 'spin', pewangi: 'flower', tunggu: 'timer', cek: 'search', tindakan: 'user', notif: 'bell', buang_manual: 'drain', uji: 'bolt' };
+const tIcon = t => ic(TAHAP_ICON[t] || 'layers');
+const tLabel = t => t === 'uji' ? 'Uji relay' : (typeMeta(t) || {}).label || t;
+async function loadJob() {
+if (jobBusy) return;
+jobBusy = true;
+try {
+const r = await api('/api/job');
+if (r && r.ok === false) { clearTimeout(jobRetry); jobRetry = setTimeout(loadJob, 1500); } else JOB = r;   // 503: sibuk, coba lagi
+} catch { } finally { jobBusy = false; }
+renderRail(); if (sheetOpen) renderJobSheet();
+}
+const jobCur = () => JOB.waiting ? -1 : JOB.idx;
+function renderRail() {
+const host = $('#railMini');
+if (!JOB || !JOB.active) { host.innerHTML = '<p class="muted">Pilih Proses di bawah untuk memulai. Urutan Tahap tampil di sini saat berjalan.</p>'; return; }
+const cur = jobCur(), n = JOB.count;
+const from = Math.max(0, Math.min(Math.max(cur, 0) - 1, n - 5)), to = Math.min(n, from + 5);
+let h = '<ol class="rail">';
+for (let i = from; i < to; i++) {
+const t = JOB.tahap[i], c = i < cur ? 'done' : i === cur ? 'run' : '';
+h += `<li class="${c}"><span class="node"></span><span class="tl">${esc(tLabel(t.t))}</span><span class="st">${i < cur ? 'selesai' : i === cur ? 'berjalan' : 'antre'}</span></li>`;
+}
+h += '</ol>';
+if (from > 0 || to < n) h += `<p class="more">${from > 0 ? from + ' sebelumnya · ' : ''}${to < n ? n - to + ' berikutnya' : ''}</p>`;
+host.innerHTML = h;
+}
+const fmtNum = v => String(v).replace('.', ',');
+function fieldVal(f, v) {
+if (f.kind === 'enum') { const i = f.opts.indexOf(v); return i >= 0 ? f.optLabels[i] : String(v); }
+if (f.kind === 'choice') return `${v}${f.unit ? ' ' + f.unit : ''}`;
+if (f.kind === 'cup') return fmtNum(v) + ' cup';
+if (f.kind === 'text') return String(v);
+if (f.fmt === 'hms') return hms(v);
+return `${v}${f.unit ? ' ' + f.unit : ''}`;
+}
+function tahapRows(t) {
+if (t.t === 'uji') return `<div><dt>Relay</dt><dd>${esc(t.relay)}</dd></div><div><dt>Lama</dt><dd>${t.detik} dtk</dd></div>`;
+const m = typeMeta(t.t); if (!m) return '';
+return m.fields.filter(f => applies(f, t) && t[f.k] !== undefined)
+.map(f => `<div class="${f.kind === 'text' ? 'wide' : ''}"><dt>${esc(f.label)}</dt><dd>${esc(fieldVal(f, t[f.k]))}</dd></div>`).join('');
+}
+function renderJobSheet() {
+const list = $('#jobList');
+if (!JOB || !JOB.active) {
+$('#jobSub').textContent = '';
+list.innerHTML = '<div class="empty"><p>Tidak ada Proses berjalan.</p></div>';
+return;
+}
+const cur = jobCur(), n = JOB.count, s = last || {};
+$('#jobTitle').textContent = JOB.name;
+const left = s.totalLeft || 0;
+$('#jobSub').textContent = JOB.waiting ? `Menunggu mulai · ${n} Tahap` : `Tahap ${Math.min(cur + 1, n)} dari ${n}` + (left ? ` · sisa ${fmtApprox(left)} · selesai ±${new Date(Date.now() + left * 1000).toTimeString().slice(0, 5)}` : '');
+const keep = list.scrollTop;
+let h = '<div class="tl-rail">';
+if (JOB.waiting) h += `<div class="tcard run wait"><div class="thead">${ic('clock')}<div class="tt"><b>Menunggu mulai</b><small>Proses mulai otomatis</small></div><span class="badge-st">${fmtApprox(s.stepLeft || JOB.waitLeft)}</span></div></div>`;
+JOB.tahap.forEach((t, i) => {
+const st = i < cur ? 'done' : i === cur ? 'run' : '';
+const label = i < cur ? 'Selesai' : i === cur ? 'Berjalan' : 'Antre';
+const live = i === cur ? `<div class="tlive"><span>${esc(s.detail || JOB.detail || '')}</span><b>sisa ${fmtClock(s.stepLeft || 0)}</b></div>` : '';
+h += `<div class="tcard ${st}" data-i="${i}"><div class="thead" role="button" tabindex="0" aria-expanded="${st !== 'done'}"><span class="tico">${tIcon(t.t)}</span>
+<div class="tt"><b>${i + 1}. ${esc(tLabel(t.t))}</b><small>±${fmtMin(t.est)}</small></div><span class="badge-st">${label}</span></div>
+<dl class="tfields">${tahapRows(t)}</dl>${live}</div>`;
+});
+list.innerHTML = h + '</div>';
+list.scrollTop = keep;
+}
+let sheetOpen = false, sheetOpener = null;
+async function openSheet() {
+if (sheetOpen || !last || last.state === 'idle') return;
+sheetOpen = true; sheetOpener = document.activeElement;
+const sh = $('#jobSheet'); sh.hidden = false;
+await loadMeta();
+renderJobSheet();
+requestAnimationFrame(() => sh.classList.add('open'));
+$('#jobPanel').focus();
+loadJob();
+setTimeout(() => { const c = $('#jobList .tcard.run'); if (c) c.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 80);
+}
+function closeSheet() {
+if (!sheetOpen) return;
+sheetOpen = false;
+const sh = $('#jobSheet'); sh.classList.remove('open');
+setTimeout(() => { if (!sheetOpen) sh.hidden = true; }, 180);
+if (sheetOpener && sheetOpener.focus) sheetOpener.focus();
+}
+$('#btnJob').onclick = openSheet; $('#btnJob2').onclick = openSheet;
+$('#jobClose').onclick = closeSheet;
+$('#jobSheet').addEventListener('click', e => {
+if (e.target.closest('[data-close]')) return closeSheet();
+const h = e.target.closest('.thead'); if (h) { const c = h.closest('.tcard'); c.classList.toggle('open'); h.setAttribute('aria-expanded', String(c.classList.contains('open') || !c.classList.contains('done'))); }
+});
+$('#jobSheet').addEventListener('keydown', e => {
+if (e.key === 'Escape') return closeSheet();
+if (e.key === 'Tab') {   // fokus terkunci di dalam sheet
+const f = $$('button,[tabindex="0"],[href]', $('#jobPanel')).filter(x => !x.disabled);
+if (!f.length) return;
+const a = f[0], z = f[f.length - 1];
+if (e.shiftKey && document.activeElement === a) { e.preventDefault(); z.focus(); }
+else if (!e.shiftKey && document.activeElement === z) { e.preventDefault(); a.focus(); }
+}
+if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('thead')) { e.preventDefault(); e.target.click(); }
+});
 async function loadSettings() {
-  try { settings = await api('/api/settings'); } catch { return; }
-  const s = settings;
-  $('#sNotif').value = ['lengkap', 'ringkas', 'senyap'][s.notif];
-  $('#calibNote').textContent = s.calib.nFill ? `Rata-rata isi penuh ${fmt(s.calib.fillSec)} (${s.calib.nFill} sampel). Mode isi "persen" memakai data ini.` : 'Belum ada data kalibrasi: mode isi "persen" memakai sensor sampai ada 1 pengisian penuh dengan mode sensor.';
-  const sel = $('#startMode').querySelector('option[value=selesai]');
-  if (sel) sel.disabled = !s.timeSynced;
-  $('#startNote').textContent = s.timeSynced ? '' : 'Jam belum sinkron (butuh internet): "Selesai pada jam" belum tersedia, gunakan tunda.';
+try { settings = await api('/api/settings'); } catch { return; }
+const s = settings, nm = ['lengkap', 'ringkas', 'senyap'][s.notif];
+$('#sNotif').value = nm;
+$$('#notifSeg [data-notif]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.notif === nm)));
+$('#calibNote').textContent = s.calib.nFill ? `Rata-rata isi penuh ${fmt(s.calib.fillSec)} (${s.calib.nFill} sampel). Mode isi "persen" memakai data ini.` : 'Belum ada data kalibrasi: mode isi "persen" memakai sensor sampai ada 1 pengisian penuh dengan mode sensor.';
+const sel = $('[data-sm=selesai]');
+sel.disabled = !s.timeSynced;
+if (!s.timeSynced && $('#startMode').value === 'selesai') setStartMode('now');
+$('#startNote').textContent = s.timeSynced ? '' : 'Jam belum sinkron (butuh internet): "Selesai pada jam" belum tersedia, gunakan tunda.';
 }
-$('#btnNotif').onclick = () => cmd('notif', $('#sNotif').value);
+$('#notifSeg').addEventListener('click', e => { const b = e.target.closest('[data-notif]'); if (b) { $('#sNotif').value = b.dataset.notif; cmd('notif', b.dataset.notif); } });
 $('#btnResetAll').onclick = () => confirm('Reset pengaturan ke default?') && cmd('reset_semua');
 $('#btnCalib').onclick = () => confirm('Reset data kalibrasi waktu isi?') && cmd('kalibrasi_air');
-
-// ------------------------------------------------------------------ Relay ----
 const RELAYS = [['kiri', 'Motor putar kiri', 'GPIO25'], ['kanan', 'Motor putar kanan', 'GPIO18'], ['isi', 'Valve isi air', 'GPIO17'],
-  ['buang', 'Motor valve buang', 'GPIO16'], ['spin', 'Motor spin', 'GPIO4'], ['pewangi', 'Pompa pewangi', 'GPIO13']];
+['buang', 'Motor valve buang', 'GPIO16'], ['spin', 'Motor spin', 'GPIO4'], ['pewangi', 'Pompa pewangi', 'GPIO13']];
 function renderRelays() {
-  const host = $('#relayCards');
-  if (host.dataset.ready) return;
-  host.dataset.ready = '1';
-  host.innerHTML = RELAYS.map(([k, label, pin]) => `<div class="card relayCard">
-    <div class="info"><span class="led" id="led-${k}"></span><div><b>${label}</b><br><span class="muted">${k} · ${pin}</span><br><span class="lockhint" id="hint-${k}"></span></div></div>
-    <div class="row" style="margin:0"><button class="btn primary" data-rl="${k}" data-on="1">ON</button><button class="btn" data-rl="${k}" data-on="0">OFF</button></div></div>`).join('');
-  $$('[data-rl]', host).forEach(b => b.onclick = () => cmd('relay', `${b.dataset.rl} ${b.dataset.on === '1' ? 'on' : 'off'}`));
+const host = $('#relayCards');
+if (host.dataset.ready) return;
+host.dataset.ready = '1';
+host.innerHTML = RELAYS.map(([k, label, pin]) => `<div class="rcard"><div class="top2"><span class="led" id="led-${k}"></span><div><b>${label}</b><br><small>${k} · ${pin}</small></div></div>
+<div class="seg" role="group" aria-label="${label}"><button type="button" data-rl="${k}" data-on="1">ON</button><button type="button" data-rl="${k}" data-on="0">OFF</button></div>
+<span class="lockhint" id="hint-${k}"></span></div>`).join('');
+$$('[data-rl]', host).forEach(b => b.onclick = () => cmd('relay', `${b.dataset.rl} ${b.dataset.on === '1' ? 'on' : 'off'}`));
 }
 function updateRelays(s) {
-  renderRelays();
-  const on = s.relays || {};
-  const busy = s.state !== 'idle';
-  const seq = busy && s.proses === 'Kalibrasi relay';
-  const lock = $('#relayLock');
-  if (s.fault) { lock.hidden = false; lock.textContent = '❌ Relay terkunci karena pelanggaran interlock. Restart mesin untuk membuka kunci.'; }
-  else if (busy && !seq) {
-    lock.hidden = false;
-    lock.textContent = `🔒 Kontrol manual & uji dikunci: ada Proses ${s.state === 'running' ? 'berjalan' : 'yang menunggu/dijeda'} (${s.proses}, ${s.stage}). Hentikan dulu di Beranda.`;
-  } else lock.hidden = true;
-  const conflict = {
-    kiri: on.kanan ? 'Motor kanan sedang aktif, matikan dulu' : on.buang ? 'Valve buang sedang aktif, matikan dulu' : '',
-    kanan: on.kiri ? 'Motor kiri sedang aktif, matikan dulu' : on.buang ? 'Valve buang sedang aktif, matikan dulu' : '',
-    isi: on.buang ? 'Valve buang sedang aktif, matikan dulu' : '',
-    buang: on.isi ? 'Valve isi sedang aktif, matikan dulu' : (on.kiri || on.kanan) ? 'Motor cuci sedang aktif, matikan dulu' : '',
-  };
-  RELAYS.forEach(([k]) => {
-    const l = $('#led-' + k); if (l) l.classList.toggle('on', !!on[k]);
-    const onBtn = $(`[data-rl="${k}"][data-on="1"]`), offBtn = $(`[data-rl="${k}"][data-on="0"]`);
-    const c = conflict[k] || '';
-    const blocked = busy || s.fault;
-    if (onBtn) { onBtn.disabled = blocked || !!c || !!on[k]; onBtn.title = c; }
-    if (offBtn) offBtn.disabled = blocked || !on[k];
-    const h = $('#hint-' + k);
-    if (h) h.textContent = !blocked && c && !on[k] ? '🔒 ' + c : '';
-  });
-  $('#btnSeq').disabled = busy || s.fault;
-  const bp = $('#relayProgress');
-  bp.hidden = !seq;
-  if (seq) bp.textContent = `Uji berurutan: ${s.detail} (langkah ${s.step}/${s.steps})`;
+renderRelays();
+const on = s.relays || {}, busy = s.state !== 'idle', seq = busy && s.proses === 'Kalibrasi relay';
+const lock = $('#relayLock');
+if (s.fault) { lock.hidden = false; setCallout(lock, 'lock', 'Relay terkunci karena pelanggaran interlock. Restart mesin untuk membuka kunci.'); }
+else if (busy && !seq) { lock.hidden = false; setCallout(lock, 'lock', esc(`Kontrol manual dan uji dikunci: ada Proses ${s.state === 'running' ? 'berjalan' : 'yang menunggu/dijeda'} (${s.proses}, ${s.stage}). Hentikan dulu di Beranda.`)); }
+else lock.hidden = true;
+const conflict = {
+kiri: on.kanan ? 'Motor kanan sedang aktif, matikan dulu' : on.buang ? 'Valve buang sedang aktif, matikan dulu' : '',
+kanan: on.kiri ? 'Motor kiri sedang aktif, matikan dulu' : on.buang ? 'Valve buang sedang aktif, matikan dulu' : '',
+isi: on.buang ? 'Valve buang sedang aktif, matikan dulu' : '',
+buang: on.isi ? 'Valve isi sedang aktif, matikan dulu' : (on.kiri || on.kanan) ? 'Motor cuci sedang aktif, matikan dulu' : '',
+};
+RELAYS.forEach(([k]) => {
+const l = $('#led-' + k); if (l) l.classList.toggle('on', !!on[k]);
+const onBtn = $(`[data-rl="${k}"][data-on="1"]`), offBtn = $(`[data-rl="${k}"][data-on="0"]`);
+const c = conflict[k] || '', blocked = busy || s.fault;
+if (onBtn) { onBtn.disabled = blocked || !!c || !!on[k]; onBtn.title = c; onBtn.classList.toggle('on', !!on[k]); }
+if (offBtn) { offBtn.disabled = blocked || !on[k]; offBtn.classList.toggle('on', !on[k]); }
+const h = $('#hint-' + k);
+if (h) h.textContent = !blocked && c && !on[k] ? 'Terkunci: ' + c : '';
+});
+$('#btnSeq').disabled = busy || s.fault;
+const bp = $('#relayProgress');
+bp.hidden = !seq;
+if (seq) $('div', bp).textContent = `Uji berurutan: ${s.detail} (langkah ${s.step}/${s.steps})`;
 }
 $('#btnSeq').onclick = () => cmd('kalibrasi_relay', $('#seqSecs').value || 3);
 $('#btnSeqStop').onclick = () => cmd('stop');
 $('#btnAllOff').onclick = () => cmd('relay', 'semua off');
-
-// ----------------------------------------------------------------- WiFi ----
 async function loadWifi() {
-  const w = await api('/api/wifi');
-  $('#wifiInfo').innerHTML = `<b>Hotspot:</b> ${w.apOn ? esc(w.ap) + ' AKTIF (192.168.4.1)' : 'nonaktif (menyala otomatis bila semua WiFi gagal)'}<br><b>Jaringan:</b> ${w.online ? esc(w.ssid) + ' · ' + esc(w.ip) + ' · ' + w.rssi + ' dBm' : 'offline'}`;
-  $('#wifiList').innerHTML = w.networks.map(n => `<div class="card wifirow"><div><b>${n.i}. ${esc(n.ssid)}</b> ${n.active ? '✅' : ''}<br><span class="muted">${n.secured ? '••••' : 'terbuka'}</span></div>
-    <div class="row" style="margin:0"><button class="btn" data-up="${n.i}">↑</button><button class="btn" data-dn="${n.i}">↓</button><button class="btn danger" data-del="${n.i}">Hapus</button></div></div>`).join('') || '<p class="muted">Belum ada WiFi.</p>';
-  $$('[data-del]').forEach(b => b.onclick = async () => { await cmd('wifi_hapus', b.dataset.del); loadWifi(); });
-  $$('[data-up]').forEach(b => b.onclick = async () => { const i = +b.dataset.up; if (i > 1) { await cmd('wifi_urutan', `${i} ${i - 1}`); loadWifi(); } });
-  $$('[data-dn]').forEach(b => b.onclick = async () => { const i = +b.dataset.dn; if (i < w.networks.length) { await cmd('wifi_urutan', `${i} ${i + 1}`); loadWifi(); } });
+let w; try { w = await api('/api/wifi'); } catch { return; }
+$('#wifiInfo').innerHTML = `<b>Hotspot:</b> ${w.apOn ? esc(w.ap) + ' aktif (192.168.4.1)' : 'nonaktif (menyala otomatis bila semua WiFi gagal)'}<br><b>Jaringan:</b> ${w.online ? esc(w.ssid) + ' · ' + esc(w.ip) + ' · ' + w.rssi + ' dBm' : 'offline'}`;
+$('#wifiList').innerHTML = w.networks.map(n => `<div class="wifirow"><div><b>${n.i}. ${esc(n.ssid)}</b> ${n.active ? '<span class="chip ok">aktif</span>' : ''}<br><small>${n.secured ? 'berkata sandi' : 'terbuka'}</small></div>
+<div class="row"><button class="icon-btn" data-up="${n.i}" aria-label="Naikkan">${ic('up')}</button><button class="icon-btn" data-dn="${n.i}" aria-label="Turunkan">${ic('down')}</button><button class="icon-btn" data-del="${n.i}" aria-label="Hapus ${esc(n.ssid)}">${ic('trash')}</button></div></div>`).join('') || '<p class="muted">Belum ada WiFi.</p>';
+$$('[data-del]').forEach(b => b.onclick = async () => { await cmd('wifi_hapus', b.dataset.del); loadWifi(); });
+$$('[data-up]').forEach(b => b.onclick = async () => { const i = +b.dataset.up; if (i > 1) { await cmd('wifi_urutan', `${i} ${i - 1}`); loadWifi(); } });
+$$('[data-dn]').forEach(b => b.onclick = async () => { const i = +b.dataset.dn; if (i < w.networks.length) { await cmd('wifi_urutan', `${i} ${i + 1}`); loadWifi(); } });
 }
 $('#wifiForm').onsubmit = async e => {
-  e.preventDefault();
-  const r = await api('/api/wifi', 'POST', { ssid: $('#wSsid').value, pass: $('#wPass').value });
-  toast((r.ok ? '' : '⚠ ') + r.msg);
-  if (r.ok) { $('#wSsid').value = ''; $('#wPass').value = ''; setTimeout(loadWifi, 400); }
+e.preventDefault();
+try {
+const r = await api('/api/wifi', 'POST', { ssid: $('#wSsid').value, pass: $('#wPass').value });
+toastR(r);
+if (r.ok) { $('#wSsid').value = ''; $('#wPass').value = ''; setTimeout(loadWifi, 400); }
+} catch (x) { guard(x); }
 };
-
-// ------------------------------------------------------------ Log & konsol ----
 const LV = ['DEBUG', 'INFO', 'STEP', 'WARN', 'ERROR', 'DONE', 'NOTIF'];
-function lineHtml(e) { return `<div class="l-${e.l}">${clock(e.t, e.e)} ${(LV[e.l] || '?').padEnd(5)} ${esc(e.m)}</div>`; }
+const LVTXT = ['debug', 'info', 'tahap', 'warn', 'galat', 'selesai', 'notif'];
+const lineHtml = e => `<div class="l-${e.l}">${clock(e.t, e.e)} ${(LV[e.l] || '?').padEnd(5)} ${esc(e.m)}</div>`;
+const logRow = e => `<div class="lr l-${e.l}"><time>${clock(e.t, e.e)}</time><i>${LVTXT[e.l] || '?'}</i><span>${esc(e.m)}</span></div>`;
 function addEntries(list, live) {
-  let alertEntry = null;
-  for (const e of list) {
-    if (e.s <= lastSeq) continue;
-    lastSeq = e.s; logLines.push(e); conLines.push(e);
-    if (live && (e.l === 3 || e.l === 4 || e.l === 6)) alertEntry = e;   // WARN / ERROR / NOTIF dari mesin
-  }
-  if (alertEntry) toast((alertEntry.l === 4 ? '❌ ' : alertEntry.l === 6 ? '📣 ' : '⚠ ') + alertEntry.m);
-  if (logLines.length > 400) logLines.splice(0, logLines.length - 400);
-  if (conLines.length > 600) conLines.splice(0, conLines.length - 600);
-  if ($('#tab-log').classList.contains('on')) renderLog();
-  if ($('#tab-console').classList.contains('on') && !conPaused) renderCon();
+let alertEntry = null;
+for (const e of list) {
+if (e.s <= lastSeq) continue;
+lastSeq = e.s; logLines.push(e); conLines.push(e);
+if (live && (e.l === 3 || e.l === 4 || e.l === 6)) alertEntry = e;   // WARN / ERROR / NOTIF dari mesin
+}
+if (alertEntry) toast(alertEntry.m, alertEntry.l === 4 ? 'err' : alertEntry.l === 6 ? 'info' : 'warn');
+if (logLines.length > 400) logLines.splice(0, logLines.length - 400);
+if (conLines.length > 600) conLines.splice(0, conLines.length - 600);
+if (curView === 'aktivitas') { if (curSeg === 'log') renderLog(); if (curSeg === 'konsol' && !conPaused) renderCon(); }
 }
 function renderLog() {
-  const min = +$('#logLevel').value, box = $('#logBox');
-  const stick = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
-  box.innerHTML = logLines.filter(e => e.l >= min).map(lineHtml).join('');
-  if (stick) box.scrollTop = box.scrollHeight;
+const min = +$('#logLevel').value, box = $('#logBox');
+const stick = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
+const rows = logLines.filter(e => e.l >= min);
+box.innerHTML = rows.map(logRow).join('') || '<p class="muted" style="padding:12px">Belum ada catatan pada tingkat ini.</p>';
+if (stick) box.scrollTop = box.scrollHeight;
 }
-function renderCon() {
-  const box = $('#conBox');
-  box.innerHTML = conLines.map(lineHtml).join('');
-  box.scrollTop = box.scrollHeight;
-}
+function renderCon() { const box = $('#conBox'); box.innerHTML = conLines.map(lineHtml).join(''); box.scrollTop = box.scrollHeight; }
 $('#logLevel').onchange = renderLog;
-$('#conPause').onclick = e => { conPaused = !conPaused; e.target.textContent = conPaused ? '▶ Lanjut' : '⏸ Pause'; if (!conPaused) renderCon(); };
+$('#logFilters').addEventListener('click', e => {
+const b = e.target.closest('[data-lv]'); if (!b) return;
+$('#logLevel').value = b.dataset.lv;
+$$('#logFilters [data-lv]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+renderLog();
+});
+$('#conPause').onclick = e => { conPaused = !conPaused; e.target.textContent = conPaused ? 'Lanjut' : 'Jeda'; if (!conPaused) renderCon(); };
 $('#conClear').onclick = () => { conLines = []; renderCon(); };
 $('#conDl').onclick = () => {
-  const txt = conLines.map(e => `${clock(e.t, e.e)} ${LV[e.l]} ${e.m}`).join('\n');
-  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt], { type: 'text/plain' }));
-  a.download = 'konsol-mesin-cuci.txt'; a.click();
+const txt = conLines.map(e => `${clock(e.t, e.e)} ${LV[e.l]} ${e.m}`).join('\n');
+const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt], { type: 'text/plain' }));
+a.download = 'konsol-mesin-cuci.txt'; a.click();
 };
 $('#conTrace').onclick = async () => {
-  const r = await api('/api/console');
-  $('#conBox').textContent = `Alasan reset terakhir: ${r.reset}\n--- ±40 baris terakhir sebelum restart ---\n${r.trace || '(tidak ada)'}`;
+const r = await api('/api/console');
+$('#conBox').textContent = `Alasan reset terakhir: ${r.reset}\n--- ±40 baris terakhir sebelum restart ---\n${r.trace || '(tidak ada)'}`;
 };
 $('#conForm').onsubmit = async e => {
-  e.preventDefault();
-  const v = $('#conIn').value.trim(); if (!v) return;
-  $('#conIn').value = '';
-  await api('/api/console', 'POST', { line: v }).catch(() => { });
-  pollOnce();
+e.preventDefault();
+const v = $('#conIn').value.trim(); if (!v) return;
+$('#conIn').value = '';
+await api('/api/console', 'POST', { line: v }).catch(() => { });
+pollOnce();
 };
 async function pollLogs() {
-  try { const r = await api('/api/poll?since=' + lastSeq); addEntries(r.log.entries); return r.log.entries.length; } catch { return 0; }
+try { const r = await api('/api/poll?since=' + lastSeq); addEntries(r.log.entries); return r.log.entries.length; } catch { return 0; }
 }
-// Server membatasi 30 entri per balasan (hemat memori); ambil lanjutannya sampai habis.
 async function fetchLogsAll() { for (let i = 0; i < 6; i++) { if ((await pollLogs()) < 30) break; } }
-
-// -------------------------------------------------------- riwayat/fw/sistem ----
 async function loadHistory() {
-  const r = await api('/api/history');
-  const st = r.stats;
-  $('#statsBox').innerHTML = `<b>Total Proses selesai:</b> ${st.cycles}<br><b>Motor cuci menyala:</b> ${(st.motorSec / 3600).toFixed(1)} jam<br><b>Rata-rata isi penuh:</b> ${st.avgFillSec ? fmt(st.avgFillSec) : '-'}`;
-  $('#histList').innerHTML = r.history.map(h => `<div class="hist"><div><b>${esc(h.proses)}</b><br><span class="muted">${h.start ? new Date(h.start * 1000).toLocaleString('id-ID') : '-'}</span></div><div style="text-align:right">${fmt(h.dur)}<br><span class="muted">${h.result}</span></div></div>`).join('') || '<p class="muted">Belum ada riwayat.</p>';
+let r; try { r = await api('/api/history'); } catch { return; }
+if (!r.stats) return;
+const st = r.stats;
+$('#statsBox').innerHTML = `<div class="stat"><b>${st.cycles}</b><small>Proses selesai</small></div><div class="stat"><b>${(st.motorSec / 3600).toFixed(1)} j</b><small>Motor cuci menyala</small></div><div class="stat"><b>${st.avgFillSec ? fmt(st.avgFillSec) : '-'}</b><small>Rata-rata isi penuh</small></div>`;
+const rc = { selesai: 'done', dihentikan: 'stop', error: 'err' };
+$('#histList').innerHTML = r.history.map(h => `<div class="hist"><div><b>${esc(h.proses)}</b><br><small>${h.start ? new Date(h.start * 1000).toLocaleString('id-ID') : '-'}</small></div><div style="text-align:right">${fmt(h.dur)}<br><span class="res ${rc[h.result] || ''}">${esc(h.result)}</span></div></div>`).join('') || '<p class="muted">Belum ada riwayat.</p>';
 }
 async function loadFw() {
-  const i = await api('/api/update/info');
-  $('#fwInfo').innerHTML = `<b>Versi aktif:</b> ${esc(i.version)} · ${esc(i.build)}<br><b>Partisi:</b> ${i.running} (cadangan: ${i.other})<br><b>Ukuran firmware:</b> ${(i.sketchSize / 1024).toFixed(0)} KB · ruang ${(i.freeSpace / 1024).toFixed(0)} KB<br><b>Versi sebelumnya:</b> ${i.canRollback ? esc(i.previousBuild || 'tersedia') : 'tidak ada'}`;
-  $('#btnRollback').disabled = !i.canRollback;
+let i; try { i = await api('/api/update/info'); } catch { return; }
+if (!i.version) return;
+$('#fwInfo').innerHTML = `<div class="kv"><span>Versi aktif</span><b>${esc(i.version)} · ${esc(i.build)}</b></div><div class="kv"><span>Partisi</span><b>${i.running} (cadangan: ${i.other})</b></div><div class="kv"><span>Ukuran / ruang</span><b>${(i.sketchSize / 1024).toFixed(0)} KB / ${(i.freeSpace / 1024).toFixed(0)} KB</b></div><div class="kv"><span>Versi sebelumnya</span><b>${i.canRollback ? esc(i.previousBuild || 'tersedia') : 'tidak ada'}</b></div>`;
+$('#btnRollback').disabled = !i.canRollback;
 }
 $('#btnFlash').onclick = () => {
-  const f = $('#fwFile').files[0];
-  if (!f) return toast('Pilih file .bin dulu');
-  if (last && last.state !== 'idle') return toast('Mesin sedang bekerja. Hentikan Proses dulu.');
-  if (!confirm(`Flash ${f.name} (${(f.size / 1024).toFixed(0)} KB)? Mesin akan restart.`)) return;
-  const fd = new FormData(); fd.append('firmware', f, f.name);
-  const x = new XMLHttpRequest(); x.open('POST', '/api/update');
-  x.upload.onprogress = e => { if (e.lengthComputable) { const p = Math.round(e.loaded / e.total * 100); $('#fwBar').style.width = p + '%'; $('#fwMsg').textContent = `Mengunggah ${p}%`; } };
-  x.onload = () => { let r = {}; try { r = JSON.parse(x.responseText); } catch { } $('#fwMsg').textContent = r.msg || 'Selesai'; toast(r.msg || 'Selesai'); if (r.ok) setTimeout(() => location.reload(), 9000); };
-  x.onerror = () => { $('#fwMsg').textContent = 'Koneksi terputus (mesin mungkin sedang restart).'; };
-  x.send(fd);
+const f = $('#fwFile').files[0];
+if (!f) return toast('Pilih file .bin dulu', 'warn');
+if (last && last.state !== 'idle') return toast('Mesin sedang bekerja. Hentikan Proses dulu.', 'warn');
+if (!confirm(`Flash ${f.name} (${(f.size / 1024).toFixed(0)} KB)? Mesin akan restart.`)) return;
+const fd = new FormData(); fd.append('firmware', f, f.name);
+const x = new XMLHttpRequest(); x.open('POST', '/api/update');
+x.upload.onprogress = e => { if (e.lengthComputable) { const p = Math.round(e.loaded / e.total * 100); $('#fwBar').style.width = p + '%'; $('#fwMsg').textContent = `Mengunggah ${p}%`; } };
+x.onload = () => { let r = {}; try { r = JSON.parse(x.responseText); } catch { } $('#fwMsg').textContent = r.msg || 'Selesai'; toast(r.msg || 'Selesai', r.ok ? 'ok' : 'warn'); if (r.ok) setTimeout(() => location.reload(), 9000); };
+x.onerror = () => { $('#fwMsg').textContent = 'Koneksi terputus (mesin mungkin sedang restart).'; };
+x.send(fd);
 };
 $('#btnRollback').onclick = async () => {
-  if (!confirm('Kembali ke firmware sebelumnya dan restart?')) return;
-  const r = await api('/api/rollback', 'POST'); toast(r.msg);
+if (!confirm('Kembali ke firmware sebelumnya dan restart?')) return;
+try { toastR(await api('/api/rollback', 'POST')); } catch (e) { guard(e); }
 };
 function renderSys() {
-  if (!last) return;
-  const s = last;
-  $('#sysInfo').innerHTML = `<b>Firmware:</b> v${esc(s.fw)}<br><b>Uptime:</b> ${fmt(s.uptime)}<br><b>Heap bebas:</b> ${(s.heap / 1024).toFixed(0)} KB<br><b>Alasan reset terakhir:</b> ${esc(s.reset)}<br><b>WiFi:</b> ${s.wifi.online ? esc(s.wifi.ssid) + ' · ' + esc(s.wifi.ip) : 'offline'}<br><b>Hotspot:</b> ${s.wifi.apOn ? esc(s.wifi.ap) + ' AKTIF (' + s.wifi.apClients + ' klien)' : 'nonaktif'}<br><b>Jam:</b> ${esc(s.wifi.time)}<br><b>Notifikasi:</b> ${esc(s.notif)}<br><b>Penyimpanan Proses:</b> ${s.fs ? 'siap' : '<span class="muted">tidak tersedia</span>'}`;
-  const rm = s.remote || {};
-  const ri = $('#remoteInfo');
-  if (ri) ri.textContent = !rm.configured ? 'Belum dikonfigurasi (isi REMOTE_URL dan REMOTE_DEVICE_TOKEN di secrets.h).' : !rm.enabled ? 'Dinonaktifkan.' : rm.connected ? '✅ Terhubung ke server jarak jauh.' : '⏳ Mencoba menyambung ke server…';
+if (!last) return;
+const s = last, kv = (k, v) => `<div class="kv"><span>${k}</span><b>${v}</b></div>`;
+$('#sysInfo').innerHTML = kv('Firmware', 'v' + esc(s.fw)) + kv('Uptime', fmt(s.uptime)) + kv('Heap bebas', (s.heap / 1024).toFixed(0) + ' KB') + kv('Alasan reset terakhir', esc(s.reset)) +
+kv('WiFi', s.wifi.online ? esc(s.wifi.ssid) + ' · ' + esc(s.wifi.ip) : 'offline') + kv('Hotspot', s.wifi.apOn ? esc(s.wifi.ap) + ' aktif (' + s.wifi.apClients + ' klien)' : 'nonaktif') +
+kv('Jam', esc(s.wifi.time)) + kv('Notifikasi', esc(s.notif)) + kv('Penyimpanan Proses', s.fs ? 'siap' : 'tidak tersedia');
+const rm = s.remote || {}, ri = $('#remoteInfo');
+if (ri) ri.textContent = !rm.configured ? 'Belum dikonfigurasi (isi REMOTE_URL dan REMOTE_DEVICE_TOKEN di secrets.h).' : !rm.enabled ? 'Dinonaktifkan.' : rm.connected ? 'Terhubung ke server jarak jauh.' : 'Mencoba menyambung ke server…';
 }
-// Password: lokal dan jarak jauh berbeda, keduanya diatur dari sini (minimal 12 karakter, diketik dua kali)
 function pwInputs(a, b) {
-  const p1 = $('#' + a).value, p2 = $('#' + b).value;
-  if (p1.length < 12) { toast('⚠ Password minimal 12 karakter'); return null; }
-  if (p1.length > 64) { toast('⚠ Password maksimal 64 karakter'); return null; }
-  if (p1 !== p2) { toast('⚠ Kedua password tidak sama'); return null; }
-  return p1;
+const p1 = $('#' + a).value, p2 = $('#' + b).value;
+if (p1.length < 12) { toast('Password minimal 12 karakter', 'warn'); return null; }
+if (p1.length > 64) { toast('Password maksimal 64 karakter', 'warn'); return null; }
+if (p1 !== p2) { toast('Kedua password tidak sama', 'warn'); return null; }
+return p1;
 }
 $('#btnPwLocal').onclick = async () => {
-  const pw = pwInputs('lpw1', 'lpw2'); if (!pw) return;
-  if (!confirm('Ganti password web lokal? Semua perangkat yang diingat akan keluar.')) return;
-  try {
-    const r = await api('/api/password', 'POST', { which: 'local', pw });
-    toast((r.ok ? '✅ ' : '⚠ ') + r.msg);
-    if (r.ok) { $('#lpw1').value = ''; $('#lpw2').value = ''; setTimeout(showLogin, 800); }
-  } catch (e) { if (e.message !== 'login') toast('Gagal: ' + e.message); }
+const pw = pwInputs('lpw1', 'lpw2'); if (!pw) return;
+if (!confirm('Ganti password web lokal? Semua perangkat yang diingat akan keluar.')) return;
+try {
+const r = await api('/api/password', 'POST', { which: 'local', pw });
+toastR(r);
+if (r.ok) { $('#lpw1').value = ''; $('#lpw2').value = ''; setTimeout(showLogin, 800); }
+} catch (e) { guard(e); }
 };
 $('#btnPwRemote').onclick = async () => {
-  const pw = pwInputs('rpw1', 'rpw2'); if (!pw) return;
-  if (!confirm('Ganti password jarak jauh? Semua sesi jarak jauh akan keluar. Catat password baru di tempat aman.')) return;
-  const msg = $('#pwRemoteMsg');
-  let r;
-  try { r = await api('/api/password', 'POST', { which: 'remote', pw }); } catch (e) { if (e.message !== 'login') toast('Gagal: ' + e.message); return; }
-  msg.textContent = (r.ok ? '⏳ ' : '⚠ ') + r.msg;
-  if (!r.ok) return;
-  $('#rpw1').value = ''; $('#rpw2').value = '';
-  for (let i = 0; i < 20; i++) {   // tunggu konfirmasi dari server (maks ±20 dtk)
-    await new Promise(res => setTimeout(res, 1000));
-    let s; try { s = await api('/api/status'); } catch { continue; }
-    const st = s.remote && s.remote.pw;
-    if (st === 'ok') { msg.textContent = '✅ ' + s.remote.pwMsg; toast('✅ Password jarak jauh diganti'); return; }
-    if (st === 'fail') { msg.textContent = '⚠ ' + s.remote.pwMsg; toast('⚠ ' + s.remote.pwMsg); return; }
-  }
-  msg.textContent = '⚠ Tidak ada konfirmasi dari server. Coba lagi.';
+const pw = pwInputs('rpw1', 'rpw2'); if (!pw) return;
+if (!confirm('Ganti password jarak jauh? Semua sesi jarak jauh akan keluar. Catat password baru di tempat aman.')) return;
+const msg = $('#pwRemoteMsg');
+let r;
+try { r = await api('/api/password', 'POST', { which: 'remote', pw }); } catch (e) { return guard(e); }
+msg.textContent = r.msg;
+if (!r.ok) return;
+$('#rpw1').value = ''; $('#rpw2').value = '';
+for (let i = 0; i < 20; i++) {   // tunggu konfirmasi dari server (maks ±20 dtk)
+await new Promise(res => setTimeout(res, 1000));
+let s; try { s = await api('/api/status'); } catch { continue; }
+const st = s.remote && s.remote.pw;
+if (st === 'ok') { msg.textContent = s.remote.pwMsg; toast('Password jarak jauh diganti', 'ok'); return; }
+if (st === 'fail') { msg.textContent = s.remote.pwMsg; toast(s.remote.pwMsg, 'warn'); return; }
+}
+msg.textContent = 'Tidak ada konfirmasi dari server. Coba lagi.';
 };
 $('#btnRestart').onclick = () => confirm('Restart mesin?') && cmd('restart');
-// ---- cadangkan & pulihkan (khusus lokal) ----
 $('#btnBackup').onclick = () => { location.href = '/api/backup' + ($('#bkWifi').checked ? '?wifi=1' : ''); };
-function readFileText(f) {
-  return new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => rej(fr.error); fr.readAsText(f); });
-}
+const readFileText = f => new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => rej(fr.error); fr.readAsText(f); });
 $('#restoreFile').onchange = async e => {
-  const f = e.target.files[0]; e.target.value = '';
-  const msg = $('#restoreMsg');
-  if (!f) return;
-  if (f.size > 12288) { msg.textContent = '⚠ Berkas terlalu besar (maks 12 KB).'; return; }
-  let data;
-  try { data = JSON.parse(await readFileText(f)); } catch { msg.textContent = '⚠ Berkas bukan JSON yang valid.'; return; }
-  const dry = await api('/api/restore?dry=1', 'POST', data).catch(() => null);
-  if (!dry) { msg.textContent = '⚠ Gagal memeriksa berkas.'; return; }
-  if (!dry.ok) { msg.textContent = '⚠ ' + dry.msg; return; }
-  if (!confirm(`Pulihkan dari cadangan?\n${dry.msg}\n\nPengaturan dan daftar WiFi saat ini akan diganti. Proses tidak ikut (ekspor/impor di tab Proses).`)) { msg.textContent = 'Dibatalkan.'; return; }
-  const r = await api('/api/restore', 'POST', data).catch(() => null);
-  msg.textContent = r && r.ok ? '✅ ' + r.msg : '⚠ ' + (r ? r.msg : 'Gagal memulihkan.');
-  if (r && r.ok) { loadSettings(); loadWifi(); toast('Pemulihan selesai'); }
+const f = e.target.files[0]; e.target.value = '';
+const msg = $('#restoreMsg');
+if (!f) return;
+if (f.size > 12288) { msg.textContent = 'Berkas terlalu besar (maks 12 KB).'; return; }
+let data;
+try { data = JSON.parse(await readFileText(f)); } catch { msg.textContent = 'Berkas bukan JSON yang valid.'; return; }
+const dry = await api('/api/restore?dry=1', 'POST', data).catch(() => null);
+if (!dry) { msg.textContent = 'Gagal memeriksa berkas.'; return; }
+if (!dry.ok) { msg.textContent = dry.msg; return; }
+if (!confirm(`Pulihkan dari cadangan?\n${dry.msg}\n\nPengaturan dan daftar WiFi saat ini akan diganti. Proses tidak ikut (ekspor/impor di menu Proses).`)) { msg.textContent = 'Dibatalkan.'; return; }
+const r = await api('/api/restore', 'POST', data).catch(() => null);
+msg.textContent = r && r.ok ? r.msg : (r ? r.msg : 'Gagal memulihkan.');
+if (r && r.ok) { loadSettings(); loadWifi(); toast('Pemulihan selesai', 'ok'); }
 };
-
-// =========================================================== Tahap & Proses ====
-// Katalog Tahap datang dari firmware (/api/tahap/meta): UI tidak menyimpan rentang/bawaan sendiri.
 let META = [];
-const ICON = { isi: '🚰', buang: '🚿', putar: '🔄', soak: '🛁', rendam: '💧', spin: '🌀', pewangi: '🌼', tunggu: '⏳', cek: '🔎', tindakan: '✋', notif: '📣', buang_manual: '🚿' };
 async function loadMeta() {
-  if (META.length) return;
-  try { const r = await api('/api/tahap/meta'); META = r.types || []; } catch { /* diulang saat tab dibuka lagi */ }
+if (META.length) return;
+try { const r = await api('/api/tahap/meta'); META = r.types || []; } catch { /* diulang saat menu dibuka lagi */ }
 }
 const typeMeta = t => META.find(x => x.t === t);
 let uidSeq = 1;
 function newItem(t, vals) {
-  const m = typeMeta(t), v = {};
-  m.fields.forEach(f => { v[f.k] = f.def; });
-  return { uid: uidSeq++, t, v: { ...v, ...(vals || {}) } };
+const m = typeMeta(t), v = {};
+m.fields.forEach(f => { v[f.k] = f.def; });
+return { uid: uidSeq++, t, v: { ...v, ...(vals || {}) } };
 }
-const applies = (f, v) => !f.when || f.when.includes(v.mode);
-const hms = s => `${String(Math.floor(s / 3600)).padStart(2, '0')}:${String(Math.floor(s % 3600 / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
-
+const applies = (f, v) => !f.when || f.when.includes((v.v || v).mode);
 function fieldHtml(f, it) {
-  const val = it.v[f.k], base = `data-uid="${it.uid}" data-k="${f.k}"`;
-  let ctl, unit = '';
-  if (f.kind === 'enum') ctl = `<select ${base}>${f.opts.map((o, i) => `<option value="${o}"${o === val ? ' selected' : ''}>${esc(f.optLabels[i])}</option>`).join('')}</select>`;
-  else if (f.kind === 'choice') ctl = `<select ${base}>${f.opts.map(o => `<option value="${o}"${+o === +val ? ' selected' : ''}>${o}${f.unit || ''}</option>`).join('')}</select>`;
-  else if (f.kind === 'cup') { ctl = `<input type="number" ${base} min="0.5" max="10" step="0.5" inputmode="decimal" value="${val}">`; unit = ' (cup)'; }
-  else if (f.kind === 'text') ctl = `<input type="text" ${base} maxlength="${f.max}" value="${esc(val)}">`;
-  else if (f.fmt === 'hms') {
-    ctl = '<span class="tri">' + [['h', Math.floor(val / 3600), 23], ['m', Math.floor(val % 3600 / 60), 59], ['s', val % 60, 59]]
-      .map(([p, x, mx]) => `<input type="number" ${base} data-hms="${p}" min="0" max="${mx}" inputmode="numeric" value="${x}" aria-label="${p === 'h' ? 'jam' : p === 'm' ? 'menit' : 'detik'}">`).join('') + '</span>';
-    unit = ' (jam : menit : detik)';
-  } else { ctl = `<input type="number" ${base} min="${f.min}" max="${f.max}" inputmode="numeric" value="${val}">`; unit = f.unit ? ` (${f.unit})` : ''; }
-  return `<label data-f="${f.k}"${applies(f, it.v) ? '' : ' hidden'}>${esc(f.label)}${unit}${ctl}</label>`;
+const val = it.v[f.k], base = `data-uid="${it.uid}" data-k="${f.k}"`;
+let ctl, unit = '';
+if (f.kind === 'enum') ctl = `<select ${base}>${f.opts.map((o, i) => `<option value="${o}"${o === val ? ' selected' : ''}>${esc(f.optLabels[i])}</option>`).join('')}</select>`;
+else if (f.kind === 'choice') ctl = `<select ${base}>${f.opts.map(o => `<option value="${o}"${+o === +val ? ' selected' : ''}>${o}${f.unit || ''}</option>`).join('')}</select>`;
+else if (f.kind === 'cup') { ctl = `<input type="number" ${base} min="0.5" max="10" step="0.5" inputmode="decimal" value="${val}">`; unit = ' (cup)'; }
+else if (f.kind === 'text') ctl = `<input type="text" ${base} maxlength="${f.max}" value="${esc(val)}">`;
+else if (f.fmt === 'hms') {
+ctl = '<span class="tri">' + [['h', Math.floor(val / 3600), 23, 'jam'], ['m', Math.floor(val % 3600 / 60), 59, 'mnt'], ['s', val % 60, 59, 'dtk']]
+.map(([p, x, mx, cap]) => `<span><input type="number" ${base} data-hms="${p}" min="0" max="${mx}" inputmode="numeric" value="${x}" aria-label="${f.label} (${cap})"><em>${cap}</em></span>`).join('') + '</span>';
+} else { ctl = `<input type="number" ${base} min="${f.min}" max="${f.max}" inputmode="numeric" value="${val}">`; unit = f.unit ? ` (${f.unit})` : ''; }
+return `<label data-f="${f.k}"${applies(f, it) ? '' : ' hidden'}>${esc(f.label)}${unit}${ctl}</label>`;
 }
 const fieldsHtml = it => typeMeta(it.t).fields.map(f => fieldHtml(f, it)).join('');
-
-// Mengambil nilai dari kontrol ke item. Mengembalikan true bila event ini milik form Tahap.
 function handleField(e, items) {
-  const el = e.target.closest('[data-k]'); if (!el) return false;
-  const it = items.find(x => x.uid === +el.dataset.uid); if (!it) return false;
-  const f = typeMeta(it.t).fields.find(x => x.k === el.dataset.k);
-  if (f.kind === 'enum' || f.kind === 'text') it.v[f.k] = el.value;
-  else if (f.kind === 'choice' || f.kind === 'cup') it.v[f.k] = parseFloat(el.value);
-  else if (el.dataset.hms) {
-    const [h, m, s] = $$('[data-hms]', el.closest('label')).map(i => parseInt(i.value, 10) || 0);
-    it.v[f.k] = h * 3600 + m * 60 + s;
-  } else it.v[f.k] = parseInt(el.value, 10);
-  const body = el.closest('.fields');
-  typeMeta(it.t).fields.forEach(g => { const lab = $(`[data-f="${g.k}"]`, body); if (lab) lab.hidden = !applies(g, it.v); });
-  return true;
+const el = e.target.closest('[data-k]'); if (!el) return false;
+const it = items.find(x => x.uid === +el.dataset.uid); if (!it) return false;
+const f = typeMeta(it.t).fields.find(x => x.k === el.dataset.k);
+if (f.kind === 'enum' || f.kind === 'text') it.v[f.k] = el.value;
+else if (f.kind === 'choice' || f.kind === 'cup') it.v[f.k] = parseFloat(el.value);
+else if (el.dataset.hms) {
+const [h, m, s] = $$('[data-hms]', el.closest('label')).map(i => parseInt(i.value, 10) || 0);
+it.v[f.k] = h * 3600 + m * 60 + s;
+} else it.v[f.k] = parseInt(el.value, 10);
+const body = el.closest('.fields');
+typeMeta(it.t).fields.forEach(g => { const lab = $(`[data-f="${g.k}"]`, body); if (lab) lab.hidden = !applies(g, it); });
+const row = el.closest('.crow'); if (row) { row.classList.remove('bad'); const fe = $('.ferr', row); if (fe) fe.remove(); }
+return true;
 }
-// Pesan galat bahasa Indonesia, atau '' bila valid (firmware tetap memvalidasi ulang)
 function validateItem(it) {
-  const m = typeMeta(it.t);
-  for (const f of m.fields) {
-    if (!applies(f, it.v)) continue;
-    const v = it.v[f.k], pre = `${m.label}: ${f.label} harus `;
-    if (f.kind === 'text') { if (!String(v).trim() || String(v).length > f.max) return pre + `diisi (1-${f.max} karakter)`; }
-    else if (f.kind === 'enum') { if (!f.opts.includes(v)) return pre + 'salah satu pilihan'; }
-    else if (f.kind === 'choice') { if (!f.opts.includes(+v)) return pre + 'salah satu dari ' + f.opts.join('/'); }
-    else if (f.kind === 'cup') { if (!(v >= 0.5 && v <= 10 && Math.abs(v * 2 - Math.round(v * 2)) < 1e-6)) return pre + '0,5 - 10 cup (kelipatan 0,5)'; }
-    else if (!(Number.isInteger(v) && v >= f.min && v <= f.max)) return pre + (f.fmt === 'hms' ? `${hms(f.min)} - ${hms(f.max)}` : `${f.min} - ${f.max}${f.unit ? ' ' + f.unit : ''}`);
-  }
-  return '';
+const m = typeMeta(it.t);
+for (const f of m.fields) {
+if (!applies(f, it)) continue;
+const v = it.v[f.k], pre = `${m.label}: ${f.label} harus `;
+if (f.kind === 'text') { if (!String(v).trim() || String(v).length > f.max) return pre + `diisi (1-${f.max} karakter)`; }
+else if (f.kind === 'enum') { if (!f.opts.includes(v)) return pre + 'salah satu pilihan'; }
+else if (f.kind === 'choice') { if (!f.opts.includes(+v)) return pre + 'salah satu dari ' + f.opts.join('/'); }
+else if (f.kind === 'cup') { if (!(v >= 0.5 && v <= 10 && Math.abs(v * 2 - Math.round(v * 2)) < 1e-6)) return pre + '0,5 - 10 cup (kelipatan 0,5)'; }
+else if (!(Number.isInteger(v) && v >= f.min && v <= f.max)) return pre + (f.fmt === 'hms' ? `${hms(f.min)} - ${hms(f.max)}` : `${f.min} - ${f.max}${f.unit ? ' ' + f.unit : ''}`);
 }
-const itemToApi = it => { const o = { t: it.t }; typeMeta(it.t).fields.forEach(f => { if (applies(f, it.v)) o[f.k] = it.v[f.k]; }); return o; };
+return '';
+}
+const itemToApi = it => { const o = { t: it.t }; typeMeta(it.t).fields.forEach(f => { if (applies(f, it)) o[f.k] = it.v[f.k]; }); return o; };
 const itemFromApi = o => newItem(o.t, Object.fromEntries(Object.entries(o).filter(([k]) => k !== 't')));
-
-// ------------------------------------------------------------------ Manual ----
-const man = { t: 'isi', item: null };
+const man = { item: null };
 function renderManual() {
-  if (!META.length) { $('#manForm').innerHTML = '<p class="muted">Memuat daftar Tahap…</p>'; return; }
-  const sel = $('#manType');
-  if (!sel.options.length) sel.innerHTML = META.map(m => `<option value="${m.t}">${ICON[m.t] || ''} ${esc(m.label)}${m.manual ? ' (hanya Manual)' : ''}</option>`).join('');
-  if (!man.item || man.item.t !== sel.value) { man.item = newItem(sel.value); }
-  $('#manForm').innerHTML = `<div class="fields">${fieldsHtml(man.item)}</div>`;
-  $('#manHint').hidden = sel.value !== 'buang_manual';
-  $('#manRun').disabled = !(last && last.state === 'idle') || !!(last && last.fault);
+if (!META.length) { $('#manForm').innerHTML = '<p class="muted">Memuat daftar Tahap…</p>'; return; }
+const grid = $('#manGrid'), cur = $('#manType').value;
+grid.innerHTML = META.map(m => `<button type="button" data-mt="${m.t}" aria-pressed="${m.t === cur}">${tIcon(m.t)}<span>${esc(m.label)}</span>${m.manual ? '<span class="dar">hanya Manual</span>' : ''}</button>`).join('');
+if (!man.item || man.item.t !== cur) man.item = newItem(cur);
+$('#manForm').innerHTML = `<div class="fields">${fieldsHtml(man.item)}</div>`;
+$('#manHint').hidden = cur !== 'buang_manual';
+$('#manRun').disabled = !(last && last.state === 'idle') || !!(last && last.fault);
 }
+$('#manGrid').addEventListener('click', e => { const b = e.target.closest('[data-mt]'); if (b) { $('#manType').value = b.dataset.mt; man.item = null; renderManual(); } });
 $('#manType').onchange = () => { man.item = null; renderManual(); };
 $('#manForm').addEventListener('input', e => { handleField(e, [man.item]); });
 $('#manForm').addEventListener('change', e => { handleField(e, [man.item]); });
 $('#manRun').onclick = async () => {
-  if (!man.item) return;
-  const err = validateItem(man.item);
-  if (err) return toast('⚠ ' + err);
-  if (man.item.t === 'buang_manual' && !confirm('Buang manual menarik valve selama waktu yang diatur TANPA membaca sensor. Pastikan Anda memantau. Lanjut?')) return;
-  try {
-    const r = await api('/api/run', 'POST', { manual: itemToApi(man.item) });
-    toast((r.ok ? '' : '⚠ ') + r.msg);
-    pollOnce();
-  } catch (e) { if (e.message !== 'login') toast('Gagal: ' + e.message); }
+if (!man.item) return;
+const err = validateItem(man.item);
+if (err) return toast(err, 'warn');
+if (man.item.t === 'buang_manual' && !confirm('Buang manual menarik valve selama waktu yang diatur TANPA membaca sensor. Pastikan Anda memantau. Lanjut?')) return;
+try { toastR(await api('/api/run', 'POST', { manual: itemToApi(man.item) })); pollOnce(); } catch (e) { guard(e); }
 };
-
-// ------------------------------------------------------------------ Proses ----
 let prosesList = null;
 const ed = { slot: 0, items: [], locked: false, warnings: [], est: 0 };
+const setEdMode = m => { $('#view-proses').dataset.mode = m; if (m === 'edit') { try { window.scrollTo({ top: 0 }); } catch { } } };
 function renderPalette() {
-  const host = $('#pcPalette');
-  if (!META.length || host.dataset.ready) return;
-  host.dataset.ready = '1';
-  host.innerHTML = META.filter(m => !m.manual).map(m => `<button class="btn" data-add="${m.t}">${ICON[m.t] || ''} ${esc(m.label)}</button>`).join('');
-  $$('[data-add]', host).forEach(b => b.onclick = () => {
-    if (ed.locked) return;
-    if (ed.items.length >= (prosesList ? prosesList.maxTahap : 40)) return toast('⚠ Maksimal 40 Tahap per Proses');
-    ed.items.push(newItem(b.dataset.add)); renderStack(); scheduleDry();
-    const st = $('#pcStack'); st.lastElementChild && st.lastElementChild.scrollIntoView({ block: 'nearest' });
-  });
+const host = $('#pcPalette');
+if (!META.length || host.dataset.ready) return;
+host.dataset.ready = '1';
+host.innerHTML = META.filter(m => !m.manual).map(m => `<button class="btn sm" type="button" data-add="${m.t}">${tIcon(m.t)}${esc(m.label)}</button>`).join('');
+$$('[data-add]', host).forEach(b => b.onclick = () => {
+if (ed.locked) return;
+if (ed.items.length >= (prosesList ? prosesList.maxTahap : 40)) return toast('Maksimal 40 Tahap per Proses', 'warn');
+ed.items.push(newItem(b.dataset.add)); renderStack(); scheduleDry();
+const st = $('#pcStack'); st.lastElementChild && st.lastElementChild.scrollIntoView({ block: 'nearest' });
+});
 }
 function rowHtml(it, i) {
-  const m = typeMeta(it.t);
-  return `<div class="crow" data-uid="${it.uid}"><span class="handle" title="Tahan &amp; geser untuk menukar urutan">☰</span>
-    <div class="cbody"><div class="ctitle"><span class="num">${i + 1}</span> ${ICON[it.t] || ''} <b>${esc(m.label)}</b></div><div class="fields">${fieldsHtml(it)}</div></div>
-    <div class="cacts"><button data-act="up" title="Naik">▲</button><button data-act="down" title="Turun">▼</button><button data-act="dup" title="Gandakan">⧉</button><button data-act="del" title="Hapus">🗑</button></div></div>`;
+const m = typeMeta(it.t);
+return `<div class="crow" data-uid="${it.uid}"><div class="crow-head"><span class="handle" title="Tahan dan geser untuk menukar urutan" aria-label="Geser">${ic('grip')}</span>
+<span class="num">${i + 1}</span><span class="tico">${tIcon(it.t)}</span><b>${esc(m.label)}</b>
+<div class="cacts"><button type="button" data-act="up" title="Naik" aria-label="Naik">${ic('up', 'sm')}</button><button type="button" data-act="down" title="Turun" aria-label="Turun">${ic('down', 'sm')}</button><button type="button" data-act="dup" title="Gandakan" aria-label="Gandakan">${ic('copy', 'sm')}</button><button type="button" data-act="del" title="Hapus" aria-label="Hapus">${ic('trash', 'sm')}</button></div></div>
+<div class="fields">${fieldsHtml(it)}</div></div>`;
 }
 function renderStack() {
-  $('#pcStack').innerHTML = ed.items.map(rowHtml).join('');
-  $('#pcEmpty').hidden = ed.items.length > 0;
-  renderEditorState();
+$('#pcStack').innerHTML = ed.items.map(rowHtml).join('');
+$('#pcEmpty').hidden = ed.items.length > 0;
+renderEditorState();
 }
-function renumber() { $$('#pcStack .crow').forEach((r, i) => { $('.num', r).textContent = i + 1; }); }
+const renumber = () => $$('#pcStack .crow').forEach((r, i) => { $('.num', r).textContent = i + 1; });
 function renderEditorState() {
-  $('#pcLock').hidden = !ed.locked;
-  $('#pcLock').textContent = ed.locked ? '🔒 Proses ini sedang dipakai (berjalan, dijeda, menunggu keputusan, atau pemulihan tertunda). Tekan Stop di Beranda dulu untuk mengubah atau menghapusnya.' : '';
-  ['pcSave', 'pcName'].forEach(id => { $('#' + id).disabled = ed.locked; });
-  $$('#pcStack input, #pcStack select, #pcStack button, #pcPalette button').forEach(x => { x.disabled = ed.locked; });
-  $('#pcSummary').textContent = ed.items.length ? `${ed.items.length} Tahap${ed.est ? ' · perkiraan ± ' + fmtMin(ed.est) : ''}` : '';
-  const w = $('#pcWarn');
-  w.hidden = !ed.warnings.length;
-  w.innerHTML = ed.warnings.length ? '⚠ <b>Peringatan</b> (boleh disimpan setelah konfirmasi):<ul>' + ed.warnings.map(x => `<li>${esc(x)}</li>`).join('') + '</ul>' : '';
+const lk = $('#pcLock');
+lk.hidden = !ed.locked;
+if (ed.locked) setCallout(lk, 'lock', 'Proses ini sedang dipakai (berjalan, dijeda, menunggu keputusan, atau pemulihan tertunda). Tekan Stop di Beranda dulu untuk mengubah atau menghapusnya.');
+['pcSave', 'pcName'].forEach(id => { $('#' + id).disabled = ed.locked; });
+$$('#pcStack input, #pcStack select, #pcStack button, #pcPalette button').forEach(x => { x.disabled = ed.locked; });
+$('#pcSummary').textContent = ed.items.length ? `${ed.items.length} Tahap${ed.est ? ' · perkiraan ± ' + fmtMin(ed.est) : ''}` : 'Belum ada Tahap';
+const w = $('#pcWarn');
+w.hidden = !ed.warnings.length;
+if (ed.warnings.length) setCallout(w, 'alert', '<b>Peringatan</b> (boleh disimpan setelah konfirmasi):<ul>' + ed.warnings.map(x => `<li>${esc(x)}</li>`).join('') + '</ul>');
 }
-function bodyOf() { return { name: $('#pcName').value.trim(), tahap: ed.items.map(itemToApi) }; }
+const bodyOf = () => ({ name: $('#pcName').value.trim(), tahap: ed.items.map(itemToApi) });
 function localError() {
-  if (!$('#pcName').value.trim()) return 'Nama Proses wajib diisi.';
-  if (!ed.items.length) return 'Tambahkan minimal satu Tahap.';
-  for (let i = 0; i < ed.items.length; i++) { const e = validateItem(ed.items[i]); if (e) return `Tahap ${i + 1}: ${e}`; }
-  return '';
+if (!$('#pcName').value.trim()) return 'Nama Proses wajib diisi.';
+if (!ed.items.length) return 'Tambahkan minimal satu Tahap.';
+for (let i = 0; i < ed.items.length; i++) { const e = validateItem(ed.items[i]); if (e) return `Tahap ${i + 1}: ${e}`; }
+return '';
 }
-// Uji coba ke firmware (tanpa menyimpan): peringatan urutan + perkiraan durasi
 let dryTimer = null;
 function scheduleDry() {
-  clearTimeout(dryTimer);
-  dryTimer = setTimeout(async () => {
-    if (localError() || ed.locked) { ed.warnings = []; ed.est = 0; renderEditorState(); return; }
-    try { const r = await api('/api/proses', 'POST', { ...bodyOf(), slot: ed.slot, dry: true }); if (r.ok) { ed.warnings = r.warnings || []; ed.est = r.est || 0; renderEditorState(); } } catch { /* tidak penting */ }
-  }, 500);
+clearTimeout(dryTimer);
+dryTimer = setTimeout(async () => {
+if (localError() || ed.locked) { ed.warnings = []; ed.est = 0; renderEditorState(); return; }
+try { const r = await api('/api/proses', 'POST', { ...bodyOf(), slot: ed.slot, dry: true }); if (r.ok) { ed.warnings = r.warnings || []; ed.est = r.est || 0; renderEditorState(); } } catch { /* tidak penting */ }
+}, 500);
 }
 $('#pcStack').addEventListener('input', e => { if (handleField(e, ed.items)) scheduleDry(); });
 $('#pcStack').addEventListener('change', e => { if (handleField(e, ed.items)) scheduleDry(); });
 $('#pcName').addEventListener('input', scheduleDry);
 $('#pcStack').addEventListener('click', e => {
-  const b = e.target.closest('[data-act]'); if (!b || ed.locked) return;
-  const uid = +b.closest('.crow').dataset.uid, i = ed.items.findIndex(x => x.uid === uid);
-  if (b.dataset.act === 'del') ed.items.splice(i, 1);
-  else if (b.dataset.act === 'up' && i > 0) [ed.items[i - 1], ed.items[i]] = [ed.items[i], ed.items[i - 1]];
-  else if (b.dataset.act === 'down' && i < ed.items.length - 1) [ed.items[i + 1], ed.items[i]] = [ed.items[i], ed.items[i + 1]];
-  else if (b.dataset.act === 'dup') { if (ed.items.length >= 40) return toast('⚠ Maksimal 40 Tahap per Proses'); ed.items.splice(i + 1, 0, { uid: uidSeq++, t: ed.items[i].t, v: { ...ed.items[i].v } }); }
-  renderStack(); scheduleDry();
+const b = e.target.closest('[data-act]'); if (!b || ed.locked) return;
+const uid = +b.closest('.crow').dataset.uid, i = ed.items.findIndex(x => x.uid === uid);
+if (b.dataset.act === 'del') ed.items.splice(i, 1);
+else if (b.dataset.act === 'up' && i > 0) [ed.items[i - 1], ed.items[i]] = [ed.items[i], ed.items[i - 1]];
+else if (b.dataset.act === 'down' && i < ed.items.length - 1) [ed.items[i + 1], ed.items[i]] = [ed.items[i], ed.items[i + 1]];
+else if (b.dataset.act === 'dup') { if (ed.items.length >= 40) return toast('Maksimal 40 Tahap per Proses', 'warn'); ed.items.splice(i + 1, 0, { uid: uidSeq++, t: ed.items[i].t, v: { ...ed.items[i].v } }); }
+renderStack(); scheduleDry();
 });
-// Geser untuk menukar urutan (pointer events: jalan di mouse & layar sentuh)
 $('#pcStack').addEventListener('pointerdown', e => {
-  const h = e.target.closest('.handle'); if (!h || ed.locked) return;
-  const list = $('#pcStack'), row = h.closest('.crow');
-  e.preventDefault(); h.setPointerCapture(e.pointerId); row.classList.add('drag');
-  const move = ev => {
-    const others = [...list.children].filter(r => r !== row);
-    const target = others.find(r => { const b = r.getBoundingClientRect(); return ev.clientY < b.top + b.height / 2; });
-    if (target) { if (row.nextElementSibling !== target) list.insertBefore(row, target); } else list.appendChild(row);
-    if (ev.clientY < 70) window.scrollBy(0, -12); else if (ev.clientY > innerHeight - 70) window.scrollBy(0, 12);
-  };
-  const up = () => {
-    h.removeEventListener('pointermove', move); h.removeEventListener('pointerup', up); h.removeEventListener('pointercancel', up);
-    row.classList.remove('drag');
-    const ids = [...list.children].map(r => +r.dataset.uid);
-    ed.items = ids.map(id => ed.items.find(x => x.uid === id));
-    renumber(); scheduleDry();
-  };
-  h.addEventListener('pointermove', move); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
+const h = e.target.closest('.handle'); if (!h || ed.locked) return;
+const list = $('#pcStack'), row = h.closest('.crow');
+e.preventDefault(); h.setPointerCapture(e.pointerId); row.classList.add('drag');
+const move = ev => {
+const others = [...list.children].filter(r => r !== row);
+const target = others.find(r => { const b = r.getBoundingClientRect(); return ev.clientY < b.top + b.height / 2; });
+if (target) { if (row.nextElementSibling !== target) list.insertBefore(row, target); } else list.appendChild(row);
+if (ev.clientY < 70) window.scrollBy(0, -12); else if (ev.clientY > innerHeight - 70) window.scrollBy(0, 12);
+};
+const up = () => {
+h.removeEventListener('pointermove', move); h.removeEventListener('pointerup', up); h.removeEventListener('pointercancel', up);
+row.classList.remove('drag');
+ed.items = [...list.children].map(r => ed.items.find(x => x.uid === +r.dataset.uid));
+renumber(); scheduleDry();
+};
+h.addEventListener('pointermove', move); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
 });
 function edClear(title) {
-  ed.slot = 0; ed.items = []; ed.locked = false; ed.warnings = []; ed.est = 0;
-  $('#pcName').value = ''; $('#pcError').hidden = true; $('#pcTitle').textContent = title || 'Proses baru';
-  renderStack();
+ed.slot = 0; ed.items = []; ed.locked = false; ed.warnings = []; ed.est = 0;
+$('#pcName').value = ''; $('#pcError').hidden = true; $('#pcTitle').textContent = title || 'Proses baru';
+renderStack();
 }
 $('#pcReset').onclick = () => { if (!ed.items.length || confirm('Kosongkan editor?')) edClear(); };
+$('#pcBack').onclick = () => setEdMode('list');
 async function pcSave(asNew) {
-  const err = $('#pcError'); err.hidden = true;
-  const fail = m => { err.textContent = m; err.hidden = false; err.scrollIntoView({ block: 'nearest' }); };
-  const le = localError();
-  if (le) return fail(le);
-  const slot = asNew ? 0 : ed.slot;
-  let dry;
-  try { dry = await api('/api/proses', 'POST', { ...bodyOf(), slot, dry: true }); } catch (e) { return; }
-  if (!dry.ok) return fail(dry.msg);
-  if (dry.warnings && dry.warnings.length && !confirm('Peringatan:\n- ' + dry.warnings.join('\n- ') + '\n\nTetap simpan?')) return;
-  let r; try { r = await api('/api/proses', 'POST', { ...bodyOf(), slot }); } catch (e) { return; }
-  if (!r.ok) return fail(r.msg);
-  ed.slot = r.slot; toast('✅ ' + r.msg);
-  $('#pcTitle').textContent = `Mengedit: ${$('#pcName').value.trim()} (slot ${r.slot})`;
-  loadProses();
+const err = $('#pcError'); err.hidden = true;
+const fail = (m, idx) => {
+setCallout(err, 'alert', esc(m)); err.hidden = false;
+$$('#pcStack .crow').forEach(r => { r.classList.remove('bad'); const fe = $('.ferr', r); if (fe) fe.remove(); });
+const row = idx >= 0 ? $$('#pcStack .crow')[idx] : null;
+if (row) { row.classList.add('bad'); row.insertAdjacentHTML('beforeend', `<p class="ferr">${esc(m.replace(/^Tahap \d+: /, ''))}</p>`); row.scrollIntoView({ block: 'center' }); } else err.scrollIntoView({ block: 'nearest' });
+};
+const le = localError();
+if (le) { const mm = /^Tahap (\d+):/.exec(le); return fail(le, mm ? +mm[1] - 1 : -1); }
+const slot = asNew ? 0 : ed.slot;
+let dry;
+try { dry = await api('/api/proses', 'POST', { ...bodyOf(), slot, dry: true }); } catch (e) { return guard(e); }
+if (!dry.ok) return fail(dry.msg, -1);
+if (dry.warnings && dry.warnings.length && !confirm('Peringatan:\n- ' + dry.warnings.join('\n- ') + '\n\nTetap simpan?')) return;
+let r; try { r = await api('/api/proses', 'POST', { ...bodyOf(), slot }); } catch (e) { return guard(e); }
+if (!r.ok) return fail(r.msg, -1);
+ed.slot = r.slot; toast(r.msg, 'ok');
+$('#pcTitle').textContent = `Mengedit: ${$('#pcName').value.trim()} (slot ${r.slot})`;
+loadProses();
 }
 $('#pcSave').onclick = () => pcSave(false);
 $('#pcSaveNew').onclick = () => pcSave(true);
-
 async function pcLoad(slot, asCopy) {
-  let r; try { r = await api('/api/proses?slot=' + slot); } catch { return; }
-  if (!r.proses) return toast('⚠ ' + (r.msg || 'Proses tidak bisa dimuat'));
-  await loadMeta();
-  ed.slot = asCopy ? 0 : slot;
-  ed.locked = asCopy ? false : !!r.locked;
-  ed.items = r.proses.tahap.map(itemFromApi);
-  ed.warnings = r.warnings || []; ed.est = r.est || 0;
-  $('#pcName').value = asCopy ? r.proses.name + ' (salinan)' : r.proses.name;
-  $('#pcTitle').textContent = asCopy ? 'Proses baru (salinan)' : `Mengedit: ${r.proses.name} (slot ${slot})`;
-  $('#pcError').hidden = true;
-  renderStack(); $('#pcEditor').scrollIntoView({ behavior: 'smooth', block: 'start' });
+let r; try { r = await api('/api/proses?slot=' + slot); } catch { return; }
+if (!r.proses) return toast(r.msg || 'Proses tidak bisa dimuat', 'warn');
+await loadMeta();
+ed.slot = asCopy ? 0 : slot;
+ed.locked = asCopy ? false : !!r.locked;
+ed.items = r.proses.tahap.map(itemFromApi);
+ed.warnings = r.warnings || []; ed.est = r.est || 0;
+$('#pcName').value = asCopy ? r.proses.name + ' (salinan)' : r.proses.name;
+$('#pcTitle').textContent = asCopy ? 'Proses baru (salinan)' : `Mengedit: ${r.proses.name} (slot ${slot})`;
+$('#pcError').hidden = true;
+renderStack(); setEdMode('edit');
 }
 async function pcExport(slot) {
-  let r; try { r = await api('/api/proses/export?slot=' + slot); } catch { return; }
-  if (!r.tahap) return toast('⚠ ' + (r.msg || 'Gagal mengekspor'));
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([JSON.stringify(r, null, 1)], { type: 'application/json' }));
-  a.download = 'proses-' + String(r.name).replace(/[^\w\-]+/g, '_') + '.json'; a.click();
+let r; try { r = await api('/api/proses/export?slot=' + slot); } catch { return; }
+if (!r.tahap) return toast(r.msg || 'Gagal mengekspor', 'warn');
+const a = document.createElement('a');
+a.href = URL.createObjectURL(new Blob([JSON.stringify(r, null, 1)], { type: 'application/json' }));
+a.download = 'proses-' + String(r.name).replace(/[^\w\-]+/g, '_') + '.json'; a.click();
 }
 $('#pcImportFile').onchange = async e => {
-  const f = e.target.files[0]; e.target.value = '';
-  if (!f) return;
-  if (f.size > 8192) return toast('⚠ Berkas terlalu besar (maks 8 KB)');
-  let data; try { data = JSON.parse(await readFileText(f)); } catch { return toast('⚠ Berkas bukan JSON yang valid'); }
-  const empty = prosesList ? prosesList.slots.findIndex(s => !s) + 1 : 0;
-  if (!empty) return toast('⚠ Penyimpanan penuh. Hapus satu Proses dulu.');
-  const r = await api('/api/proses/import?slot=' + empty, 'POST', data).catch(() => null);
-  toast(r && r.ok ? '✅ Diimpor ke slot ' + r.slot : '⚠ ' + (r ? r.msg : 'Gagal mengimpor'));
-  loadProses();
+const f = e.target.files[0]; e.target.value = '';
+if (!f) return;
+if (f.size > 8192) return toast('Berkas terlalu besar (maks 8 KB)', 'warn');
+let data; try { data = JSON.parse(await readFileText(f)); } catch { return toast('Berkas bukan JSON yang valid', 'warn'); }
+const empty = prosesList ? prosesList.slots.findIndex(s => !s) + 1 : 0;
+if (!empty) return toast('Penyimpanan penuh. Hapus satu Proses dulu.', 'warn');
+const r = await api('/api/proses/import?slot=' + empty, 'POST', data).catch(() => null);
+if (r && r.ok) toast('Diimpor ke slot ' + r.slot, 'ok'); else toast(r ? r.msg : 'Gagal mengimpor', 'warn');
+loadProses();
 };
 async function pcDelete(slot, name) {
-  if (!confirm(`Hapus Proses "${name}"?`)) return;
-  const d = await api('/api/proses?slot=' + slot, 'DELETE').catch(() => null);
-  if (!d) return;
-  toast(d.ok ? '🗑 ' + d.msg : '⚠ ' + d.msg);
-  if (d.ok && ed.slot === slot) edClear();
-  loadProses();
+if (!confirm(`Hapus Proses "${name}"?`)) return;
+const d = await api('/api/proses?slot=' + slot, 'DELETE').catch(() => null);
+if (!d) return;
+toast(d.msg, d.ok ? 'ok' : 'warn');
+if (d.ok && ed.slot === slot) { edClear(); setEdMode('list'); }
+loadProses();
 }
+const trailHtml = (tr, n) => `<div class="trail" aria-hidden="true">${(tr || []).map(t => `<span>${tIcon(t)}</span>`).join('')}${n > (tr || []).length ? `<em>+${n - tr.length}</em>` : ''}</div>`;
 async function loadProses() {
-  let r; try { r = await api('/api/proses'); } catch { return; }
-  prosesList = r;
-  const slots = r.slots.map((s, i) => s ? { ...s, slot: i + 1 } : null).filter(Boolean);
-  $('#pcList').innerHTML = slots.map(s => s.bad
-    ? `<div class="card cpcard"><div class="info"><b>${s.slot}. (berkas rusak)</b></div><div class="row"><button class="btn danger sm" data-pdel="${s.slot}" data-name="berkas rusak">Hapus</button></div></div>`
-    : `<div class="card cpcard"><div class="info"><b>${s.slot}. ${esc(s.name)}</b>${s.locked ? ' <span class="chip run">dipakai</span>' : ''}<br><span class="muted">${s.count} Tahap · ± ${fmtMin(s.est)}</span></div>
-      <div class="row"><button class="btn sm" data-pedit="${s.slot}">✎ ${s.locked ? 'Lihat' : 'Edit'}</button><button class="btn sm" data-pcopy="${s.slot}">⧉ Salin</button><button class="btn sm" data-pexp="${s.slot}">⬇ Ekspor</button><button class="btn danger sm" data-pdel="${s.slot}" data-name="${esc(s.name)}" ${s.locked ? 'disabled title="Sedang dipakai"' : ''}>Hapus</button></div></div>`
-  ).join('') || '<p class="muted">Belum ada Proses. Susun di editor di bawah.</p>';
-  $('#pcCount').textContent = `${slots.length}/${r.max}`;
-  $$('#pcList [data-pedit]').forEach(b => b.onclick = () => pcLoad(+b.dataset.pedit, false));
-  $$('#pcList [data-pcopy]').forEach(b => b.onclick = () => pcLoad(+b.dataset.pcopy, true));
-  $$('#pcList [data-pexp]').forEach(b => b.onclick = () => pcExport(+b.dataset.pexp));
-  $$('#pcList [data-pdel]').forEach(b => b.onclick = () => pcDelete(+b.dataset.pdel, b.dataset.name));
-  renderHomeProses();
-  if (ed.slot) { const cur = slots.find(s => s.slot === ed.slot); if (cur && ed.locked !== !!cur.locked) { ed.locked = !!cur.locked; renderEditorState(); } }
+let r; try { r = await api('/api/proses'); } catch { return; }
+if (!r.slots) return;
+prosesList = r;
+const slots = r.slots.map((s, i) => s ? { ...s, slot: i + 1 } : null).filter(Boolean);
+$('#pcList').innerHTML = slots.map(s => s.bad
+? `<div class="pcard cpcard"><b class="nm">${s.slot}. Berkas rusak</b><div class="pcacts"><button class="btn dout sm" data-pdel="${s.slot}" data-name="berkas rusak">Hapus</button></div></div>`
+: `<div class="pcard cpcard">${trailHtml(s.trail, s.count)}<div><div class="nm">${esc(s.name)}</div>
+<div class="meta"><span>${s.count} Tahap</span><span>± ${fmtMin(s.est)}</span>${s.locked ? `<span class="chip run">${ic('lock')}dipakai</span>` : ''}</div></div>
+<div class="pcacts"><button class="btn sm" data-pedit="${s.slot}">${ic(s.locked ? 'search' : 'edit', 'sm')}${s.locked ? 'Lihat' : 'Edit'}</button><button class="btn sm sq" data-pcopy="${s.slot}" aria-label="Salin ${esc(s.name)}" title="Salin">${ic('copy', 'sm')}</button><button class="btn sm sq" data-pexp="${s.slot}" aria-label="Ekspor ${esc(s.name)}" title="Ekspor">${ic('download', 'sm')}</button><button class="btn dout sm sq" data-pdel="${s.slot}" data-name="${esc(s.name)}" aria-label="Hapus ${esc(s.name)}" title="Hapus" ${s.locked ? 'disabled' : ''}>${ic('trash', 'sm')}</button></div></div>`
+).join('') + (slots.length < r.max ? `<button class="pcard new" id="pcNew" type="button">${ic('plus', 'lg')}Proses baru</button>` : '');
+$('#pcCount').textContent = `${slots.length}/${r.max}`;
+$$('#pcList [data-pedit]').forEach(b => b.onclick = () => pcLoad(+b.dataset.pedit, false));
+$$('#pcList [data-pcopy]').forEach(b => b.onclick = () => pcLoad(+b.dataset.pcopy, true));
+$$('#pcList [data-pexp]').forEach(b => b.onclick = () => pcExport(+b.dataset.pexp));
+$$('#pcList [data-pdel]').forEach(b => b.onclick = () => pcDelete(+b.dataset.pdel, b.dataset.name));
+const nw = $('#pcNew'); if (nw) nw.onclick = () => { edClear(); setEdMode('edit'); };
+renderHomeProses();
+if (ed.slot) { const cur = slots.find(s => s.slot === ed.slot); if (cur && ed.locked !== !!cur.locked) { ed.locked = !!cur.locked; renderEditorState(); } }
+if (!loadProses.hist) { loadProses.hist = true; lastUsedLoad(); }
 }
-
-// ---------------------------------------------------------- Beranda: mulai ----
+function setStartMode(m) {
+$('#startMode').value = m;
+$$('#startSeg [data-sm]').forEach(b => b.classList.toggle('on', b.dataset.sm === m));
+$('#startTunda').hidden = m !== 'tunda'; $('#startSelesai').hidden = m !== 'selesai';
+}
+$('#startSeg').addEventListener('click', e => { const b = e.target.closest('[data-sm]'); if (b && !b.disabled) setStartMode(b.dataset.sm); });
+$('#startMode').onchange = () => setStartMode($('#startMode').value);
 function startBody(slot) {
-  const mode = $('#startMode').value, body = { slot };
-  if (mode === 'tunda') {
-    const v = $('#startTunda').value || '00:30:00';
-    body.tunda = v.length === 5 ? v + ':00' : v;
-  } else if (mode === 'selesai') {
-    const v = $('#startSelesai').value;
-    if (!v) { toast('⚠ Isi jam selesai dulu'); return null; }
-    body.selesai = v;
-  }
-  return body;
+const mode = $('#startMode').value, body = { slot };
+if (mode === 'tunda') {
+const v = $('#startTunda').value || '00:30:00';
+body.tunda = v.length === 5 ? v + ':00' : v;
+} else if (mode === 'selesai') {
+const v = $('#startSelesai').value;
+if (!v) { toast('Isi jam selesai dulu', 'warn'); return null; }
+body.selesai = v;
+}
+return body;
+}
+let lastUsedName = '';
+async function lastUsedLoad() {
+try {
+const r = await api('/api/history');
+const names = prosesList ? prosesList.slots.filter(s => s && s.name).map(s => s.name) : [];
+const h = (r.history || []).find(x => names.includes(x.proses));
+lastUsedName = h ? h.proses : '';
+const lu = $('#lastUsed'); lu.hidden = !lastUsedName; lu.textContent = lastUsedName ? 'Terakhir dipakai: ' + lastUsedName : '';
+} catch { }
 }
 function renderHomeProses() {
-  if (!prosesList) return;
-  const idle = !last || last.state === 'idle';
-  const slots = prosesList.slots.map((s, i) => s ? { ...s, slot: i + 1 } : null).filter(Boolean);
-  $('#homeEmpty').hidden = slots.length > 0;
-  $('#startOpts').hidden = slots.length === 0;
-  $('#prosesGrid').innerHTML = slots.map(s => s.bad
-    ? `<div class="card prog" aria-disabled="true"><b>⚠ Slot ${s.slot}</b><small>berkas rusak (hapus di tab Proses)</small></div>`
-    : `<button class="card prog cpRun" data-run="${s.slot}" ${idle ? '' : 'disabled'}><b>▶ ${esc(s.name)}</b><small>${s.count} Tahap · ± ${fmtMin(s.est)}</small></button>`).join('');
-  $$('#prosesGrid [data-run]').forEach(b => b.onclick = async () => {
-    const body = startBody(+b.dataset.run); if (!body) return;
-    try { const r = await api('/api/run', 'POST', body); toast((r.ok ? '' : '⚠ ') + r.msg); pollOnce(); } catch (e) { if (e.message !== 'login') toast('Gagal: ' + e.message); }
-  });
+if (!prosesList) return;
+const idle = !last || last.state === 'idle';
+const slots = prosesList.slots.map((s, i) => s ? { ...s, slot: i + 1 } : null).filter(Boolean);
+$('#homeEmpty').hidden = slots.length > 0;
+$('#startOpts').hidden = slots.length === 0;
+$('#prosesGrid').innerHTML = slots.map(s => s.bad
+? `<div class="pcard prog" aria-disabled="true"><b class="nm">Slot ${s.slot}</b><small>Berkas rusak (hapus di menu Proses)</small></div>`
+: `<button class="pcard prog cpRun" data-run="${s.slot}" ${idle ? '' : 'disabled'}>${trailHtml(s.trail, s.count)}<div><div class="nm">${esc(s.name)}</div><div class="meta"><span>${s.count} Tahap</span><span>± ${fmtMin(s.est)}</span></div></div><span class="go">${ic('play', 'sm')}Mulai</span></button>`).join('');
+$$('#prosesGrid [data-run]').forEach(b => b.onclick = async () => {
+const body = startBody(+b.dataset.run); if (!body) return;
+try { toastR(await api('/api/run', 'POST', body)); pollOnce(); } catch (e) { guard(e); }
+});
 }
-$('#startMode').onchange = () => {
-  const m = $('#startMode').value;
-  $('#startTunda').hidden = m !== 'tunda'; $('#startSelesai').hidden = m !== 'selesai';
-};
-$('#goProses').onclick = () => $('#tabs [data-tab=proses]').click();
-
-// ---------------------------------------------------- perangkat yang diingat ----
-const fmtDate = e => e ? new Date(e * 1000).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '-';
+$('#goProses').onclick = () => { location.hash = '#proses'; show('proses'); };
 async function loadDevices() {
-  let r; try { r = await api('/api/devices'); } catch { return; }
-  $('#devHint').textContent = r.temporary
-    ? 'Sesi ini TIDAK diingat (login ulang saat browser ditutup). Centang "Ingat perangkat ini" saat login.'
-    : `Maksimal ${r.max} perangkat. Bila penuh, yang terlama otomatis dihapus. Perangkat tetap masuk sampai kamu menghapusnya.`;
-  $('#devList').innerHTML = r.devices.map(d => `<div class="wifirow" style="margin:8px 0"><div><b>${esc(d.name)}</b> ${d.current ? '<span class="chip run">Perangkat ini</span>' : ''}<br><span class="muted">Masuk ${fmtDate(d.created)} · terakhir aktif ${fmtDate(d.lastSeen)}</span></div>
-    <button class="btn danger" data-dev="${d.id}" data-cur="${d.current ? 1 : 0}">Hapus</button></div>`).join('') || '<p class="muted">Belum ada perangkat yang diingat.</p>';
-  $$('#devList [data-dev]').forEach(b => b.onclick = async () => {
-    if (!confirm(b.dataset.cur === '1' ? 'Hapus perangkat INI? Kamu akan keluar.' : 'Hapus perangkat ini dari daftar?')) return;
-    const d = await api('/api/devices?id=' + b.dataset.dev, 'DELETE');
-    toast(d.ok ? '✅ ' + d.msg : '⚠ ' + d.msg);
-    if (d.self) showLogin(); else loadDevices();
-  });
+let r; try { r = await api('/api/devices'); } catch { return; }
+if (!r.devices) return;
+$('#devHint').textContent = r.temporary
+? 'Sesi ini TIDAK diingat (login ulang saat browser ditutup). Centang "Ingat perangkat ini" saat login.'
+: `Maksimal ${r.max} perangkat. Bila penuh, yang terlama otomatis dihapus. Perangkat tetap masuk sampai kamu menghapusnya.`;
+$('#devList').innerHTML = r.devices.map(d => `<div class="wifirow"><div><b>${esc(d.name)}</b> ${d.current ? '<span class="chip run">Perangkat ini</span>' : ''}<br><small>Masuk ${fmtDate(d.created)} · terakhir aktif ${fmtDate(d.lastSeen)}</small></div>
+<button class="btn dout sm" data-dev="${d.id}" data-cur="${d.current ? 1 : 0}">Hapus</button></div>`).join('') || '<p class="muted">Belum ada perangkat yang diingat.</p>';
+$$('#devList [data-dev]').forEach(b => b.onclick = async () => {
+if (!confirm(b.dataset.cur === '1' ? 'Hapus perangkat INI? Kamu akan keluar.' : 'Hapus perangkat ini dari daftar?')) return;
+const d = await api('/api/devices?id=' + b.dataset.dev, 'DELETE');
+toast(d.msg, d.ok ? 'ok' : 'warn');
+if (d.self) showLogin(); else loadDevices();
+});
 }
 $('#btnDevOthers').onclick = async () => {
-  if (!confirm('Keluarkan semua perangkat lain?')) return;
-  const d = await api('/api/devices?others=1', 'DELETE'); toast(d.msg); loadDevices();
+if (!confirm('Keluarkan semua perangkat lain?')) return;
+const d = await api('/api/devices?others=1', 'DELETE'); toast(d.msg, 'ok'); loadDevices();
 };
-
-// ---------------------------------------------------------------- koneksi ----
-// Tanpa WebSocket (hemat memori ESP32): polling status + log tiap 2 dtk, 10 dtk saat tab tersembunyi.
 let pollTimer = null, pollBusy = false;
 async function pollOnce() {
-  if (pollBusy) return;
-  pollBusy = true;
-  try {
-    const r = await api('/api/poll?since=' + lastSeq);
-    if (r.status) renderStatus(r.status);
-    updateRemoteBanner(r.remote);
-    addEntries(r.log.entries, true);
-  } catch (e) { /* koneksi tersendat: dicoba lagi di putaran berikutnya */ } finally { pollBusy = false; }
+if (pollBusy) return;
+pollBusy = true;
+try {
+const r = await api('/api/poll?since=' + lastSeq);
+pollFails = 0;
+if (r.status) renderStatus(r.status);
+updateRemoteBanner(r.remote);
+addEntries(r.log.entries, true);
+} catch (e) { if (e.message !== 'login' && ++pollFails >= 2 && last) renderChips(last); } finally { pollBusy = false; }
 }
 function schedulePoll() {
-  clearTimeout(pollTimer);
-  pollTimer = setTimeout(async () => { if (!$('#app').hidden) await pollOnce(); schedulePoll(); }, document.hidden ? 10000 : 2000);
+clearTimeout(pollTimer);
+pollTimer = setTimeout(async () => { if (!$('#app').hidden) await pollOnce(); schedulePoll(); }, document.hidden ? 10000 : 2000);
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && !$('#app').hidden) { pollOnce(); schedulePoll(); } });
-// Mode jarak jauh (Worker Cloudflare): kode UI sama, tetapi fitur sensitif disembunyikan.
-function applyRemote() { $$('[data-local]').forEach(e => { e.hidden = true; }); }
+function applyRemote(on) {
+REMOTE = on;
+$$('[data-local]').forEach(e => { e.hidden = on; });
+if (on && curSeg === 'konsol') actSeg('log');
+}
 function updateRemoteBanner(rm) {
-  const b = $('#bannerOffline');
-  if (!rm) { b.hidden = true; document.body.classList.remove('offline'); return; }
-  b.hidden = rm.online;
-  document.body.classList.toggle('offline', !rm.online);
-  if (!rm.online) {
-    const t = rm.lastSeen ? new Date(rm.lastSeen).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : null;
-    b.textContent = t ? `⚠ Mesin offline sejak ${t}. Kontrol dinonaktifkan sampai tersambung kembali.` : '⚠ Mesin belum pernah terhubung ke server.';
-  }
+const b = $('#bannerOffline');
+if (!rm) { b.hidden = true; document.body.classList.remove('offline'); return; }
+b.hidden = rm.online;
+document.body.classList.toggle('offline', !rm.online);
+if (!rm.online) {
+const t = rm.lastSeen ? new Date(rm.lastSeen).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : null;
+$('#offlineTxt').textContent = t ? `Mesin offline sejak ${t}. Kontrol dinonaktifkan sampai tersambung kembali.` : 'Mesin belum pernah terhubung ke server.';
+}
 }
 async function start() {
-  let r;
-  try { r = await api('/api/poll?since=0'); } catch { return; }
-  $('#app').hidden = false; $('#login').hidden = true;
-  try { const info = await api('/api/info'); if (info && info.remote) applyRemote(); } catch { /* ESP32 lama tanpa /api/info */ }
-  if (r.status) renderStatus(r.status);
-  updateRemoteBanner(r.remote);
-  addEntries(r.log.entries, false);
-  if (r.log.entries.length >= 30) await fetchLogsAll();
-  loadSettings(); loadMeta().then(() => { renderPalette(); return loadProses(); }); schedulePoll();
+let r;
+try { r = await api('/api/poll?since=0'); } catch { return; }
+$('#app').hidden = false; $('#login').hidden = true;
+try { const info = await api('/api/info'); applyRemote(!!(info && info.remote)); } catch { /* ESP32 lama tanpa /api/info */ }
+if (r.status) renderStatus(r.status);
+updateRemoteBanner(r.remote);
+addEntries(r.log.entries, false);
+if (r.log.entries.length >= 30) await fetchLogsAll();
+loadSettings(); loadMeta().then(() => { renderPalette(); return loadProses(); }); schedulePoll();
+const [v, sg] = location.hash.slice(1).split('/');
+if (VIEWS.includes(v) && v !== 'beranda') show(v, sg);
 }
-start();
-</script>
+start();</script>
 </body>
 </html>

@@ -6,6 +6,7 @@ tulis firmware/mesin_cuci_otomatis/web_ui.h. Jalankan setiap selesai mengubah we
     python tools/build_web.py --remote   # + cloud/public/index.html untuk Worker (UI jarak jauh, kode sama)
 """
 import gzip
+import re
 import pathlib
 import sys
 
@@ -16,7 +17,25 @@ out = root / "firmware" / "mesin_cuci_otomatis" / "web_ui.h"
 html = (web / "index.html").read_text(encoding="utf-8")
 css = (web / "style.css").read_text(encoding="utf-8")
 js = (web / "app.js").read_text(encoding="utf-8")
-html = html.replace("/*CSS*/", css).replace("/*JS*/", js)
+
+
+def slim(text, line_comments):
+    """Buang komentar satu baris penuh dan indentasi awal (aman: tanpa mengubah string/regex)."""
+    out = []
+    for ln in text.split("\n"):
+        t = ln.strip()
+        if not t or (line_comments and t.startswith("//")):
+            continue
+        out.append(t)
+    return "\n".join(out)
+
+
+def slim_css(text):
+    text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+    return slim(text, False)
+
+
+html = html.replace("/*CSS*/", slim_css(css)).replace("/*JS*/", slim(js, True))
 
 data = gzip.compress(html.encode("utf-8"), compresslevel=9, mtime=0)
 lines = []

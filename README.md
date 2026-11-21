@@ -46,10 +46,10 @@ Berkas `.bin`: `.pio/build/rymcu-esp32-devkitc/firmware.bin`.
 2. Board: *ESP32 Dev Module*. **Tools → Partition Scheme → "Minimal SPIFFS (1.9MB APP with OTA)"** (wajib).
 3. Library Manager: `ArduinoJson` (v7), `WebSockets` (Links2004), `AsyncTCP` dan `ESPAsyncWebServer`
    (keduanya versi **mathieucarbou**; jika perlu pasang dari GitHub).
-4. Upload lewat USB. *Sketch → Export Compiled Binary* menghasilkan `.bin` untuk flash lewat web (tab Firmware).
+4. Upload lewat USB. *Sketch → Export Compiled Binary* menghasilkan `.bin` untuk flash lewat web (menu Sistem → Pemeliharaan).
 
 ### Lewat web
-Dashboard → tab **Firmware** → pilih `.bin` → *Flash*. Hanya saat mesin siap (IDLE). Firmware lama tetap
+Dashboard → menu **Sistem → Pemeliharaan → Firmware** → pilih `.bin` → *Flash*. Hanya saat mesin siap (IDLE). Firmware lama tetap
 utuh di partisi cadangan; tombol **Kembali ke versi sebelumnya** tersedia.
 
 ## Dashboard web
@@ -59,7 +59,19 @@ utuh di partisi cadangan; tombol **Kembali ke versi sebelumnya** tersedia.
 | Jaringan rumah | `http://mesincuci.local` atau IP yang dikirim Telegram saat online |
 | Hotspot ESP32 (darurat) | **hanya menyala bila semua WiFi tersimpan gagal**: sambung ke `MesinCuci-XXXX` (password `AP_PASSWORD`) → `http://192.168.4.1`. Mati lagi 2 menit setelah WiFi rumah pulih dan tanpa klien |
 
-Tab: Beranda, Proses, Manual, Relay, Pengaturan, WiFi, Log, Konsol (serial monitor web), Riwayat, Firmware, Sistem.
+Lima menu (bottom-nav di HP, rail di layar lebar; tema Otomatis/Terang/Gelap dengan aksen #00E5C3):
+
+| Menu | Isi |
+|---|---|
+| **Beranda** | status (cincin progres, sisa waktu), kartu keputusan, **Rel Tahap**, air/relay/koneksi, mulai Proses |
+| **Proses** | kartu Proses dengan jejak ikon Tahap, editor 3 kolom |
+| **Manual** | jalankan satu Tahap + kontrol relay dan uji berurutan |
+| **Aktivitas** | Log, Riwayat & statistik, Konsol (serial monitor web, hanya lokal) |
+| **Sistem** | Koneksi (WiFi, jarak jauh), Keamanan (dua password, perangkat diingat), Mesin (notifikasi, kalibrasi air, tema), Pemeliharaan (info, firmware, cadangan, reset/restart) |
+
+**Rel Tahap:** ketuk area *Sisa Tahap* di Beranda (atau *Lihat semua*) untuk membuka panel berisi semua Tahap Proses yang
+berjalan (selesai, berjalan, antre) sebagai kartu lengkap dengan semua variabelnya. Datanya dari `GET /api/job`.
+Panduan visual: `docs/DESIGN.md`.
 Sumber dashboard ada di `web/`; setelah diubah jalankan `python tools/build_web.py` (menghasilkan `web_ui.h`).
 
 ## Proses & Tahap
@@ -83,12 +95,12 @@ disusun di tab **Proses** dari Tahap terkecil; tiap Tahap punya variabelnya send
 | **Notifikasi** | pesan (≤ 40 karakter); terkirim walau mode Senyap, lalu lanjut |
 
 Menu **Manual** menjalankan satu Tahap dengan form yang sama, ditambah **Buang manual** (valve ditarik selama waktu tertentu
-**tanpa sensor**, jalan darurat bila sensor rusak). Kontrol relay langsung dan kalibrasi relay ada di tab **Relay**.
+**tanpa sensor**, jalan darurat bila sensor rusak). Kontrol relay langsung dan kalibrasi relay ada di menu **Manual** (panel Relay).
 
 **Mulai:** sekarang, tunda `HH:MM:SS`, atau selesai pada jam `HH:MM` (perkiraan: isi/buang berbasis sensor bisa meleset).
 Proses yang sedang dipakai (berjalan, dijeda, menunggu keputusan, menunggu mulai, atau pemulihan listrik padam tertunda)
 **tidak bisa diubah/dihapus**: tekan Stop dulu. Proses disimpan sebagai berkas JSON di LittleFS (partisi `spiffs`), ditulis
-atomik; ekspor/impor per Proses ada di tab Proses.
+atomik; ekspor/impor per Proses ada di menu Proses.
 
 ### Keputusan menunggu
 Bila Isi/Buang/Spin/Cek gagal atau ada Tahap *Minta tindakan*, mesin **berhenti dan tidak pernah lanjut sendiri**. Dashboard
@@ -113,7 +125,7 @@ Catatan fitur lama yang dihapus: `Old_Vertion/proses_lama.md` (lokal).
 `relay <kiri|kanan|isi|buang|spin|pewangi> <on|off>`, `relay semua off`, `kalibrasi_relay [detik]`, `buang_manual <menit>`;
 `notif lengkap|ringkas|senyap`, `remote [on|off]`, `kalibrasi_air`, `reset_semua`; WiFi: `wifi_list wifi_tambah wifi_hapus
 wifi_urutan`; `restart`. Konsol Serial/web juga punya `heap`, `tasks`, `log`, `relay_test <nama>`, `serial debug on|off`.
-Variabel air/putar/pewangi tidak lagi berupa perintah: diatur per Tahap di dashboard (tab Proses dan Manual).
+Variabel air/putar/pewangi tidak lagi berupa perintah: diatur per Tahap di dashboard (menu Proses dan Manual).
 
 ## Wokwi
 
@@ -129,7 +141,7 @@ Fixture uji UI `tools/uitest/meta.json` dibuat dari firmware: `test_tahap --meta
 
 ## Uji relay & failsafe
 
-- Dashboard → tab **Relay**: tombol ON/OFF per relay (hanya saat mesin siap, otomatis mati 60 detik) dan **Uji berurutan**
+- Dashboard → menu **Manual** (panel Relay): tombol ON/OFF per relay (hanya saat mesin siap, otomatis mati 60 detik) dan **Uji berurutan**
   (kiri → kanan → isi → buang → spin → pewangi). perintah `relay <nama> <on|off>`,
   `relay semua off`, `kalibrasi_relay [detik]`.
 - Motor kiri & kanan **tidak pernah** menyala bersamaan, dijaga berlapis: (1) interlock di `relaySet`, (2) pin motor lawan
@@ -142,7 +154,7 @@ Fixture uji UI `tools/uitest/meta.json` dibuat dari firmware: `test_tahap --meta
 
 Login dengan **Ingat perangkat ini** disimpan di NVS (maks **5 perangkat**; bila penuh, yang terlama otomatis dihapus) dan tidak
 kedaluwarsa di sisi mesin. Cookie browser berumur 400 hari (batas browser) dan diperpanjang tiap dipakai. Kelola/hapus di
-tab **Sistem → Perangkat yang diingat**. Mengganti password web mengeluarkan semua perangkat.
+menu **Sistem → Keamanan → Perangkat yang diingat**. Mengganti password web mengeluarkan semua perangkat.
 
 ## Uji antarmuka (opsional)
 
@@ -167,11 +179,11 @@ Web lokal (HTTP, rumah/hotspot) ─────► ESP32   (jalur utama, tetap j
   ada di `cloud/src/allow.js` dan `firmware/.../remote_policy.cpp`, diuji identik dengan `cloud/test/allow-vectors.txt`.
   Flash firmware, WiFi, ganti password, perangkat diingat, konsol, dan restore **hanya** dari web lokal.
 - Konfigurasi & deploy Worker: `cloud/README.md` (panduan akun, 2FA, `npm test` untuk uji lokal tanpa akun).
-- Di web lokal: tab **Sistem → Kontrol jarak jauh** untuk mengaktifkan/menonaktifkan sambungan; `remote on|off` di konsol.
+- Di web lokal: menu **Sistem → Koneksi → Kontrol jarak jauh** untuk mengaktifkan/menonaktifkan sambungan; `remote on|off` di konsol.
 
-## Cadangkan & pulihkan (tab Sistem, hanya web lokal)
+## Cadangkan & pulihkan (menu Sistem → Pemeliharaan, hanya web lokal)
 
-- **Unduh cadangan:** satu berkas JSON (versi 3) berisi pengaturan dan daftar WiFi; Proses diekspor satu per satu di tab Proses. Password WiFi hanya ikut bila
+- **Unduh cadangan:** satu berkas JSON (versi 3) berisi pengaturan dan daftar WiFi; Proses diekspor satu per satu di menu Proses. Password WiFi hanya ikut bila
   dicentang (simpan berkasnya dengan aman). Data kalibrasi dan jadwal sekali pakai tidak disertakan.
 - **Pulihkan dari berkas:** berkas diperiksa dulu (simulasi, `?dry=1`) dan ringkasannya ditampilkan untuk dikonfirmasi. Pemulihan
   **atomik**: bila satu bagian tidak valid, tidak ada yang berubah. Nilai di luar rentang disesuaikan; batas berkas 12 KB
@@ -203,7 +215,7 @@ Web lokal (HTTP, rumah/hotspot) ─────► ESP32   (jalur utama, tetap j
   migrasi `renamed_classes` (Relay -> RelayV2) dipakai untuk memaksa kode baru.
 
 ## Dua password, diatur dari dashboard lokal
-- Dashboard lokal → tab **Sistem**: **Password web lokal** dan **Password jarak jauh** (keduanya minimal 12 karakter, diketik dua kali).
+- Dashboard lokal → menu **Sistem → Keamanan**: **Password web lokal** dan **Password jarak jauh** (keduanya minimal 12 karakter, diketik dua kali).
   Dua password sengaja berbeda: kebocoran satu tidak membuka yang lain.
 - Password jarak jauh dikirim ESP32 **sekali** lewat sambungan TLS ke Worker (pesan `setpw`); Worker menghitung hash PBKDF2 dan
   menyimpannya di Durable Object. Tidak disimpan di ESP32 maupun log (perintah `web_password` dan konsol juga disembunyikan di log).
