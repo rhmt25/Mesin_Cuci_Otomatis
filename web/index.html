@@ -9,6 +9,7 @@
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+<symbol id="i-washer" viewBox="0 0 64 64"><g stroke-width="3.6"><rect x="10" y="8" width="44" height="48" rx="8"/><circle cx="32" cy="36" r="12"/><path d="M22 36c4-4 6 4 10 0s6 4 10 0M18 16h4M26 16h4"/></g></symbol>
 <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10"/></symbol>
 <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5"/></symbol>
 <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 6h8M18 6h2M4 12h2M12 12h8M4 18h10M20 18h0"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></symbol>
@@ -66,7 +67,7 @@
 
 <section id="login" hidden>
   <form id="loginForm" class="card login">
-    <div class="logo" aria-hidden="true"><svg class="ic lg"><use href="#i-drop"/></svg></div>
+    <div class="logo" aria-hidden="true"><svg class="ic lg"><use href="#i-washer"/></svg></div>
     <h1>Mesin Cuci</h1>
     <input id="pw" type="password" placeholder="Password" autocomplete="current-password" aria-label="Password" required>
     <label class="chk"><input id="remember" type="checkbox" checked> Ingat perangkat ini (bisa dihapus di Sistem)</label>
@@ -86,7 +87,7 @@
 
   <div class="shell">
   <header class="top">
-    <div class="brand"><span class="logo" aria-hidden="true"><svg class="ic"><use href="#i-drop"/></svg></span><span>Mesin Cuci</span></div>
+    <div class="brand"><span class="logo" aria-hidden="true"><svg class="ic"><use href="#i-washer"/></svg></span><span>Mesin Cuci</span></div>
     <div class="chips">
       <span id="chipState" class="chip">…</span>
       <span id="chipWifi" class="chip">…</span>
@@ -179,9 +180,9 @@
     <section id="view-proses" class="view view-proses" data-mode="list">
       <div class="listmode">
         <div class="sechead"><div><h1>Proses</h1><p class="muted">Urutan Tahap yang bisa dijalankan. Maksimal 10 Proses, 40 Tahap per Proses. Proses yang sedang dipakai tidak bisa diubah.</p></div>
-          <div class="row"><span id="pcCount" class="chip"></span>
-            <label class="btn ghost sm" for="pcImportFile" data-local><svg class="ic sm"><use href="#i-upload"/></svg>Impor</label><input id="pcImportFile" type="file" accept=".json,application/json" hidden></div></div>
+          <span id="pcCount" class="chip"></span></div>
         <div id="pcList" class="pgrid"></div>
+        <div class="card" data-local><h3>Impor Proses</h3><label class="drop" for="pcImportFile"><svg class="ic lg"><use href="#i-upload"/></svg><span class="t">Seret Berkas Proses (.json) ke Sini</span><span class="h">atau klik untuk memilih berkas</span><span class="dn"></span><input id="pcImportFile" type="file" accept=".json,application/json" hidden></label></div>
       </div>
       <div class="editmode" id="pcEditor">
         <div class="edhead"><button class="btn ghost sm" id="pcBack" type="button"><svg class="ic sm"><use href="#i-left"/></svg>Daftar</button><h2 id="pcTitle">Proses baru</h2></div>
@@ -225,7 +226,7 @@
           <div id="relayCards" class="rgrid"></div>
           <div class="relaytools">
             <div class="tt"><label for="seqSecs" class="sr">Lama menyala per relay (detik)</label><input id="seqSecs" type="number" min="1" max="30" value="3" aria-label="Lama menyala per relay (detik)"><span class="muted">detik per relay</span>
-              <button class="btn sm" id="btnSeq"><svg class="ic sm"><use href="#i-play"/></svg>Uji berurutan</button><button class="btn sm" id="btnSeqStop">Berhenti</button></div>
+              <button class="btn" id="btnSeq"><svg class="ic sm"><use href="#i-play"/></svg>Uji berurutan</button><button class="btn" id="btnSeqStop">Berhenti</button></div>
             <button class="btn dout" id="btnAllOff"><svg class="ic sm"><use href="#i-power"/></svg>Matikan semua relay</button>
           </div>
         </div>
@@ -315,7 +316,7 @@
         <div class="grid2">
           <div class="card"><h3>Info sistem</h3><div id="sysInfo"></div></div>
           <div class="card" data-local><h3>Firmware</h3><div id="fwInfo" class="muted"></div>
-            <div class="form dpanel"><label>Pilih file .bin<input id="fwFile" type="file" accept=".bin"></label>
+            <div class="form dpanel"><label class="drop" for="fwFile"><svg class="ic lg"><use href="#i-upload"/></svg><span class="t">Seret File Firmware (.bin) ke Sini</span><span class="h">atau klik untuk memilih file</span><span class="dn"></span><input id="fwFile" type="file" accept=".bin" hidden></label>
               <button class="btn primary" id="btnFlash"><svg class="ic sm"><use href="#i-upload"/></svg>Flash firmware</button>
               <div class="bar"><div id="fwBar"></div></div>
               <p class="field-help" id="fwMsg">Hanya saat mesin siap (tidak mencuci / dijeda). Mesin restart otomatis setelah berhasil.</p>
@@ -323,7 +324,7 @@
           <div class="card" data-local><h3>Cadangkan dan pulihkan</h3>
             <p class="muted">Pengaturan dan daftar WiFi disimpan ke satu berkas JSON (Proses diekspor satu per satu di menu Proses). Password WiFi hanya ikut bila dicentang: simpan berkasnya dengan aman.</p>
             <label class="chk"><input type="checkbox" id="bkWifi"> Sertakan password WiFi</label>
-            <div class="row"><button class="btn" id="btnBackup"><svg class="ic sm"><use href="#i-download"/></svg>Unduh cadangan</button><label class="btn" for="restoreFile"><svg class="ic sm"><use href="#i-upload"/></svg>Pulihkan dari berkas…</label><input id="restoreFile" type="file" accept=".json,application/json" hidden></div>
+            <div class="row"><button class="btn" id="btnBackup"><svg class="ic sm"><use href="#i-download"/></svg>Unduh cadangan</button></div><label class="drop" for="restoreFile"><svg class="ic lg"><use href="#i-upload"/></svg><span class="t">Seret Berkas Cadangan (.json) ke Sini</span><span class="h">atau klik untuk memilih berkas</span><span class="dn"></span><input id="restoreFile" type="file" accept=".json,application/json" hidden></label>
             <p class="muted" id="restoreMsg" role="status"></p></div>
           <div class="card"><h3>Zona berbahaya</h3><p class="muted">Aksi berikut meminta konfirmasi.</p>
             <div class="row"><button class="btn dout" id="btnResetAll">Reset pengaturan</button><button class="btn dout" id="btnRestart"><svg class="ic sm"><use href="#i-power"/></svg>Restart mesin</button></div></div>

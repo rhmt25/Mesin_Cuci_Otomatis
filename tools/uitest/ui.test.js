@@ -412,7 +412,7 @@ function route(url, opt) {
   ok(cards.length === 5 && cards.map(c => c.classList.contains('done') ? 'D' : c.classList.contains('run') ? 'R' : 'Q').join('') === 'DRQQQ', 'kartu: 1 selesai, 1 berjalan, 3 antre');
   ok($$('.badge-st', cards[0])[0].textContent === 'Selesai' && $('.badge-st', cards[1]).textContent === 'Berjalan' && $('.badge-st', cards[2]).textContent === 'Antre', 'badge status per kartu');
   const dd = (c, label) => { const dt = $$('dt', c).find(x => x.textContent === label); return dt ? dt.nextElementSibling.textContent : null; };
-  ok(dd(cards[0], 'Mode pengisian') === 'Sensor (sampai penuh)' && dd(cards[0], 'Batas waktu isi') === '00:30:00' && dd(cards[0], 'Coba ulang bila batas habis') === '3 kali' && dd(cards[0], 'Tunggu antar coba ulang') === '15 mnt', 'kartu Isi: semua variabel mode sensor (label & satuan dari meta)');
+  ok(dd(cards[0], 'Mode pengisian') === 'Sensor (sampai penuh)' && dd(cards[0], 'Batas waktu isi') === '00:30:00' && dd(cards[0], 'Batas Ulang') === '3 kali' && dd(cards[0], 'Jeda Percobaan') === '15 mnt', 'kartu Isi: semua variabel mode sensor (label & satuan dari meta)');
   ok(dd(cards[0], 'Level') === null && dd(cards[0], 'Lama isi') === null, 'variabel yang tidak berlaku untuk mode tidak ditampilkan');
   ok(dd(cards[2], 'Ulangi') === '2 sesi' && dd(cards[2], 'Pola putar') === 'Gentle (5,3 / 7)' && dd(cards[3], 'Jumlah pewangi') === '0,5 cup' && dd(cards[4], 'Pesan') === 'Tambahkan deterjen', 'Soak, Pewangi (0,5 cup), Minta tindakan: variabel lengkap');
   ok(/Agitasi \(kanan\)/.test($('.tlive', cards[1]).textContent) && /sisa 03:10/.test($('.tlive', cards[1]).textContent), 'kartu berjalan: detail fase + sisa Tahap');
