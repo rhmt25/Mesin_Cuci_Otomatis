@@ -396,7 +396,7 @@ h1,h2,h3,label:not(.chk):not(.drop),dt,.nav button,.seg button,.filters button,.
 .crow input,.crow select{cursor:auto;user-select:auto;-webkit-user-select:auto}
 .crow{user-select:none;-webkit-user-select:none}
 .crow .handle{touch-action:none}
-.crow-head{user-select:none;-webkit-user-select:none}
+.crow-head{user-select:none;-webkit-user-select:none;touch-action:none}
 .crow.drag{box-shadow:0 14px 34px -10px rgba(0,0,0,.45);opacity:.96}
 .crow-ph{border:2px dashed var(--accent-text);border-radius:var(--r-md);background:var(--accent-soft)}
 body.dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}

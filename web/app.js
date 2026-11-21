@@ -726,7 +726,7 @@ $('#pcStack').addEventListener('click', e => {
   else if (b.dataset.act === 'dup') { if (ed.items.length >= 40) return toast('Maksimal 40 Tahap per Proses', 'warn'); ed.items.splice(i + 1, 0, { uid: uidSeq++, t: ed.items[i].t, v: { ...ed.items[i].v } }); }
   renderStack(); scheduleDry();
 });
-// Geser bebas untuk menukar urutan: tahan di mana saja pada kartu Tahap (kecuali kotak isian/tombol) lalu geser.
+// Geser bebas untuk menukar urutan: seret dari mana saja pada kartu Tahap (kecuali kotak isian/tombol), tanpa menahan.
 // Kartu yang diseret mengambang; penanda (placeholder) menandai posisi jatuh, dihitung dari kartu lain yang tidak ikut bergeser.
 let dragSt = null;
 const stackEl = $('#pcStack');
@@ -757,7 +757,7 @@ function beginDrag() {
 }
 function dragMove(ev) {
   const d = dragSt; if (!d) return;
-  if (!d.on) { if (Math.hypot((ev.clientX || 0) - d.x, ev.clientY - d.y) > 8) cancelDrag(false); return; }   // bergerak sebelum selesai menahan = menggulir
+  if (!d.on) { if (Math.hypot((ev.clientX || 0) - d.x, ev.clientY - d.y) > 4) beginDrag(); else return; }   // seperti menyeret berkas: mulai setelah bergerak sedikit
   ev.preventDefault && ev.preventDefault();
   d.row.style.top = (ev.clientY - d.off) + 'px';
   const others = [...stackEl.children].filter(r => r !== d.row && r !== d.ph);
@@ -774,7 +774,7 @@ stackEl.addEventListener('pointerdown', e => {
   cancelDrag(false);
   dragSt = { row, x: e.clientX || 0, y: e.clientY || 0, on: false };
   document.addEventListener('pointermove', dragMove); document.addEventListener('pointerup', dragUp); document.addEventListener('pointercancel', dragCancel);
-  if (onHandle) { e.preventDefault(); beginDrag(); } else dragSt.timer = setTimeout(beginDrag, 280);
+  if (onHandle) { e.preventDefault(); beginDrag(); }
 });
 document.addEventListener('touchmove', e => { if (dragSt && dragSt.on) e.preventDefault(); }, { passive: false });
 stackEl.addEventListener('contextmenu', e => { if (dragSt) e.preventDefault(); });
