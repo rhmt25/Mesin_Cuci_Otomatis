@@ -16,6 +16,11 @@ enum SR : uint8_t { SR_CONTINUE, SR_DONE, SR_DECIDE, SR_FAIL };
 
 static QueueHandle_t cmdQueue = nullptr;
 static SemaphoreHandle_t statusMutex = nullptr;
+static SemaphoreHandle_t jobMutex = nullptr;   // melindungi job/idx/waitingStart dari pembacaan API (machineCopyJob)
+struct JobLock {
+  JobLock() { if (jobMutex) xSemaphoreTake(jobMutex, portMAX_DELAY); }
+  ~JobLock() { if (jobMutex) xSemaphoreGive(jobMutex); }
+};
 static MachineStatus snap;
 static volatile bool holdFlag = false;
 
@@ -629,7 +634,7 @@ static void endProgram(CycleResult res, const char* why) {
 }
 
 static void stepFinished() {
-  idx++;
+  { JobLock jl; idx++; }
   if (idx >= job.count) {
     endProgram(RES_DONE, nullptr);
     return;
@@ -754,6 +759,7 @@ static void commonStart(int resumeIdx, uint32_t waitSec) {
 }
 
 static void startProses(uint8_t slot, uint32_t waitSec, int finishAt, int resumeIdx) {
+  JobLock jl;
   if (slot >= PROSES_SLOTS || !prosesLoad(slot, job)) {
     logf(LOG_WARN, "Proses slot %u kosong atau rusak", (unsigned)slot + 1);
     memset(&job, 0, sizeof(job));
@@ -777,6 +783,7 @@ static void startProses(uint8_t slot, uint32_t waitSec, int finishAt, int resume
 }
 
 static void startSingle(const Tahap& t, const char* name, bool test) {
+  JobLock jl;
   memset(&job, 0, sizeof(job));
   strlcpy(job.name, name, sizeof(job.name));
   job.t[0] = t;
@@ -795,6 +802,7 @@ static void startSingle(const Tahap& t, const char* name, bool test) {
 }
 
 static void startRelaySeq(uint8_t secs) {
+  JobLock jl;
   memset(&job, 0, sizeof(job));
   strlcpy(job.name, "Kalibrasi relay", sizeof(job.name));
   for (uint8_t r = 0; r < R_COUNT; r++) {
@@ -1227,6 +1235,7 @@ static void machineTask(void*) {
 void machineBegin() {
   cmdQueue = xQueueCreate(8, sizeof(MachineCmd));
   statusMutex = xSemaphoreCreateMutex();
+  jobMutex = xSemaphoreCreateMutex();
   memset(&snap, 0, sizeof(snap));
   memset(&job, 0, sizeof(job));
 
@@ -1288,6 +1297,22 @@ void machineGetStatus(MachineStatus& out) {
   } else {
     out = snap;
   }
+}
+
+bool machineCopyJob(Proses& out, uint8_t& idxOut, bool& waiting, uint32_t& waitLeftMs, uint8_t& slot, bool& manual, bool& test) {
+  if (jobMutex && xSemaphoreTake(jobMutex, pdMS_TO_TICKS(20)) != pdTRUE) return false;
+  bool active = mstate != MS_IDLE && job.count > 0;
+  if (active) {
+    out = job;
+    idxOut = idx;
+    waiting = waitingStart;
+    waitLeftMs = waitLeft;
+    slot = jobSlot;
+    manual = jobManual;
+    test = jobTest;
+  }
+  if (jobMutex) xSemaphoreGive(jobMutex);
+  return active;
 }
 
 bool machineIsIdle() {

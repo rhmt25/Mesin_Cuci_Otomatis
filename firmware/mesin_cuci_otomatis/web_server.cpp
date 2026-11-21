@@ -163,7 +163,7 @@ static void setupRoutes() {
 
   // ---- API (dispatcher bersama api_core) ----
   for (const char* p : {"/api/status", "/api/info", "/api/poll", "/api/settings", "/api/logs", "/api/history",
-                        "/api/tahap/meta", "/api/proses", "/api/proses/export", "/api/wifi", "/api/console", "/api/update/info"})
+                        "/api/tahap/meta", "/api/job", "/api/proses", "/api/proses/export", "/api/wifi", "/api/console", "/api/update/info"})
     getRoute(p);
   for (const char* p : {"/api/proses", "/api/wifi"}) deleteRoute(p);
   for (const char* p : {"/api/settings", "/api/proses", "/api/proses/import", "/api/password", "/api/run", "/api/decide", "/api/cmd", "/api/wifi", "/api/console"})

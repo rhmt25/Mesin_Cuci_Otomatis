@@ -73,6 +73,8 @@ bool machinePost(const MachineCmd& cmd);
 bool machineStartProses(uint8_t slot, uint32_t waitSec = 0, int finishAtMin = -1);
 bool machineRunManual(const Tahap& t);
 void machineGetStatus(MachineStatus& out);
+// Salinan pekerjaan yang sedang berjalan untuk API (/api/job). false bila idle atau mutex sibuk.
+bool machineCopyJob(Proses& out, uint8_t& idx, bool& waiting, uint32_t& waitLeftMs, uint8_t& slot, bool& manual, bool& test);
 bool machineIsIdle();
 bool machineSlotInUse(uint8_t slot);           // Proses sedang berjalan/menunggu/dijeda atau pemulihan tertunda
 void machineHold(bool hold);                   // tahan Proses baru (saat flash firmware)

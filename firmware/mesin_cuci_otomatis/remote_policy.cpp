@@ -41,7 +41,7 @@ bool remoteApiAllowed(const char* method, const char* path, const char* cmd) {
   if (!method || !path) return false;
   if (strcmp(method, "GET") == 0) {
     static const char* const ok[] = {"/api/status", "/api/poll", "/api/info", "/api/settings", "/api/logs",
-                                     "/api/history", "/api/tahap/meta", "/api/proses", "/api/proses/export"};
+                                     "/api/history", "/api/tahap/meta", "/api/job", "/api/proses", "/api/proses/export"};
     for (const char* p : ok)
       if (strcmp(path, p) == 0) return true;
     return false;

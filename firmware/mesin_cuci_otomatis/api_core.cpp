@@ -220,6 +220,8 @@ static String prosesListJson() {
     o["count"] = p->count;
     o["rev"] = p->rev;
     o["est"] = prosesEstimateSec(*p);
+    JsonArray tr = o["trail"].to<JsonArray>();   // jejak jenis Tahap (maks 12) untuk kartu Proses
+    for (uint8_t k = 0; k < p->count && k < 12; k++) tr.add(tahapKey(p->t[k].type));
   }
   delete p;
   return toString(d);
@@ -248,6 +250,58 @@ static ApiResult prosesDetail(int slot) {
     JsonArray rk = d["ringkas"].to<JsonArray>();
     for (uint8_t i = 0; i < p->count; i++) rk.add(tahapRingkas(p->t[i]));
     addWarnings(d, *p);
+    res = {200, toString(d)};
+  }
+  delete p;
+  return res;
+}
+
+// Pekerjaan yang sedang berjalan: semua Tahap (selesai, berjalan, antre) untuk Rel Tahap di dashboard.
+static ApiResult jobJson() {
+  if (apiLowMemory(16384)) return {503, msgJson(false, "memori rendah, coba lagi")};
+  Proses* p = new Proses;
+  if (!p) return {503, msgJson(false, "memori rendah, coba lagi")};
+  uint8_t idx = 0, slot = NO_SLOT;
+  bool waiting = false, manual = false, test = false;
+  uint32_t waitMs = 0;
+  bool active = machineCopyJob(*p, idx, waiting, waitMs, slot, manual, test);
+  ApiResult res;
+  if (!active && !machineIsIdle()) {
+    res = {503, msgJson(false, "sibuk, coba lagi")};
+  } else if (!active) {
+    res = {200, "{\"active\":false}"};
+  } else {
+    MachineStatus ms;
+    machineGetStatus(ms);
+    JsonDocument d;
+    d["active"] = true;
+    d["name"] = JsonString(p->name);
+    d["slot"] = slot == NO_SLOT ? 0 : slot + 1;
+    d["manual"] = manual;
+    d["test"] = test;
+    d["waiting"] = waiting;
+    d["waitLeft"] = waitMs / 1000;
+    d["idx"] = idx;
+    d["count"] = p->count;
+    d["state"] = ms.state == MS_RUNNING ? "running" : ms.state == MS_PAUSED ? "paused" : "decide";
+    d["detail"] = JsonString(ms.detail);
+    d["stepLeft"] = ms.stepLeftSec;
+    JsonArray arr = d["tahap"].to<JsonArray>();
+    for (uint8_t i = 0; i < p->count; i++) {
+      JsonObject o = arr.add<JsonObject>();
+      const Tahap& t = p->t[i];
+      if (t.type == TH_UJI_RELAY) {
+        o["t"] = "uji";
+        o["relay"] = relayName((RelayId)t.mode);
+        o["detik"] = t.detik;
+        o["ringkas"] = JsonString(("Uji relay " + String(relayName((RelayId)t.mode))).c_str());
+        o["est"] = t.detik;
+      } else {
+        tahapToJson(t, o);
+        o["ringkas"] = JsonString(tahapRingkas(t).c_str());
+        o["est"] = tahapEstimateSec(t);
+      }
+    }
     res = {200, toString(d)};
   }
   delete p;
@@ -400,6 +454,7 @@ ApiResult apiHandle(ApiSource src, const char* method, const String& path, const
       return {200, apiLogsJson((uint32_t)query("since").toInt(), lim > 0 ? (size_t)lim : 1)};
     }
     if (path == "/api/history") return {200, historyJson()};
+    if (path == "/api/job") return jobJson();
     if (path == "/api/tahap/meta") {
       if (apiLowMemory(16384)) return {503, msgJson(false, "memori rendah, coba lagi")};
       return {200, tahapMetaJson()};
