@@ -1,4 +1,4 @@
-/* ========== 1. Token (DESIGN.md §3-5). Komponen hanya memakai token, tanpa hex mentah. ========== */
+/* ========== 1. Token (token desain). Komponen hanya memakai token, tanpa hex mentah. ========== */
 :root{
   --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:24px;--s6:32px;--s7:48px;
   --r-sm:8px;--r-md:14px;--r-lg:22px;--r-pill:999px;

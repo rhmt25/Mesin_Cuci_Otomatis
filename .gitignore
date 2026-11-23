@@ -9,15 +9,11 @@ secrets.h
 **/secrets.h
 !**/secrets.example.h
 
-# Versi lama / eksperimen, tidak dipakai
-Old_Vertion/
+# Semua berkas proses pembuatan proyek (memori agen, desain, plan, todo, versi lama): hanya lokal
+_proses/
 
 # Output graphify (knowledge graph)
 graphify-out/
-
-# Dokumen kerja lokal (tidak di-commit)
-plan.md
-todo.md
 
 # Uji UI
 tools/uitest/node_modules/

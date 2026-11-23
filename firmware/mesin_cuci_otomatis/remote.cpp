@@ -13,7 +13,7 @@
 // Bundel sertifikat CA bawaan core Arduino (memverifikasi sertifikat Cloudflare, tanpa pinning).
 extern const uint8_t x509_crt_bundle_start[] asm("_binary_x509_crt_bundle_start");
 
-// Protokol (JSON per pesan WebSocket) — lihat plan.md 5.4
+// Protokol (JSON per pesan WebSocket)
 //   ESP->Worker: hello, hb (30 dtk), status (3 dtk saat ada penonton), log, notif, res
 //   Worker->ESP: req {id,m,p,q,b}, viewers {n,ttl}
 #define HB_INTERVAL_MS      30000

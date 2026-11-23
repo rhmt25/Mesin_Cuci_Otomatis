@@ -71,7 +71,6 @@ Lima menu (bottom-nav di HP, rail di layar lebar; tema Otomatis/Terang/Gelap den
 
 **Rel Tahap:** ketuk area *Sisa Tahap* di Beranda (atau *Lihat semua*) untuk membuka panel berisi semua Tahap Proses yang
 berjalan (selesai, berjalan, antre) sebagai kartu lengkap dengan semua variabelnya. Datanya dari `GET /api/job`.
-Panduan visual: `docs/DESIGN.md`.
 Sumber dashboard ada di `web/`; setelah diubah jalankan `python tools/build_web.py` (menghasilkan `web_ui.h`).
 
 ## Proses & Tahap
@@ -116,7 +115,6 @@ menampilkan tombol sesuai kasus dan notifikasi dikirim (ulang tiap 10 menit):
 turun dari posisi penuh dalam waktu *Verifikasi*; bila tidak, valve dilepas 3 dtk lalu ditarik lagi (*Tarik Ulang Valve*).
 Setelah terbukti, valve ditarik sampai *lama buang*, lalu dicek: bila air masih penuh sesi diulang; semua sesi gagal → keputusan.
 Listrik padam → saat menyala ditanya **Lanjutkan / Batalkan** (tidak pernah lanjut otomatis; dibatalkan bila Proses sudah diubah).
-Catatan fitur lama yang dihapus: `Old_Vertion/proses_lama.md` (lokal).
 
 ## Perintah (Web · Serial/Konsol)
 

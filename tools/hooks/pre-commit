@@ -5,7 +5,7 @@ staged=$(git diff --cached --name-only --diff-filter=ACM)
 
 for f in $staged; do
   case "$f" in
-    *secrets.h|*.dev.vars|*.secrets.local.json|plan.md|todo.md)
+    *secrets.h|*.dev.vars|*.secrets.local.json|plan.md|todo.md|_proses/*|*/_proses/*)
       echo "DITOLAK: $f tidak boleh di-commit"; fail=1 ;;
   esac
 done
