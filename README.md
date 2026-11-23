@@ -48,6 +48,9 @@ Berkas `.bin`: `.pio/build/rymcu-esp32-devkitc/firmware.bin`.
    (keduanya versi **mathieucarbou**; jika perlu pasang dari GitHub).
 4. Upload lewat USB. *Sketch → Export Compiled Binary* menghasilkan `.bin` untuk flash lewat web (menu Sistem → Pemeliharaan).
 
+### Satu klik (WiFi + Worker)
+Salin `.env.example` menjadi `.env.local` (git-ignored), isi `DEPLOY_ESP_PASSWORD`, lalu klik ganda `tools/deploy.cmd`. Skrip membangun web dan firmware, mengunggah `.bin` ke `mesincuci.local` lewat OTA (hanya bila mesin IDLE), menunggu ESP32 hidup kembali, lalu menguji dan men-deploy Worker. Opsi: `-SkipEsp`, `-SkipWorker`.
+
 ### Lewat web
 Dashboard → menu **Sistem → Pemeliharaan → Firmware** → pilih `.bin` → *Flash*. Hanya saat mesin siap (IDLE). Firmware lama tetap
 utuh di partisi cadangan; tombol **Kembali ke versi sebelumnya** tersedia.

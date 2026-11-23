@@ -19,3 +19,7 @@ graphify-out/
 tools/uitest/node_modules/
 tools/uitest/package-lock.json
 cloud/.remote-password.tmp
+
+# Kunci/password lokal untuk skrip deploy
+.env.local
+.env
