@@ -1458,7 +1458,7 @@ document.body.classList.add('dragging');
 }
 function dragMove(ev) {
 const d = dragSt; if (!d) return;
-if (!d.on) { if (Math.hypot((ev.clientX || 0) - d.x, ev.clientY - d.y) > 4) beginDrag(); else return; }   // seperti menyeret berkas: mulai setelah bergerak sedikit
+if (!d.on) { if (Math.hypot((ev.clientX || 0) - d.x, ev.clientY - d.y) > 4) beginDrag(); else return; }
 ev.preventDefault && ev.preventDefault();
 d.row.style.top = (ev.clientY - d.off) + 'px';
 const others = [...stackEl.children].filter(r => r !== d.row && r !== d.ph);
@@ -1469,13 +1469,12 @@ if (ev.clientY < 70) window.scrollBy(0, -14); else if (ev.clientY > innerHeight 
 const dragUp = () => cancelDrag(true), dragCancel = () => cancelDrag(false);
 stackEl.addEventListener('pointerdown', e => {
 if (ed.locked || (e.button && e.button !== 0)) return;
+if (!e.target.closest('.handle')) return;   // drag hanya lewat pegangan di pojok kartu
 const row = e.target.closest('.crow'); if (!row) return;
-const onHandle = !!e.target.closest('.handle');
-if (!onHandle && e.target.closest('input,select,button,textarea,a,.sw')) return;
 cancelDrag(false);
 dragSt = { row, x: e.clientX || 0, y: e.clientY || 0, on: false };
 document.addEventListener('pointermove', dragMove); document.addEventListener('pointerup', dragUp); document.addEventListener('pointercancel', dragCancel);
-if (onHandle) { e.preventDefault(); beginDrag(); }
+e.preventDefault(); beginDrag();
 });
 document.addEventListener('touchmove', e => { if (dragSt && dragSt.on) e.preventDefault(); }, { passive: false });
 stackEl.addEventListener('contextmenu', e => { if (dragSt) e.preventDefault(); });

@@ -484,28 +484,25 @@ function route(url, opt) {
   $('input', rws[0]).dispatchEvent(pev('pointerdown', 10)); d.dispatchEvent(pev('pointermove', 60));
   ok(!$('.crow-ph'), 'menyeret dari kotak isian tidak memulai drag');
   $('input', rws[0]).dispatchEvent(pev('pointerup', 60));
-  $('.num', rws[0]).dispatchEvent(pev('pointerdown', 10));
-  ok(!$('.crow-ph'), 'hanya menekan (tanpa bergerak): belum drag, klik tetap normal');
-  d.dispatchEvent(pev('pointermove', 30));
-  ok(!!$('.crow-ph') && rws[0].classList.contains('drag'), 'langsung seret dari area kartu (tanpa menahan) mengaktifkan drag');
+  $('.num', rws[0]).dispatchEvent(pev('pointerdown', 10)); d.dispatchEvent(pev('pointermove', 60));
+  ok(!$('.crow-ph'), 'menyeret dari area kartu (bukan pegangan) tidak memulai drag');
+  d.dispatchEvent(pev('pointerup', 60));
+  $('.handle', rws[0]).dispatchEvent(pev('pointerdown', 10)); d.dispatchEvent(pev('pointermove', 30));
+  ok(!!$('.crow-ph') && rws[0].classList.contains('drag'), 'seret lewat pegangan mengaktifkan drag');
   d.dispatchEvent(pev('pointermove', 460)); d.dispatchEvent(pev('pointerup', 460));
   ok(!$('.crow-ph') && labels() === lab0.split(',').slice(1).concat(lab0.split(',')[0]).join(','), 'seret bebas ke paling bawah sekaligus (lebih dari satu langkah)');
   const rws2 = $$('#pcStack .crow');
   rws2.forEach((r, i) => { r.getBoundingClientRect = () => ({ top: i * 100, left: 0, width: 300, height: 90, bottom: i * 100 + 90 }); });
   const b2 = labels();
-  $('.num', rws2[4]).dispatchEvent(pev('pointerdown', 410));
+  $('.handle', rws2[4]).dispatchEvent(pev('pointerdown', 410));
   d.dispatchEvent(pev('pointermove', 380));
   d.dispatchEvent(pev('pointermove', 5)); d.dispatchEvent(pev('pointerup', 5));
   ok(labels() === [b2.split(',')[4]].concat(b2.split(',').slice(0, 4)).join(','), 'seret bebas dari bawah ke paling atas');
   ok($$('#pcStack .crow .num').map(n => n.textContent).join('') === '12345', 'nomor Tahap diperbarui setelah drag');
-  $('.num', $$('#pcStack .crow')[0]).dispatchEvent(pev('pointerdown', 10));
-  d.dispatchEvent(pev('pointermove', 12));
-  ok(!$('.crow-ph'), 'gerakan kecil (< 4 px) bukan drag');
-  d.dispatchEvent(pev('pointerup', 12));
 
   const lbRow = $$('#pcStack .crow')[1]; lbRow.getBoundingClientRect = () => ({ top: 100, left: 0, width: 300, height: 90, bottom: 190 });
   $('label', lbRow).dispatchEvent(pev('pointerdown', 120)); d.dispatchEvent(pev('pointermove', 160));
-  ok(!!$('.crow-ph'), 'menyeret dari label/area kosong kartu langsung memulai drag');
+  ok(!$('.crow-ph'), 'menyeret dari label/area kosong kartu tidak memulai drag');
   d.dispatchEvent(pev('pointerup', 160));
   ok(!/[A-Za-z]\(/.test($$('#pcStack .crow label > span:first-child').map(x => x.textContent).join('|')), 'ada spasi sebelum kurung buka pada semua label (J : M : D, satuan)');
 
