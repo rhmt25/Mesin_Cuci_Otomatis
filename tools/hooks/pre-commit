@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Rahmat Hidayat
 # Tolak commit yang berisi kredensial. Aktifkan: git config core.hooksPath tools/hooks
 fail=0
 staged=$(git diff --cached --name-only --diff-filter=ACM)

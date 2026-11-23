@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 #pragma once
 // Flash firmware: web (upload .bin) atau USB; rollback ke partisi sebelumnya.
 #include <Arduino.h>

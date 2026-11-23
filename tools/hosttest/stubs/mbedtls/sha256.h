@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 #pragma once
 #include "../Arduino.h"
 inline int mbedtls_sha256(const unsigned char* in, size_t n, unsigned char out[32], int) {

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 #pragma once
 // Tahap = satu aksi mesin terkecil dengan variabelnya sendiri. Proses = urutan Tahap buatan pemilik.
 // Katalog (jenis, variabel, rentang, bawaan) ada di sini dan diekspos ke UI lewat tahapMetaJson().

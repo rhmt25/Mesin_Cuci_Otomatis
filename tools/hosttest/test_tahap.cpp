@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 // Uji katalog Tahap, validasi, JSON, estimasi, dan penyimpanan Proses (tanpa perangkat keras).
 #include <string>
 #include <vector>

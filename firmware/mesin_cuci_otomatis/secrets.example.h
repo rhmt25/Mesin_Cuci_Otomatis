@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 #pragma once
 // TEMPLATE kredensial. Salin file ini menjadi secrets.h di folder yang sama,
 // lalu isi nilainya. secrets.h tidak boleh di-commit.

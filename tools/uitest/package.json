@@ -1,6 +1,7 @@
 {
   "name": "mesin-cuci-uitest",
   "private": true,
+  "license": "GPL-3.0-or-later",
   "description": "Uji antarmuka dashboard (jsdom + server palsu). Jalankan: cd tools/uitest && npm install && npm test",
   "scripts": { "test": "node ui.test.js" },
   "devDependencies": { "jsdom": "^26.0.0" }

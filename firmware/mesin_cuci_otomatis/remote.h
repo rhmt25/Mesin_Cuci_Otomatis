@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 #pragma once
 // Kontrol jarak jauh: SATU koneksi WebSocket (WSS) keluar ke Cloudflare Worker.
 // Perintah/permintaan API diterima lewat koneksi ini, status/log dikirim bila ada penonton,

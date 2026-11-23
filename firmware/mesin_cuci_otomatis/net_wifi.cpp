@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 #include "net_wifi.h"
 #include <WiFi.h>
 #include <DNSServer.h>

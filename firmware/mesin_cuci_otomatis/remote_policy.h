@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 #pragma once
 // Allowlist untuk permintaan dari jarak jauh (lewat Worker). Murni (tanpa Arduino) agar bisa diuji di PC,
 // dan HARUS identik dengan cloud/src/allow.js (diuji bersama dengan cloud/test/allow-vectors.txt).

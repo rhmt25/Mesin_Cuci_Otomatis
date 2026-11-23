@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  firmware:
+    name: Firmware build + host tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install PlatformIO
+        run: pip install platformio
+      - name: Create placeholder secrets.h
+        run: cp firmware/mesin_cuci_otomatis/secrets.example.h firmware/mesin_cuci_otomatis/secrets.h
+      - name: Build firmware
+        run: pio run -e rymcu-esp32-devkitc
+      - name: Host logic tests
+        run: sh tools/hosttest/run.sh
+
+  ui:
+    name: UI tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+        working-directory: tools/uitest
+      - run: npm test
+        working-directory: tools/uitest
+
+  worker:
+    name: Worker end-to-end tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+        working-directory: cloud
+      - run: npm test
+        working-directory: cloud

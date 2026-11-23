@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 #pragma once
 // Penyimpanan NVS: pengaturan, daftar WiFi, kalibrasi, resume, statistik, auth.
 #include <Arduino.h>

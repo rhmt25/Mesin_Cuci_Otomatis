@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 // Mesin Cuci Otomatis - firmware ESP32 (WROOM)
 // Core 1: kontrol mesin (machine.cpp). Core 0: WiFi, Web, kontrol jarak jauh.
 // Kredensial ada di secrets.h (salin dari secrets.example.h).

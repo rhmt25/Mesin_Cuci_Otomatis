@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 #pragma once
 // Mesin (Core 1): state machine Proses berbasis millis(), tanpa delay().
 // Proses = urutan Tahap (tahap.h). Mesin menjalankan salinan Proses di RAM; tidak membaca berkas saat berjalan.

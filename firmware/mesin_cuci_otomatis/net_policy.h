@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 #pragma once
 // Logika kebijakan jaringan yang murni (tanpa Arduino/WiFi) sehingga bisa diuji di PC.
 #include <stdint.h>

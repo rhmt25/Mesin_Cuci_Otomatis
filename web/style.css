@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+   Copyright (C) 2026 Rahmat Hidayat */
 /* ========== 1. Token (token desain). Komponen hanya memakai token, tanpa hex mentah. ========== */
 :root{
   --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:24px;--s6:32px;--s7:48px;

@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Rahmat Hidayat
 # Uji logika mesin di PC (butuh g++). Jalankan dari akar repo: sh tools/hosttest/run.sh [-v]
 set -e
 FW=firmware/mesin_cuci_otomatis

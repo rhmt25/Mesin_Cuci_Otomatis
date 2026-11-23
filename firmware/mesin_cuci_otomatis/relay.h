@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 #pragma once
 // Driver relay (trigger LOW, open-drain) + interlock keselamatan.
 #include <Arduino.h>

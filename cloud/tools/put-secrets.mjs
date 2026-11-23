@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 // Mengirim rahasia ke Cloudflare (wrangler secret put) tanpa menampilkannya.
 // Token & chat id Telegram diambil otomatis dari firmware/mesin_cuci_otomatis/secrets.h (lokal).
 import { spawnSync } from "node:child_process";

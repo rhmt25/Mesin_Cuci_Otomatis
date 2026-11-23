@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 #pragma once
 // Cadangkan & pulihkan pengaturan dan daftar WiFi (Proses diekspor satu per satu) (JSON). Khusus web lokal.
 // Logika murni (std::string + ArduinoJson) agar bisa diuji di PC.

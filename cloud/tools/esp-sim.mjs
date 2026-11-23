@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 // Simulator ESP32 untuk uji Worker: terhubung seperti perangkat sungguhan dan menjawab permintaan API.
 import WebSocket from "ws";
 

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 // Uji ujung-ke-ujung Worker + Durable Object di runtime lokal (wrangler dev), dengan simulator ESP32
 // dan server Telegram palsu. Tidak memakai akun Cloudflare. Jalankan: npm test
 import { spawn, spawnSync } from "node:child_process";

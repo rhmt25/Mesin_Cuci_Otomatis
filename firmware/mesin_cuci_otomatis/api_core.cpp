@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 #include "api_core.h"
 #include <ArduinoJson.h>
 #include "backup.h"

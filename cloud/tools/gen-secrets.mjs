@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 // Membuat rahasia untuk Worker + ESP32, disimpan LOKAL di .secrets.local.json (tidak masuk git).
 //   PowerShell:  $env:REMOTE_PASSWORD="password-web-jarak-jauh"; node tools/gen-secrets.mjs
 //   Putar token perangkat & sesi: tambahkan --rotate

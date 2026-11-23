@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 #pragma once
 // Sensor level air dengan debounce non-blocking. HIGH = ada air.
 #include <Arduino.h>

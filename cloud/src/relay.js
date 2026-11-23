@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 // Durable Object "Relay": satu instans untuk satu mesin.
 // - menerima SATU koneksi WebSocket dari ESP32 (WebSocket Hibernation: tidak ditagih saat diam)
 // - menyimpan cache status/log terakhir (browser tidak pernah membangunkan ESP32 untuk membaca)

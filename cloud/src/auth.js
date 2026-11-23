@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 // Autentikasi jarak jauh: hash password PBKDF2, sesi bertanda tangan HMAC (tanpa penyimpanan di server).
 const enc = new TextEncoder();
 

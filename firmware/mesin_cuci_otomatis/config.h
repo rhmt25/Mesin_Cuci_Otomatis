@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 #pragma once
 // Konfigurasi pusat: pin, konstanta, default. Kredensial ada di secrets.h.
 #include <Arduino.h>

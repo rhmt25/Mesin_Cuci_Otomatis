@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 // Allowlist jarak jauh. Kontrol penuh, kecuali aksi berisiko (flash firmware, WiFi, password, perangkat, konsol, restore,
 // impor Proses). ESP32 menegakkan aturan yang sama (pertahanan berlapis).
 

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 #include "settings.h"
 #include <Preferences.h>
 #include <mbedtls/sha256.h>

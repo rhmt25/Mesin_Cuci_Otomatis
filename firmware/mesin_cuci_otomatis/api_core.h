@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 #pragma once
 // Dispatcher API tunggal: dipakai oleh HTTP lokal (web_server.cpp) dan jarak jauh (remote.cpp, lewat Worker).
 // Autentikasi dilakukan oleh pemanggil (cookie lokal / Worker). Permintaan REMOTE dicek allowlist di sini.

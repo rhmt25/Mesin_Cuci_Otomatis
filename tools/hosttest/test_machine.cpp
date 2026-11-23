@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 // Uji logika mesin di PC: jam palsu + model tangki air + stub Arduino.
 // Jalankan: bash tools/hosttest/run.sh
 #include <functional>

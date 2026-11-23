@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 #pragma once
 // FILE HASIL GENERATE oleh tools/build_web.py dari folder web/. Jangan diedit manual.
 #include <Arduino.h>

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 #pragma once
 // WiFi multi-SSID non-blocking (STA) + hotspot darurat (AP, hanya bila semua SSID gagal) + watchdog konektivitas + mDNS + NTP.
 #include <Arduino.h>

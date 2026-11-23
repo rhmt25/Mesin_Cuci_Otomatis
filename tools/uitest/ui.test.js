@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 const root = require('path').resolve(__dirname, '../../web') + '/';

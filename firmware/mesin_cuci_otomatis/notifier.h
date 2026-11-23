@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 #pragma once
 // Notifier: filter mode (Lengkap/Ringkas/Senyap), batching 1,5 dtk, antrean saat offline.
 // Dipanggil hanya dari task remote; teks dikirim ke Worker yang meneruskannya ke Telegram.

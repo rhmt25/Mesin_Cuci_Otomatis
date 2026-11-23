@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 // Batas laju login (murni, bisa diuji). Penguncian bertingkat per IP + batas global untuk serangan dari banyak IP.
 export const FAILS_PER_LOCK = 5;
 export const LEVELS_MS = [5 * 60e3, 15 * 60e3, 60 * 60e3, 6 * 3600e3, 24 * 3600e3];   // lama kunci tiap tingkat

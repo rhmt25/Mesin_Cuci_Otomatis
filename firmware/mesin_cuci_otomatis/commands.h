@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 #pragma once
 // Command layer tunggal: Web lokal, Web jarak jauh, dan Serial/Konsol semuanya memanggil
 // executeCommand(). Ini yang menjamin paritas kontrol 100%.

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 // Worker: login, sesi, allowlist, halaman UI jarak jauh, dan relay ke ESP32 lewat Durable Object.
 import { verifyPassword, makeSession, verifySession, parseCookie, timingSafeEqual } from "./auth.js";
 import { isAllowed } from "./allow.js";

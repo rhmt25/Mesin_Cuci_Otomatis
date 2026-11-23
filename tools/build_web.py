@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Rahmat Hidayat
 """Gabungkan web/index.html + style.css + app.js menjadi satu halaman, gzip, lalu
 tulis firmware/mesin_cuci_otomatis/web_ui.h. Jalankan setiap selesai mengubah web/.
 
@@ -43,6 +45,8 @@ for i in range(0, len(data), 16):
     lines.append("  " + ",".join("0x%02x" % b for b in data[i:i + 16]))
 
 out.write_text(
+    "// SPDX-License-Identifier: GPL-3.0-or-later\n"
+    "// Copyright (C) 2026 Rahmat Hidayat\n"
     "#pragma once\n"
     "// FILE HASIL GENERATE oleh tools/build_web.py dari folder web/. Jangan diedit manual.\n"
     "#include <Arduino.h>\n"

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 #pragma once
 // Penyimpanan Proses sebagai berkas JSON di LittleFS (partisi "spiffs"). Tulis atomik: pN.tmp -> rename.
 #include <Arduino.h>

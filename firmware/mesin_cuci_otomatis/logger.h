@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Rahmat Hidayat
 #pragma once
 // Pengganti Serial.print*: tulis ke USB + ring buffer (log web/konsol, notifier)
 // + jejak crash di memori RTC.

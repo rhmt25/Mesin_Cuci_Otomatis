@@ -1,5 +1,7 @@
 # Relay jarak jauh (Cloudflare Worker + Durable Object)
 
+> Dokumentasi lengkap: [`docs/`](../docs/README.md) · Panduan pemasangan: [`docs/id/pemasangan.md`](../docs/id/pemasangan.md)
+
 Web UI jarak jauh untuk Mesin Cuci. ESP32 hanya membuka **satu koneksi WebSocket keluar** ke Worker ini; Worker menyajikan
 halaman UI yang sama dengan web lokal (fitur sensitif disembunyikan), meneruskan perintah, menyimpan cache status/log, dan
 mengirim notifikasi Telegram (termasuk alarm "mesin tidak terhubung"). Web lokal ESP32 tetap berfungsi tanpa internet.

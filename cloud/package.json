@@ -1,6 +1,7 @@
 {
   "name": "mesin-cuci-remote",
   "private": true,
+  "license": "GPL-3.0-or-later",
   "version": "1.0.0",
   "description": "Relay jarak jauh Mesin Cuci: Cloudflare Worker + Durable Object (paket Free)",
   "type": "module",

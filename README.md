@@ -1,228 +1,74 @@
-# Mesin Cuci Otomatis (ESP32)
+# Mesin Cuci Otomatis · Automatic Washing Machine
 
-Firmware ESP32 (modul **WROOM**) untuk mesin cuci dua tabung: kontrol lewat **dashboard web lokal** (jaringan rumah atau
-hotspot darurat ESP32) tanpa bergantung pada internet, plus **web jarak jauh** lewat Cloudflare Worker (opsional) dan
-**notifikasi Telegram** yang dikirim oleh Worker.
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![CI](https://github.com/rhmt25/Mesin_Cuci_Otomatis/actions/workflows/ci.yml/badge.svg)](https://github.com/rhmt25/Mesin_Cuci_Otomatis/actions/workflows/ci.yml)
+![Platform: ESP32](https://img.shields.io/badge/platform-ESP32-informational)
 
-- **Core 1** menjalankan mesin (state machine berbasis `millis()`, tanpa `delay()`), **Core 0** untuk WiFi/Telegram/Web.
-- Semua relay mati saat boot, error, atau STOP (relay trigger LOW, mode `OUTPUT_OPEN_DRAIN`).
-- Satu *command layer* dan satu dispatcher API (`api_core`) dipakai web lokal, web jarak jauh, dan Serial/Konsol → kontrolnya sama persis.
-- Proses tetap jalan saat WiFi mati; log diantrekan dan dikirim begitu online.
-- Satu sumber kode: folder `firmware/mesin_cuci_otomatis/` dibuka di Arduino IDE **dan** PlatformIO.
+> 🇮🇩 **Bahasa Indonesia:** see [README.id.md](README.id.md)
 
-## Wiring (WROOM)
+Open-source ESP32 firmware that turns a twin-tub washing machine into a smart, safe, programmable one. Control it from a
+**local web dashboard** (home network or the ESP32's own emergency hotspot, no internet needed), optionally from anywhere
+through a **Cloudflare Worker**, and get **Telegram notifications**.
 
-| Fungsi | GPIO | Catatan |
+## Features
+
+- **Build your own Programs** from Stages (fill, drain, agitate, soak, rest, spin, fragrance, wait, water check, ask-for-action, notify), each with its own variables. No hard-coded programs.
+- **Safe by design:** all relays off at boot/error/Stop; layered interlocks; time failsafes; watchdog. On any failure the machine **stops and asks you**, never continuing on its own.
+- **Works offline:** the state machine runs on its own core (`millis()`-based, no `delay()`); Programs continue when WiFi drops.
+- **One command layer** shared by the local web, remote web and Serial console, so controls are identical.
+- **Remote access without opening ports:** the ESP32 makes a single outbound WSS connection to a Cloudflare Worker (Free plan).
+- **Hardened login:** two separate passwords, brute-force lockouts, signed sessions, remote allowlist enforced on both ends.
+- **Mobile-first dashboard** (light/dark), OTA firmware update with rollback, backup & restore, power-loss recovery.
+- **Well tested:** 385 host-side logic checks, UI tests, and a Worker end-to-end suite, all runnable without hardware.
+
+## Quick start
+
+```bash
+git clone https://github.com/rhmt25/Mesin_Cuci_Otomatis.git
+cd Mesin_Cuci_Otomatis
+cp firmware/mesin_cuci_otomatis/secrets.example.h firmware/mesin_cuci_otomatis/secrets.h   # then edit it
+pio run -e rymcu-esp32-devkitc -t upload                                                   # flash over USB
+```
+
+Then open `http://mesincuci.local` and follow the [User Manual](docs/en/user-manual.md).
+
+## Documentation
+
+| | English | Bahasa Indonesia |
 |---|---|---|
-| Motor putar kiri | **25** | dulu GPIO5 (strapping pin) — pindahkan kabel IN relay |
-| Motor putar kanan | 18 | |
-| Valve isi air | 17 | |
-| Motor penarik valve buang | 16 | |
-| Motor spin | 4 | |
-| Pompa pewangi | 13 | |
-| Sensor level air | 27 | `INPUT_PULLUP`, HIGH = ada air |
-| Sumber sensor/tombol | 14 | selalu HIGH |
+| User manual | [docs/en/user-manual.md](docs/en/user-manual.md) | [docs/id/manual-pengguna.md](docs/id/manual-pengguna.md) |
+| Hardware & wiring | [docs/en/hardware.md](docs/en/hardware.md) | [docs/id/perangkat-keras.md](docs/id/perangkat-keras.md) |
+| Installation | [docs/en/installation.md](docs/en/installation.md) | [docs/id/pemasangan.md](docs/id/pemasangan.md) |
+| Architecture & security | [docs/en/architecture.md](docs/en/architecture.md) | [docs/id/arsitektur.md](docs/id/arsitektur.md) |
+| Reference (commands, API) | [docs/en/reference.md](docs/en/reference.md) | [docs/id/referensi.md](docs/id/referensi.md) |
+| Development | [docs/en/development.md](docs/en/development.md) | [docs/id/pengembangan.md](docs/id/pengembangan.md) |
 
-Modul relay: **Normally Open, trigger LOW**. Pengaturan ada di `config.h`
-(`RELAY_ACTIVE_LOW`, `RELAY_OPEN_DRAIN`).
+Also: [Remote relay (Worker)](cloud/README.md) · [Contributing](CONTRIBUTING.md) · [Security policy](SECURITY.md) · [Changelog](CHANGELOG.md)
 
-## Menyiapkan `secrets.h`
-
-Salin `firmware/mesin_cuci_otomatis/secrets.example.h` menjadi `secrets.h` (tidak di-commit) lalu isi:
-`WIFI_SSID/PASSWORD`, `AP_PASSWORD` (hotspot, min. 8 karakter),
-`WEB_PASSWORD` (login dashboard), dan (opsional) `REMOTE_URL` + `REMOTE_DEVICE_TOKEN` untuk kontrol jarak jauh.
-Token bot Telegram **tidak** ada di ESP32: disimpan sebagai secret Worker (lihat `cloud/README.md`).
-
-## Flash
-
-### PlatformIO
-```
-pio run -e rymcu-esp32-devkitc -t upload      # lewat USB
-```
-Berkas `.bin`: `.pio/build/rymcu-esp32-devkitc/firmware.bin`.
-
-### Arduino IDE
-1. Buka `firmware/mesin_cuci_otomatis/mesin_cuci_otomatis.ino`.
-2. Board: *ESP32 Dev Module*. **Tools → Partition Scheme → "Minimal SPIFFS (1.9MB APP with OTA)"** (wajib).
-3. Library Manager: `ArduinoJson` (v7), `WebSockets` (Links2004), `AsyncTCP` dan `ESPAsyncWebServer`
-   (keduanya versi **mathieucarbou**; jika perlu pasang dari GitHub).
-4. Upload lewat USB. *Sketch → Export Compiled Binary* menghasilkan `.bin` untuk flash lewat web (menu Sistem → Pemeliharaan).
-
-### Satu klik (WiFi + Worker)
-Salin `.env.example` menjadi `.env.local` (git-ignored), isi `DEPLOY_ESP_PASSWORD`, lalu klik ganda `tools/deploy.cmd`. Skrip membangun web dan firmware, mengunggah `.bin` ke `mesincuci.local` lewat OTA (hanya bila mesin IDLE), menunggu ESP32 hidup kembali, lalu menguji dan men-deploy Worker. Opsi: `-SkipEsp`, `-SkipWorker`.
-
-### Lewat web
-Dashboard → menu **Sistem → Pemeliharaan → Firmware** → pilih `.bin` → *Flash*. Hanya saat mesin siap (IDLE). Firmware lama tetap
-utuh di partisi cadangan; tombol **Kembali ke versi sebelumnya** tersedia.
-
-## Dashboard web
-
-| Dari | Alamat |
-|---|---|
-| Jaringan rumah | `http://mesincuci.local` atau IP yang dikirim Telegram saat online |
-| Hotspot ESP32 (darurat) | **hanya menyala bila semua WiFi tersimpan gagal**: sambung ke `MesinCuci-XXXX` (password `AP_PASSWORD`) → `http://192.168.4.1`. Mati lagi 2 menit setelah WiFi rumah pulih dan tanpa klien |
-
-Lima menu (bottom-nav di HP, rail di layar lebar; tema Otomatis/Terang/Gelap dengan aksen #00E5C3):
-
-| Menu | Isi |
-|---|---|
-| **Beranda** | status (cincin progres, sisa waktu), kartu keputusan, **Rel Tahap**, air/relay/koneksi, mulai Proses |
-| **Proses** | kartu Proses dengan jejak ikon Tahap, editor 3 kolom |
-| **Manual** | jalankan satu Tahap + kontrol relay dan uji berurutan |
-| **Aktivitas** | Log, Riwayat & statistik, Konsol (serial monitor web, hanya lokal) |
-| **Sistem** | Koneksi (WiFi, jarak jauh), Keamanan (dua password, perangkat diingat), Mesin (notifikasi, kalibrasi air, tema), Pemeliharaan (info, firmware, cadangan, reset/restart) |
-
-**Rel Tahap:** ketuk area *Sisa Tahap* di Beranda (atau *Lihat semua*) untuk membuka panel berisi semua Tahap Proses yang
-berjalan (selesai, berjalan, antre) sebagai kartu lengkap dengan semua variabelnya. Datanya dari `GET /api/job`.
-Sumber dashboard ada di `web/`; setelah diubah jalankan `python tools/build_web.py` (menghasilkan `web_ui.h`).
-
-## Proses & Tahap
-
-**Tidak ada program bawaan.** Beranda hanya menampilkan **Proses** buatanmu (maks 10, tiap Proses maks 40 **Tahap**). Proses
-disusun di tab **Proses** dari Tahap terkecil; tiap Tahap punya variabelnya sendiri. Katalog (jenis, rentang, bawaan) ada di
-`tahap.cpp` dan dikirim ke dashboard lewat `/api/tahap/meta`, jadi dashboard dan firmware tidak bisa berbeda.
-
-| Tahap | Variabel (bawaan) |
-|---|---|
-| **Isi air** | mode `sensor` / `persen` (25·50·75%, dari kalibrasi) / `waktu`; batas waktu `00:30:00` (sensor, persen); lama isi 30 mnt (waktu); coba ulang 3×; tunggu antar coba 15 mnt; pra-cek bila air sudah penuh: `buang` / `jeda` / `pakai` |
-| **Buang air** | lama buang 5 mnt; **Verifikasi Pengurangan Jumlah Air** 45 dtk; **Tarik Ulang Valve** 2×; batas ulang sesi 3× (cek akhir "tidak penuh" selalu dilakukan) |
-| **Putar mesin** | lama 15 mnt; pola `normal` (7 dtk nyala/4 jeda) · `gentle` (5,3/7) · `hijab` (3/9) |
-| **Soak** | ulangi 2; waktu putar 1 mnt; waktu rendam 4 mnt; pola |
-| **Rendam** | lama 4 mnt (diam, semua relay mati) |
-| **Spin** | lama 10 mnt (memeriksa sensor dulu: air harus sudah turun) |
-| **Pewangi** | 1 cup (kelipatan 0,5; **0,5 cup = 10 dtk**; failsafe pompa 240 dtk) |
-| **Tunggu** | 00:00:10 |
-| **Cek air** | harus `penuh` / `tidak penuh` |
-| **Minta tindakan** | pesan (≤ 40 karakter); mesin berhenti sampai Lanjut/Batal; notifikasi selalu terkirim |
-| **Notifikasi** | pesan (≤ 40 karakter); terkirim walau mode Senyap, lalu lanjut |
-
-Menu **Manual** menjalankan satu Tahap dengan form yang sama, ditambah **Buang manual** (valve ditarik selama waktu tertentu
-**tanpa sensor**, jalan darurat bila sensor rusak). Kontrol relay langsung dan kalibrasi relay ada di menu **Manual** (panel Relay).
-
-**Mulai:** sekarang, tunda `HH:MM:SS`, atau selesai pada jam `HH:MM` (perkiraan: isi/buang berbasis sensor bisa meleset).
-Proses yang sedang dipakai (berjalan, dijeda, menunggu keputusan, menunggu mulai, atau pemulihan listrik padam tertunda)
-**tidak bisa diubah/dihapus**: tekan Stop dulu. Proses disimpan sebagai berkas JSON di LittleFS (partisi `spiffs`), ditulis
-atomik; ekspor/impor per Proses ada di menu Proses.
-
-### Keputusan menunggu
-Bila Isi/Buang/Spin/Cek gagal atau ada Tahap *Minta tindakan*, mesin **berhenti dan tidak pernah lanjut sendiri**. Dashboard
-menampilkan tombol sesuai kasus dan notifikasi dikirim (ulang tiap 10 menit):
-
-| Kasus | Pilihan |
-|---|---|
-| Isi gagal, Buang gagal, Spin masih penuh, Cek gagal | **Ulang** / **Lanjut** (dengan peringatan) / **Batal** |
-| Air sudah penuh sebelum mengisi (pra-cek `jeda`) | **Buang lalu isi** / **Pakai air yang ada** / **Batal** |
-| Minta tindakan | **Lanjut** / **Batal** |
-
-**Sensor level ada di paling atas** (hanya tahu *penuh* / *tidak penuh*): pada Tahap Buang, valve ditarik dan air harus mulai
-turun dari posisi penuh dalam waktu *Verifikasi*; bila tidak, valve dilepas 3 dtk lalu ditarik lagi (*Tarik Ulang Valve*).
-Setelah terbukti, valve ditarik sampai *lama buang*, lalu dicek: bila air masih penuh sesi diulang; semua sesi gagal → keputusan.
-Listrik padam → saat menyala ditanya **Lanjutkan / Batalkan** (tidak pernah lanjut otomatis; dibatalkan bila Proses sudah diubah).
-
-## Perintah (Web · Serial/Konsol)
-
-`proses` (daftar), `proses <nomor> [tunda HH:MM:SS | selesai HH:MM]`, `pilih <ulang|lanjut|batal|buang|pakai>`, `stop`, `jeda`,
-`lanjutkan`, `lewati`, `batalkan`, `cek_air`, `status`, `pengaturan`, `riwayat`, `statistik`, `info`, `bantuan`;
-`relay <kiri|kanan|isi|buang|spin|pewangi> <on|off>`, `relay semua off`, `kalibrasi_relay [detik]`, `buang_manual <menit>`;
-`notif lengkap|ringkas|senyap`, `remote [on|off]`, `kalibrasi_air`, `reset_semua`; WiFi: `wifi_list wifi_tambah wifi_hapus
-wifi_urutan`; `restart`. Konsol Serial/web juga punya `heap`, `tasks`, `log`, `relay_test <nama>`, `serial debug on|off`.
-Variabel air/putar/pewangi tidak lagi berupa perintah: diatur per Tahap di dashboard (menu Proses dan Manual).
-
-## Wokwi
-
-`pio run -e wokwi` → env dengan `TIME_SCALE=60` (1 menit proses = 1 detik) dan relay push-pull.
-Sensor air disimulasikan dengan slide switch di GPIO27. Hotspot ESP32 tidak bisa diuji di Wokwi.
-
-## Uji logika di PC
-
-`sh tools/hosttest/run.sh` (butuh `g++`) menjalankan state machine dengan jam palsu dan model tangki air (194 pemeriksaan:
-semua Tahap, semua keputusan dan pilihannya, pra-cek, soak, tunda, pemulihan listrik padam, kunci slot, failsafe pompa,
-interlock, backup) dan katalog Tahap + penyimpanan Proses (181 pemeriksaan: batas tiap variabel, JSON, peringatan, estimasi).
-Fixture uji UI `tools/uitest/meta.json` dibuat dari firmware: `test_tahap --meta > tools/uitest/meta.json`.
-
-## Uji relay & failsafe
-
-- Dashboard → menu **Manual** (panel Relay): tombol ON/OFF per relay (hanya saat mesin siap, otomatis mati 60 detik) dan **Uji berurutan**
-  (kiri → kanan → isi → buang → spin → pewangi). perintah `relay <nama> <on|off>`,
-  `relay semua off`, `kalibrasi_relay [detik]`.
-- Motor kiri & kanan **tidak pernah** menyala bersamaan, dijaga berlapis: (1) interlock di `relaySet`, (2) pin motor lawan
-  dipaksa mati secara fisik sebelum motor dinyalakan, (3) jeda ganti arah, (4) `relayGuard()` tiap tick: bila terdeteksi
-  kiri+kanan / isi+buang / buang+motor, semua relay dimatikan dan **dikunci sampai restart**, (5) motor cuci dimatikan paksa
-  bila menyala terus > 65 detik, (6) semua relay mati saat boot, error, atau STOP.
-- Login web: centang **Ingat perangkat ini** agar tetap masuk; sesi tersimpan di NVS sehingga tetap berlaku setelah restart.
-
-## Perangkat yang diingat
-
-Login dengan **Ingat perangkat ini** disimpan di NVS (maks **5 perangkat**; bila penuh, yang terlama otomatis dihapus) dan tidak
-kedaluwarsa di sisi mesin. Cookie browser berumur 400 hari (batas browser) dan diperpanjang tiap dipakai. Kelola/hapus di
-menu **Sistem → Keamanan → Perangkat yang diingat**. Mengganti password web mengeluarkan semua perangkat.
-
-## Uji antarmuka (opsional)
-
-`cd tools/uitest && npm install && npm test` — jsdom + server palsu: editor Proses/Tahap, kartu keputusan, Manual, drag & drop, penguncian relay, pesan penolakan, daftar perangkat.
-
-## Ringan & andal (Tahap 2)
-
-- Dashboard memakai **polling** (`/api/poll`, 2 dtk; 10 dtk saat tab tersembunyi), tanpa WebSocket server. ArduinoOTA dihapus
-  (flash lewat web atau USB). Ring log 100 entri, antrean notifikasi 30 entri.
-- **Watchdog konektivitas:** tiap 30 dtk ping gateway; 3 kali gagal → sambung ulang WiFi; 3 kali reconnect gagal → WiFi dimulai
-  ulang. Aktif hanya setelah gateway pernah menjawab ping (router yang memblokir ICMP tidak memicu apa pun).
-- Log DEBUG ke serial USB hanya bila diaktifkan: konsol `serial debug on|off` (tidak disimpan).
-
-## Kontrol jarak jauh & notifikasi (Tahap 3–4)
+## Repository layout
 
 ```
-ESP32 ──(SATU koneksi WSS keluar)──► Cloudflare Worker + Durable Object ◄── HP/browser (UI sama, fitur sensitif disembunyikan)
-                                         └── notifikasi Telegram + alarm "mesin tidak terhubung"
-Web lokal (HTTP, rumah/hotspot) ─────► ESP32   (jalur utama, tetap jalan tanpa internet)
+firmware/mesin_cuci_otomatis/   ESP32 firmware (Arduino IDE + PlatformIO)
+web/                            Dashboard source, built into the firmware and the Worker
+cloud/                          Cloudflare Worker + Durable Object (remote access, Telegram)
+tools/                          Build/deploy scripts, host tests, UI tests, git hook
+docs/                           Documentation (en/, id/)
+diagram.json, wokwi.toml        Wokwi simulation
 ```
-- Perintah chat Telegram dihapus; Telegram hanya untuk **notifikasi** (dikirim Worker). Daftar perintah yang boleh dari jarak jauh
-  ada di `cloud/src/allow.js` dan `firmware/.../remote_policy.cpp`, diuji identik dengan `cloud/test/allow-vectors.txt`.
-  Flash firmware, WiFi, ganti password, perangkat diingat, konsol, dan restore **hanya** dari web lokal.
-- Konfigurasi & deploy Worker: `cloud/README.md` (panduan akun, 2FA, `npm test` untuk uji lokal tanpa akun).
-- Di web lokal: menu **Sistem → Koneksi → Kontrol jarak jauh** untuk mengaktifkan/menonaktifkan sambungan; `remote on|off` di konsol.
 
-## Cadangkan & pulihkan (menu Sistem → Pemeliharaan, hanya web lokal)
+## Hardware at a glance
 
-- **Unduh cadangan:** satu berkas JSON (versi 3) berisi pengaturan dan daftar WiFi; Proses diekspor satu per satu di menu Proses. Password WiFi hanya ikut bila
-  dicentang (simpan berkasnya dengan aman). Data kalibrasi dan jadwal sekali pakai tidak disertakan.
-- **Pulihkan dari berkas:** berkas diperiksa dulu (simulasi, `?dry=1`) dan ringkasannya ditampilkan untuk dikonfirmasi. Pemulihan
-  **atomik**: bila satu bagian tidak valid, tidak ada yang berubah. Nilai di luar rentang disesuaikan; batas berkas 12 KB
-  (kasus terburuk < 1 KB). Tanpa password di berkas, WiFi yang sama mempertahankan password lamanya.
-- Tidak tersedia dari jarak jauh. Logika ada di `backup.cpp` (murni, diuji di `tools/hosttest`).
+ESP32 WROOM + 6-channel active-LOW relay board + one water-level sensor. Pin map and safety notes:
+[docs/en/hardware.md](docs/en/hardware.md).
 
-## Catatan jaringan WiFi (hasil ukur di perangkat)
+> ⚠️ This project switches mains-powered appliances. Mains wiring is dangerous; build it only if you are qualified, and at your own risk.
 
-- Daya pancar diset **15 dBm** (`WIFI_TX_POWER` di `config.h`) dan bandwidth HT20. Pada daya penuh (19,5 dBm) perangkat ini kehilangan
-  ±20-35% paket (ping 1400 B hilang 36%, permintaan web sesekali tertahan 2-8 dtk); pada 15 dBm: 300/300 permintaan sukses.
-  Ini ciri suplai 5V/USB yang drop saat memancar: perbaiki suplai (kabel tebal, catu cukup arus, catu relay terpisah, kapasitor
-  470-1000 µF) sebelum menaikkan daya pancar.
+## Contributing
 
-## Keamanan login (brute-force)
+Issues and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md) first.
+To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
-- **Web lokal:** tiap 5 password salah beruntun dikunci makin lama: 30 dtk, 1, 2, 5, 15 mnt, lalu 1 jam; berhasil login mereset.
-  Setiap penguncian masuk log WARN (dan notifikasi).
-- **Web jarak jauh (Worker):** kunci per IP bertingkat 5 mnt, 15 mnt, 1 jam, 6 jam, 24 jam (turun lagi setelah 24 jam tenang);
-  bila >50 percobaan gagal dalam 10 menit dari banyak IP, semua login dikunci 5 menit. Sesi bertanda tangan HMAC, cookie
-  `HttpOnly` + `SameSite=Strict`, pemeriksaan Origin (CSRF). Logika di `cloud/src/ratelimit.js` (diuji di `cloud/test/e2e.mjs`).
-  Catatan: penguncian per IP juga mengunci pemilik bila salah mengetik 5 kali; tunggu hitungan mundur yang ditampilkan.
-- Disarankan password acak panjang (≥ 16 karakter) untuk jarak jauh dan 2FA pada akun Cloudflare.
+## License
 
-## Catatan stabilitas sambungan jarak jauh
-- Heartbeat tingkat aplikasi (`hb` tiap 30 dtk, Worker membalas `ack`); tanpa `ack` 100 dtk ESP32 menyambung ulang. Ping WebSocket
-  bawaan pustaka tidak dipakai (tidak dijawab Worker).
-- Daya pancar WiFi 11 dBm (`WIFI_TX_POWER`): pada 15 dBm sambungan TLS tetap tersendat di perangkat ini.
-- Setelah `wrangler deploy` yang mengubah Durable Object, instans lama bisa tetap berjalan selama sambungan ESP32 masih terbuka;
-  migrasi `renamed_classes` (Relay -> RelayV2) dipakai untuk memaksa kode baru.
-
-## Dua password, diatur dari dashboard lokal
-- Dashboard lokal → menu **Sistem → Keamanan**: **Password web lokal** dan **Password jarak jauh** (keduanya minimal 12 karakter, diketik dua kali).
-  Dua password sengaja berbeda: kebocoran satu tidak membuka yang lain.
-- Password jarak jauh dikirim ESP32 **sekali** lewat sambungan TLS ke Worker (pesan `setpw`); Worker menghitung hash PBKDF2 dan
-  menyimpannya di Durable Object. Tidak disimpan di ESP32 maupun log (perintah `web_password` dan konsol juga disembunyikan di log).
-  Mesin harus sedang terhubung ke server; bila tidak, penyimpanan ditolak dengan pesan jelas.
-- Semua sesi jarak jauh keluar seketika (epoch sesi naik) dan notifikasi Telegram "Password jarak jauh diganti" dikirim.
-- Browser jarak jauh **tidak** punya jalur untuk mengganti password (`/api/password` hanya lokal). Setelah diganti dari dashboard,
-  `gen-secrets`/`put-secrets` tidak lagi menentukan password (hash di Worker yang berlaku).
-- Catatan deploy: bila kode Durable Object berubah, tambahkan migrasi `renamed_classes` di `wrangler.toml`; instans lama bisa tetap
-  berjalan selama sambungan ESP32 terbuka.
+Copyright © 2026 Rahmat Hidayat. Licensed under the **GNU General Public License v3.0 or later**, see [LICENSE](LICENSE).
+This program is distributed in the hope that it will be useful, but **without any warranty**.

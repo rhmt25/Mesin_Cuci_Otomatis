@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Rahmat Hidayat
 # Deploy satu klik: bangun web + firmware, flash ESP32 lewat WiFi (OTA), lalu deploy Cloudflare Worker.
 # Pakai: klik ganda tools\deploy.cmd, atau  powershell -File tools\deploy.ps1 [-SkipEsp] [-SkipWorker]
 # Konfigurasi dibaca dari .env.local di akar repo (git-ignored). Contoh: .env.example
