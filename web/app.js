@@ -821,6 +821,14 @@ async function pcLoad(slot, asCopy) {
   $('#pcError').hidden = true;
   renderStack(); setEdMode('edit');
 }
+async function pcDuplicate(slot) {
+  let r; try { r = await api('/api/proses?slot=' + slot); } catch { return; }
+  if (!r.proses) return toast(r.msg || 'Proses tidak bisa dimuat', 'warn');
+  const name = (r.proses.name + ' (salinan)').slice(0, 27);
+  let d; try { d = await api('/api/proses', 'POST', { name, tahap: r.proses.tahap, slot: 0 }); } catch (e) { return guard(e); }
+  toast(d.msg || (d.ok ? 'Proses digandakan' : 'Gagal menggandakan'), d.ok ? 'ok' : 'warn');
+  loadProses();
+}
 async function pcExport(slot) {
   let r; try { r = await api('/api/proses/export?slot=' + slot); } catch { return; }
   if (!r.tahap) return toast(r.msg || 'Gagal mengekspor', 'warn');
@@ -861,7 +869,7 @@ async function loadProses() {
   ).join('') + (slots.length < r.max ? `<button class="pcard new" id="pcNew" type="button">${ic('plus', 'lg')}Proses baru</button>` : '');
   $('#pcCount').textContent = `${slots.length}/${r.max}`;
   $$('#pcList [data-pedit]').forEach(b => b.onclick = () => pcLoad(+b.dataset.pedit, false));
-  $$('#pcList [data-pcopy]').forEach(b => b.onclick = () => pcLoad(+b.dataset.pcopy, true));
+  $$('#pcList [data-pcopy]').forEach(b => b.onclick = () => pcDuplicate(+b.dataset.pcopy));
   $$('#pcList [data-pexp]').forEach(b => b.onclick = () => pcExport(+b.dataset.pexp));
   $$('#pcList [data-pdel]').forEach(b => b.onclick = () => pcDelete(+b.dataset.pdel, b.dataset.name));
   const nw = $('#pcNew'); if (nw) nw.onclick = () => { edClear(); setEdMode('edit'); };

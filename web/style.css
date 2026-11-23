@@ -245,7 +245,8 @@ button.pcard:disabled{opacity:.55;cursor:not-allowed}
 .view-proses .editmode{display:none}
 #view-proses[data-mode=edit] .listmode{display:none}
 #view-proses[data-mode=edit] .editmode{display:block}
-.edhead{display:flex;align-items:center;gap:var(--s3);margin-bottom:var(--s3)}
+.edhead{display:flex;align-items:center;gap:var(--s3);margin-bottom:var(--s3)}.edhead h2{min-width:0;flex:1;overflow-wrap:anywhere}.edhead .btn{flex:0 0 auto}
+.crow-head b{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .edgrid{display:grid;gap:var(--s3);grid-template-columns:1fr}
 
 .palette{display:flex;gap:var(--s2);overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}
@@ -380,6 +381,14 @@ h1,h2,h3,label:not(.chk):not(.drop),dt,.nav button,.seg button,.filters button,.
   .logbox,.conbox{max-height:45vh}
 }
 @media(max-width:380px){.ctl .btn span{display:none}.ctl .btn{padding:0}.stats{grid-template-columns:1fr}.rls{grid-template-columns:repeat(2,1fr)}.hero{padding:var(--s4) var(--s3)}}
+@media(max-width:559px){
+  .palette{flex-wrap:wrap;overflow:visible}.palette .btn{flex:1 1 calc(50% - 4px);min-width:0}
+  .crow-head{flex-wrap:wrap;row-gap:4px}.crow-head b{flex:1 1 60px}
+  .cacts{flex:1 0 100%;justify-content:flex-end;margin-left:0;border-top:1px solid var(--line);padding-top:4px}
+  .cacts button{flex:1;max-width:64px}
+  .fields{grid-template-columns:1fr}
+  .edsum .btn{width:100%}
+}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 
 .listmode{display:flex;flex-direction:column;gap:var(--s3)}

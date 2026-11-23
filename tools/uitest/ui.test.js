@@ -201,10 +201,10 @@ function route(url, opt) {
   click($('[data-pedit="1"]')); await sleep(150);
   ok($('#pcName').value === 'Cuci harian' && $$('#pcStack .crow').length === 6, 'Edit memuat Proses tersimpan');
   ok($('input[data-k="cup"]', rowOf(4)).value === '0.5' && $$('input[data-hms]', rowOf(0)).map(i => i.value).join(':') === '0:30:0', 'nilai tersimpan tampil benar');
-  click($('[data-pcopy="1"]')); await sleep(150);
-  ok($('#pcName').value === 'Cuci harian (salinan)' && /salinan/.test($('#pcTitle').textContent), 'Salin: Proses baru dengan nama (salinan)');
-  click($('#pcSave')); await sleep(150);
-  ok(S.store.filter(Boolean).length === 2 && $('#pcCount').textContent === '2/10', 'salinan tersimpan sebagai slot baru');
+  click($('#pcBack')); await sleep(50);
+  click($('[data-pcopy="1"]')); await sleep(250);
+  ok($('#view-proses').dataset.mode === 'list', 'Salin: tidak membuka editor');
+  ok(S.store.filter(Boolean).length === 2 && $('#pcCount').textContent === '2/10' && $$('#pcList .nm').some(n => n.textContent === 'Cuci harian (salinan)'), 'salinan langsung tersimpan sebagai slot baru');
   click($('[data-pexp="1"]')); await sleep(80);
   S.locked.add(1);
   await w.loadProses();
