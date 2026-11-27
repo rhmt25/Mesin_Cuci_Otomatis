@@ -129,7 +129,7 @@ asks you.
 - **Relay panel**: ON/OFF per relay (IDLE only, auto-off after 60 s) and **Sequential test**
   (left → right → fill → drain → spin → fragrance). Useful after wiring.
 - **Water calibration** (Sistem → Mesin) measures fill time for `persen` mode.
-- **Water sensor** (Sistem → Mesin, card *Sensor air*): confirmation time 1-60 s (default 10). The sensor is only trusted after it has stayed wet, or stayed dry, for that long, so splashes are ignored. While filling, the valve stays open for this long after water reaches the sensor, so do not set it too high. It can only be changed while the wash tub is idle.
+- **Water sensor confirmation** (Sistem → Mesin, card *Pengaturan air*): confirmation time 1-60 s (default 10). The sensor is only trusted after it has stayed wet, or stayed dry, for that long, so splashes are ignored. While filling, the valve stays open for this long after water reaches the sensor, so do not set it too high. It can only be changed while the wash tub is idle.
 
 ## 8. Activity: Log, History, Console
 
@@ -143,7 +143,7 @@ asks you.
 |---|---|
 | **Koneksi** | WiFi list (max 5, priority order), remote control on/off. |
 | **Keamanan** | **Local web password** and **Remote password** (each ≥ 12 chars, typed twice); remembered devices. Changing the web password signs out every device. |
-| **Mesin** | Notification mode (`lengkap` full / `ringkas` brief / `senyap` silent), water calibration, water sensor, theme. |
+| **Mesin** | Notification mode (`lengkap` full / `ringkas` brief / `senyap` silent), water settings (sensor confirmation and calibration), theme. |
 | **Pemeliharaan** | Device info, **firmware flash** via web, **backup & restore**, restart, reset all. |
 
 ### Backup & restore

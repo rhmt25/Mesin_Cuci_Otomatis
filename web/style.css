@@ -406,6 +406,7 @@ h1,h2,h3,label:not(.chk):not(.drop),dt,.nav button,.seg button,.filters button,.
 #btnPwLocal,#btnPwRemote{margin-top:auto}
 .field-help:empty{display:none}
 .grid2>.card:last-child:nth-child(odd){grid-column:1/-1}
+#grpMesin .dpanel>p{margin-bottom:var(--s2)}
 .danger-item{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);padding:var(--s3);border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface-2)}
 .danger-item>div{min-width:0;flex:1}.danger-item b{font-size:.9375rem}
 .danger-item .btn{flex:0 0 auto}
