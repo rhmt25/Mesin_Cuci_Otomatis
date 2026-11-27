@@ -17,9 +17,9 @@ CmdResult executeCommand(const String& command, const String& args, CmdSource sr
 String normalizeCommand(const String& raw);
 
 // Dipakai juga oleh API (/api/run, /api/decide): cek mesin siap, validasi, kirim ke mesin
-CmdResult commandRunProses(int slot, uint32_t waitSec, int finishAtMin);   // slot 1..10
-CmdResult commandRunManual(const Tahap& t);
-CmdResult commandDecide(const String& choice);                             // ulang|lanjut|batal|buang|pakai
+CmdResult commandRunProses(int slot, uint32_t waitSec, int finishAtMin, uint8_t ws = WS_CUCI);   // slot 1..10
+CmdResult commandRunManual(const Tahap& t, uint8_t ws = WS_CUCI);
+CmdResult commandDecide(const String& choice, uint8_t ws = WS_CUCI);       // ulang|lanjut|batal|buang|pakai
 
 // Teks laporan (dipakai konsol/perintah)
 String statusText();

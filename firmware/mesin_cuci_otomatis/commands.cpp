@@ -101,24 +101,42 @@ String wifiListText() {
 }
 
 String prosesListText() {
-  String t = "\xF0\x9F\x97\x82 Proses (maks " + String(PROSES_SLOTS) + "):\n";
-  int n = 0;
   Proses* p = new Proses;
   if (!p) return "Memori rendah.";
-  for (uint8_t i = 0; i < PROSES_SLOTS; i++) {
-    SlotState st = prosesSlotState(i);
-    if (st == SLOT_EMPTY) continue;
-    n++;
-    if (st == SLOT_BAD) {
-      t += String(i + 1) + ". (berkas rusak)\n";
-    } else if (prosesLoad(i, *p)) {
-      t += String(i + 1) + ". " + p->name + " (" + String((int)p->count) + " Tahap, \xC2\xB1" + fmtDuration(prosesEstimateSec(*p)) + ")\n";
+  String t;
+  for (uint8_t ws = 0; ws < WS_COUNT; ws++) {
+    t += "\xF0\x9F\x97\x82 Proses " + String(wsName(ws)) + " (maks " + String(PROSES_SLOTS) + "):\n";
+    int n = 0;
+    for (uint8_t i = 0; i < PROSES_SLOTS; i++) {
+      uint8_t id = prosesId(ws, i);
+      SlotState st = prosesSlotState(id);
+      if (st == SLOT_EMPTY) continue;
+      n++;
+      if (st == SLOT_BAD) {
+        t += String(i + 1) + ". (berkas rusak)\n";
+      } else if (prosesLoad(id, *p)) {
+        t += String(i + 1) + ". " + p->name + " (" + String((int)p->count) + " Tahap, \xC2\xB1" + fmtDuration(prosesEstimateSec(*p)) + ")\n";
+      }
     }
+    if (!n) t += "(belum ada)\n";
   }
   delete p;
-  if (!n) t += "(belum ada, buat di dashboard web tab Proses)\n";
-  else t += "Jalankan: proses <nomor>";
-  t.trim();
+  t += "Jalankan: proses [pengering] <nomor>";
+  return t;
+}
+
+// Satu baris keadaan workspace
+static String laneText(const MachineStatus& s) {
+  if (s.state == MS_IDLE) {
+    String t = "Siap";
+    if (s.resumePending) t += " \xE2\x80\xA2 \xE2\x9A\xA1 menunggu keputusan pemulihan (" + String(s.resumeInfo) + ")";
+    return t;
+  }
+  if (s.state == MS_PAUSED) return String("\xE2\x8F\xB8 DIJEDA \xE2\x80\xA2 ") + s.name + " \xE2\x80\xA2 " + s.stage;
+  if (s.state == MS_DECIDE) return String("\xE2\x9D\x93 MENUNGGU KEPUTUSAN \xE2\x80\xA2 ") + s.name + " \xE2\x80\xA2 " + s.pauseReason;
+  String t = String(s.name) + " \xE2\x80\xA2 " + s.stage + " \xE2\x80\xA2 " + s.detail;
+  t += " \xE2\x80\xA2 sisa Tahap " + fmtDuration(s.stepLeftSec);
+  t += " \xE2\x80\xA2 total sisa \xC2\xB1 " + fmtDuration(s.totalLeftSec) + " (" + s.progressPct + "%)";
   return t;
 }
 
@@ -126,18 +144,11 @@ String statusText() {
   MachineStatus s;
   machineGetStatus(s);
   static const char* waterTxt[] = {"kosong", "penuh", "mengukur"};
-  String t = "\xF0\x9F\x93\x8A ";
-  if (s.state == MS_IDLE) {
-    t += "Siap";
-    if (s.resumePending) t += " \xE2\x80\xA2 \xE2\x9A\xA1 menunggu keputusan pemulihan (" + String(s.resumeInfo) + ")";
-  } else if (s.state == MS_PAUSED) {
-    t += String("\xE2\x8F\xB8 DIJEDA \xE2\x80\xA2 ") + s.name + " \xE2\x80\xA2 " + s.stage;
-  } else if (s.state == MS_DECIDE) {
-    t += String("\xE2\x9D\x93 MENUNGGU KEPUTUSAN \xE2\x80\xA2 ") + s.name + " \xE2\x80\xA2 " + s.pauseReason;
-  } else {
-    t += String(s.name) + " \xE2\x80\xA2 " + s.stage + " \xE2\x80\xA2 " + s.detail;
-    t += " \xE2\x80\xA2 sisa Tahap " + fmtDuration(s.stepLeftSec);
-    t += " \xE2\x80\xA2 total sisa \xC2\xB1 " + fmtDuration(s.totalLeftSec) + " (" + s.progressPct + "%)";
+  String t = "\xF0\x9F\x93\x8A Cuci: " + laneText(s);
+  {
+    MachineStatus k;
+    machineGetStatus(k, WS_KERING);
+    t += "\nPengering: " + laneText(k);
   }
   t += "\n\xF0\x9F\x92\xA7 Air: " + String(waterTxt[s.waterState]) + "\n";
   if (netOnline()) t += "\xF0\x9F\x93\xB6 " + netSsid() + " (" + netRssi() + " dBm)";
@@ -180,9 +191,10 @@ String statsText() {
 
 String helpText() {
   return "Perintah utama:\n"
-         "proses [nomor] [tunda HH:MM:SS | selesai HH:MM]  (tanpa nomor: daftar Proses)\n"
-         "pilih <ulang|lanjut|batal|buang|pakai>  (jawab keputusan menunggu)\n"
-         "stop, jeda, lanjutkan, lewati, batalkan, status, cek_air\n"
+         "proses [pengering] [nomor] [tunda HH:MM:SS | selesai HH:MM]  (tanpa nomor: daftar Proses)\n"
+         "pilih <ulang|lanjut|batal|buang|pakai> [pengering]  (jawab keputusan menunggu)\n"
+         "stop [cuci|pengering]  (tanpa pilihan: hentikan keduanya)\n"
+         "jeda, lanjutkan, lewati, batalkan [pengering]; status, cek_air\n"
          "pengaturan, riwayat, statistik, wifi_list, wifi_tambah, wifi_hapus, wifi_urutan\n"
          "notif <lengkap|ringkas|senyap>, remote [on|off], kalibrasi_air, reset_semua, restart, info\n"
          "relay <kiri|kanan|isi|buang|spin|pewangi> <on|off>, relay semua off, kalibrasi_relay [detik]\n"
@@ -194,53 +206,60 @@ String helpText() {
 // ============================================================================
 // Eksekusi
 // ============================================================================
-// Teks alasan mesin tidak siap (kosong bila siap)
-static String busyReason() {
+// Teks alasan workspace tidak siap (kosong bila siap)
+static String busyReason(uint8_t ws) {
   MachineStatus st;
-  machineGetStatus(st);
   if (otaBusy()) return "Mesin sedang memperbarui firmware.";
+  if (ws == WS_KERING) {   // kalibrasi relay berurutan meminjam motor spin
+    machineGetStatus(st, WS_CUCI);
+    if (st.relaySeq) return "Kalibrasi relay sedang berjalan. Tunggu selesai atau STOP.";
+  }
+  machineGetStatus(st, ws);
+  String who = ws == WS_KERING ? "Pengering: " : "";
   if (st.state == MS_RUNNING)
-    return String("Ada Proses berjalan: ") + st.name + " (" + st.stage + "). Hentikan dulu dengan STOP.";
+    return who + "Ada Proses berjalan: " + st.name + " (" + st.stage + "). Hentikan dulu dengan STOP.";
   if (st.state == MS_PAUSED)
-    return String("Ada Proses yang dijeda: ") + st.name + " (" + st.stage + "). Lanjutkan atau hentikan dulu.";
+    return who + "Ada Proses yang dijeda: " + st.name + " (" + st.stage + "). Lanjutkan atau hentikan dulu.";
   if (st.state == MS_DECIDE)
-    return String("Mesin menunggu keputusan: ") + st.name + " (" + st.pauseReason + "). Jawab atau hentikan dulu.";
+    return who + "Mesin menunggu keputusan: " + st.name + " (" + st.pauseReason + "). Jawab atau hentikan dulu.";
   return "";
 }
 
-static CmdResult postSimple(uint8_t type, const char* okMsg) {
+static CmdResult postSimple(uint8_t type, const char* okMsg, uint8_t ws = WS_CUCI) {
   MachineCmd c;
   memset(&c, 0, sizeof(c));
   c.type = type;
+  c.ws = ws;
   c.finishAt = -1;
   if (!machinePost(c)) return fail("Antrean perintah mesin penuh, coba lagi.");
   return ok(okMsg);
 }
 
-CmdResult commandRunProses(int slot, uint32_t waitSec, int finishAtMin) {
+CmdResult commandRunProses(int slot, uint32_t waitSec, int finishAtMin, uint8_t ws) {
   if (slot < 1 || slot > PROSES_SLOTS) return fail(String("Nomor Proses 1-") + PROSES_SLOTS + ". Ketik proses untuk daftar.");
-  String busy = busyReason();
+  String busy = busyReason(ws);
   if (busy.length()) return fail("Ditolak. " + busy);
   if (finishAtMin >= 0 && !netTimeSynced()) return fail("Jam belum tersinkron (butuh internet). Gunakan tunda.");
-  SlotState st = prosesSlotState(slot - 1);
+  SlotState st = prosesSlotState(prosesId(ws, slot - 1));
   if (st == SLOT_EMPTY) return fail("Proses " + String(slot) + " kosong.");
   if (st == SLOT_BAD) return fail("Proses " + String(slot) + " rusak. Hapus atau impor ulang.");
-  if (!machineStartProses(slot - 1, waitSec, finishAtMin)) return fail("Antrean perintah mesin penuh, coba lagi.");
+  if (!machineStartProses(slot - 1, waitSec, finishAtMin, ws)) return fail("Antrean perintah mesin penuh, coba lagi.");
   return ok("\xE2\x96\xB6 Proses " + String(slot) + " dikirim ke mesin.");
 }
 
-CmdResult commandRunManual(const Tahap& t) {
-  String busy = busyReason();
+CmdResult commandRunManual(const Tahap& t, uint8_t ws) {
+  if (!tahapAllowed(t.type, ws)) return fail(String(tahapLabel(t.type)) + " tidak tersedia di workspace " + wsName(ws) + ".");
+  String busy = busyReason(ws);
   if (busy.length()) return fail("Ditolak. " + busy);
   String err;
   if (!tahapValidate(t, err, true)) return fail(err);
-  if (!machineRunManual(t)) return fail("Antrean perintah mesin penuh, coba lagi.");
+  if (!machineRunManual(t, ws)) return fail("Antrean perintah mesin penuh, coba lagi.");
   return ok(String("\xE2\x96\xB6 Manual: ") + tahapLabel(t.type) + " dikirim ke mesin.");
 }
 
-CmdResult commandDecide(const String& choice) {
+CmdResult commandDecide(const String& choice, uint8_t ws) {
   MachineStatus s;
-  machineGetStatus(s);
+  machineGetStatus(s, ws);
   if (s.state != MS_DECIDE) return fail("Tidak ada keputusan yang menunggu.");
   uint8_t opt = decisionOptFromName(choice);
   if (!opt) return fail("Pilihan tidak dikenal. Gunakan: ulang, lanjut, batal, buang, pakai.");
@@ -254,6 +273,7 @@ CmdResult commandDecide(const String& choice) {
   memset(&c, 0, sizeof(c));
   c.type = MC_DECIDE;
   c.arg = opt;
+  c.ws = ws;
   c.finishAt = -1;
   if (!machinePost(c)) return fail("Antrean perintah mesin penuh, coba lagi.");
   return ok(String("Keputusan dikirim: ") + decisionOptLabel(opt) + ".");
@@ -303,6 +323,16 @@ CmdResult executeCommand(const String& command, const String& argsIn, CmdSource 
 
   // ---- Proses & kontrol mesin ----
   if (name == "proses") {
+    uint8_t ws = WS_CUCI;
+    {   // kata pertama boleh menyebut workspace: "proses pengering 2"
+      String first = token(args, 0);
+      first.toLowerCase();
+      if (first == "cuci" || first == "pengering") {
+        ws = (uint8_t)wsFromName(first);
+        args = args.substring(first.length());
+        args.trim();
+      }
+    }
     String a = token(args, 0);
     if (a.length() == 0) return ok(prosesListText());
     int slot;
@@ -323,9 +353,13 @@ CmdResult executeCommand(const String& command, const String& argsIn, CmdSource 
     } else if (mode.length()) {
       return fail("Format: proses <nomor> [tunda HH:MM:SS | selesai HH:MM]");
     }
-    return commandRunProses(slot, wait, finishAt);
+    return commandRunProses(slot, wait, finishAt, ws);
   }
-  if (name == "pilih") return commandDecide(token(args, 0));
+  if (name == "pilih") {
+    int ws = wsFromName(token(args, 1));
+    if (ws < 0) return fail("Format: pilih <opsi> [pengering]");
+    return commandDecide(token(args, 0), (uint8_t)ws);
+  }
   if (name == "buang_manual") {
     int m;
     if (!parseInt(token(args, 0), 1, 60, m)) return fail("Format: buang_manual <menit 1-60>");
@@ -337,7 +371,7 @@ CmdResult executeCommand(const String& command, const String& argsIn, CmdSource 
   if (name == "relay_test") {
     int r = relayFromName(token(args, 0));
     if (r < 0) return fail("Relay tidak dikenal. Pilihan: kiri, kanan, isi, buang, spin, pewangi.");
-    String busy = busyReason();
+    String busy = busyReason(machineRelayWs(r));
     if (busy.length()) return fail("Ditolak. " + busy);
     MachineCmd c;
     memset(&c, 0, sizeof(c));
@@ -350,7 +384,8 @@ CmdResult executeCommand(const String& command, const String& argsIn, CmdSource 
   if (name == "kalibrasi_relay") {
     int secs = 3;
     if (args.length() && !parseInt(token(args, 0), 1, 30, secs)) return fail("Lama nyala per relay: 1-30 detik.");
-    String busy = busyReason();
+    String busy = busyReason(WS_CUCI);
+    if (!busy.length()) busy = busyReason(WS_KERING);
     if (busy.length()) return fail("Ditolak. " + busy);
     MachineCmd c;
     memset(&c, 0, sizeof(c));
@@ -370,11 +405,11 @@ CmdResult executeCommand(const String& command, const String& argsIn, CmdSource 
     if (!on && !off) return fail("Format: relay <kiri|kanan|isi|buang|spin|pewangi|semua> <on|off>");
     if (who == "semua") {
       if (on) return fail("Semua relay tidak boleh dinyalakan sekaligus. Gunakan kalibrasi_relay.");
-      return postSimple(MC_STOP, "Semua relay dimatikan.");
+      return postSimple(MC_STOP, "Semua relay dimatikan.", WS_ALL);
     }
     int r = relayFromName(who);
     if (r < 0) return fail("Relay tidak dikenal. Pilihan: kiri, kanan, isi, buang, spin, pewangi, semua.");
-    String busy = busyReason();
+    String busy = busyReason(machineRelayWs(r));
     if (busy.length()) return fail("Ditolak: kontrol relay manual hanya saat tidak ada Proses. " + busy);
     if (on) {
       const char* why = relayCheck((RelayId)r, true);
@@ -399,11 +434,19 @@ CmdResult executeCommand(const String& command, const String& argsIn, CmdSource 
     if (!on) return ok(String("Relay ") + who + " dimatikan.");
     return ok(String("Relay ") + who + " dinyalakan (otomatis mati 60 detik).");
   }
-  if (name == "stop") return postSimple(MC_STOP, "\xE2\x8F\xB9 Perintah STOP dikirim. Semua relay dimatikan.");
-  if (name == "jeda") return postSimple(MC_PAUSE, "\xE2\x8F\xB8 Perintah jeda dikirim.");
-  if (name == "lanjutkan") return postSimple(MC_RESUME, "\xE2\x96\xB6 Perintah lanjutkan dikirim.");
-  if (name == "lewati") return postSimple(MC_SKIP, "\xE2\x8F\xAD Tahap dilewati.");
-  if (name == "batalkan") return postSimple(MC_CANCEL_RESUME, "Pemulihan Proses dibatalkan.");
+  if (name == "stop" || name == "jeda" || name == "lanjutkan" || name == "lewati" || name == "batalkan") {
+    String who = token(args, 0);
+    int ws = wsFromName(who);
+    if (ws < 0) return fail("Format: " + name + " [cuci|pengering]");
+    if (name == "stop") {
+      if (!who.length()) return postSimple(MC_STOP, "\xE2\x8F\xB9 Perintah STOP dikirim. Semua relay dimatikan.", WS_ALL);
+      return postSimple(MC_STOP, ws == WS_KERING ? "\xE2\x8F\xB9 STOP pengering dikirim." : "\xE2\x8F\xB9 STOP cuci dikirim.", (uint8_t)ws);
+    }
+    if (name == "jeda") return postSimple(MC_PAUSE, "\xE2\x8F\xB8 Perintah jeda dikirim.", (uint8_t)ws);
+    if (name == "lanjutkan") return postSimple(MC_RESUME, "\xE2\x96\xB6 Perintah lanjutkan dikirim.", (uint8_t)ws);
+    if (name == "lewati") return postSimple(MC_SKIP, "\xE2\x8F\xAD Tahap dilewati.", (uint8_t)ws);
+    return postSimple(MC_CANCEL_RESUME, "Pemulihan Proses dibatalkan.", (uint8_t)ws);
+  }
 
   if (name == "cek_air") {
     MachineStatus s;
@@ -479,9 +522,7 @@ CmdResult executeCommand(const String& command, const String& argsIn, CmdSource 
 
   // ---- sistem ----
   if (name == "restart") {
-    MachineStatus s;
-    machineGetStatus(s);
-    if (s.state != MS_IDLE) return fail("Mesin sedang bekerja. Hentikan Proses dulu.");
+    if (!machineIsIdle()) return fail("Mesin sedang bekerja. Hentikan Proses dulu.");
     scheduleRestart(1000);
     return ok("Restart dalam 1 detik...");
   }

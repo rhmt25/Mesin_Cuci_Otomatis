@@ -10,7 +10,7 @@
 enum MState : uint8_t { MS_IDLE, MS_RUNNING, MS_PAUSED, MS_DECIDE };
 
 // Keputusan menunggu: mesin berhenti dan tidak pernah lanjut sendiri.
-enum DecCode : uint8_t { DC_NONE, DC_ISI_GAGAL, DC_PRA_PENUH, DC_BUANG_GAGAL, DC_SPIN_PENUH, DC_CEK_GAGAL, DC_TINDAKAN };
+enum DecCode : uint8_t { DC_NONE, DC_ISI_GAGAL, DC_PRA_PENUH, DC_BUANG_GAGAL, DC_CEK_GAGAL, DC_TINDAKAN };
 enum DecOpt : uint8_t { OP_ULANG = 1, OP_LANJUT = 2, OP_BATAL = 4, OP_BUANG = 8, OP_PAKAI = 16 };
 
 const char* decisionCodeName(uint8_t code);       // "isi_gagal", ...
@@ -39,12 +39,15 @@ struct MachineCmd {
   uint8_t type;
   uint8_t arg;
   uint8_t arg2;
+  uint8_t ws;        // Ws sasaran (WS_ALL hanya untuk MC_STOP); uji relay & relay manual mengikuti pemilik relay
   uint32_t waitSec;
   int16_t finishAt;
   Tahap tahap;
 };
 
 struct MachineStatus {
+  uint8_t ws;               // workspace snapshot ini
+  bool relaySeq;            // kalibrasi relay berurutan sedang memakai semua relay
   uint8_t state;            // MState
   uint8_t slot;             // slot Proses yang berjalan (NO_SLOT untuk Manual/uji)
   bool manual;
@@ -72,12 +75,15 @@ struct MachineStatus {
 
 void machineBegin();                           // buat task di Core 1
 bool machinePost(const MachineCmd& cmd);
-bool machineStartProses(uint8_t slot, uint32_t waitSec = 0, int finishAtMin = -1);
-bool machineRunManual(const Tahap& t);
-void machineGetStatus(MachineStatus& out);
+bool machineStartProses(uint8_t slot, uint32_t waitSec = 0, int finishAtMin = -1, uint8_t ws = WS_CUCI);
+bool machineRunManual(const Tahap& t, uint8_t ws = WS_CUCI);
+void machineGetStatus(MachineStatus& out, uint8_t ws = WS_CUCI);   // air, relay, dan uptime sama di kedua workspace
+uint8_t machineRelayWs(uint8_t relay);          // workspace pemilik relay (spin = pengering)
 // Salinan pekerjaan yang sedang berjalan untuk API (/api/job). false bila idle atau mutex sibuk.
-bool machineCopyJob(Proses& out, uint8_t& idx, bool& waiting, uint32_t& waitLeftMs, uint8_t& slot, bool& manual, bool& test);
-bool machineIsIdle();
-bool machineSlotInUse(uint8_t slot);           // Proses sedang berjalan/menunggu/dijeda atau pemulihan tertunda
+bool machineCopyJob(Proses& out, uint8_t& idx, bool& waiting, uint32_t& waitLeftMs, uint8_t& slot, bool& manual, bool& test,
+                    uint8_t ws = WS_CUCI);
+bool machineIsIdle();                          // kedua workspace idle
+bool machineIsIdle(uint8_t ws);
+bool machineSlotInUse(uint8_t id);             // id = prosesId(ws, slot): berjalan/menunggu/dijeda atau pemulihan tertunda
 void machineHold(bool hold);                   // tahan Proses baru (saat flash firmware)
 String machineStatusLine();                    // ringkas untuk konsol

@@ -52,9 +52,10 @@ struct ResumeInfo {
   uint16_t rev;       // revisi Proses saat dimulai; berbeda = Proses sudah diubah, pemulihan dibatalkan
   uint32_t savedAt;   // epoch (0 bila tidak diketahui)
 };
-void resumeSave(uint8_t slot, uint8_t stepIndex, uint16_t rev);
-bool resumeLoad(ResumeInfo& out);
-void resumeClear();
+// ws: 0 = cuci, 1 = pengering (data pemulihan terpisah)
+void resumeSave(uint8_t slot, uint8_t stepIndex, uint16_t rev, uint8_t ws = 0);
+bool resumeLoad(ResumeInfo& out, uint8_t ws = 0);
+void resumeClear(uint8_t ws = 0);
 
 // --- Statistik & riwayat ---
 enum CycleResult : uint8_t { RES_DONE, RES_STOPPED, RES_ERROR };

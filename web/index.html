@@ -100,6 +100,13 @@
 
   <main id="main">
     <div id="bannerOffline" class="callout err" role="alert" hidden><svg class="ic"><use href="#i-cloud-off"/></svg><div id="offlineTxt"></div></div>
+    <div id="wsBar" class="wsbar">
+      <div class="seg" id="wsSeg" role="group" aria-label="Workspace">
+        <button type="button" data-ws="cuci" class="on" aria-pressed="true"><span>Cuci</span><small id="wsSt-cuci">Siap</small></button>
+        <button type="button" data-ws="pengering" aria-pressed="false"><span>Pengering</span><small id="wsSt-pengering">Siap</small></button>
+      </div>
+      <button type="button" class="btn dout" id="btnStopAll" hidden>Stop semua</button>
+    </div>
 
     <!-- ===== BERANDA ===== -->
     <section id="view-beranda" class="view on">
@@ -171,7 +178,7 @@
       </div>
       <div id="homeEmpty" class="empty" hidden>
         <svg class="art" viewBox="0 0 64 64" aria-hidden="true"><rect x="10" y="8" width="44" height="48" rx="8"/><circle cx="32" cy="36" r="12"/><path d="M22 36c4-4 6 4 10 0s6 4 10 0M18 16h4M26 16h4"/></svg>
-        <p>Belum ada Proses. Proses disusun dari Tahap: isi air, putar, buang, spin, dan lainnya.</p>
+        <p id="homeEmptyTxt">Belum ada Proses cuci. Proses disusun dari Tahap: isi air, putar, buang, dan lainnya.</p>
         <button class="btn primary" id="goProses"><svg class="ic"><use href="#i-plus"/></svg>Buat Proses pertama</button>
       </div>
       <div class="pgrid" id="prosesGrid"><div class="skel"></div><div class="skel"></div></div>
@@ -181,7 +188,7 @@
     <!-- ===== PROSES ===== -->
     <section id="view-proses" class="view view-proses" data-mode="list">
       <div class="listmode">
-        <div class="sechead"><div><h1>Proses</h1><p class="muted">Urutan Tahap yang bisa dijalankan. Maksimal 10 Proses, 40 Tahap per Proses. Proses yang sedang dipakai tidak bisa diubah.</p></div>
+        <div class="sechead"><div><h1 id="pcHeading">Proses cuci</h1><p class="muted">Urutan Tahap yang bisa dijalankan. Maksimal 10 Proses per workspace, 40 Tahap per Proses. Proses yang sedang dipakai tidak bisa diubah.</p></div>
           <span id="pcCount" class="chip"></span></div>
         <div id="pcList" class="pgrid"></div>
         <div class="card" data-local><h3>Impor Proses</h3><label class="drop" for="pcImportFile"><svg class="ic lg"><use href="#i-upload"/></svg><span class="t">Seret Berkas Proses (.json) ke Sini</span><span class="h">atau klik untuk memilih berkas</span><span class="dn"></span><input id="pcImportFile" type="file" accept=".json,application/json" hidden></label></div>
@@ -210,7 +217,7 @@
 
     <!-- ===== MANUAL ===== -->
     <section id="view-manual" class="view">
-      <div class="sechead"><div><h1>Manual</h1><p class="muted">Jalankan satu Tahap atau kendalikan relay langsung. Hanya saat mesin siap.</p></div></div>
+      <div class="sechead"><div><h1>Manual</h1><p class="muted">Jalankan satu Tahap atau kendalikan relay langsung. Hanya saat bagian yang dipakai sedang siap.</p></div></div>
       <div class="mangrid">
         <div class="card" id="manTahap">
           <h2>Jalankan satu Tahap</h2>

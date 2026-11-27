@@ -48,7 +48,7 @@ Dashboard → **Sistem → Pemeliharaan → Firmware** → choose `.bin` → *Fl
 
 Updates the ESP32 over WiFi (OTA) **and** the Worker in one go.
 
-1. Copy `.env.example` to `.env.local` (git-ignored); set `DEPLOY_ESP_PASSWORD` (local dashboard password) and, if needed, `DEPLOY_ESP_HOST`.
+1. Copy `.env.example` to `.env.local` (git-ignored); set `DEPLOY_ESP_PASSWORD` (local dashboard password), `DEPLOY_ESP_MAC` (the washer ESP32's MAC address; deploy aborts on a mismatch) and, if needed, `DEPLOY_ESP_HOST`.
 2. Double-click `tools\deploy.cmd` (or `powershell -File tools\deploy.ps1`).
 3. The script builds the web UI and firmware, uploads the `.bin` to `mesincuci.local` (only when the machine is IDLE), waits for
    the ESP32 to come back, then tests and deploys the Worker.

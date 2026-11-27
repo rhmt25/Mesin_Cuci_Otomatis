@@ -102,6 +102,12 @@ main{max-width:1200px;margin:0 auto;padding:var(--s4) var(--s4) var(--s6)}
 .btn.ghost{background:transparent}
 .btn.danger{background:var(--err);border-color:var(--err);color:var(--bg)}
 .btn.dout{background:transparent;border-color:var(--err);color:var(--err)}
+.wsbar{display:flex;gap:var(--s2);align-items:center;margin:var(--s2) 0 var(--s3)}
+.wsbar .seg{flex:1;min-width:0}
+.wsbar .seg button{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:48px;padding:4px 10px}
+.wsbar small{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:400;font-size:.75rem;text-transform:none}
+.wsbar small.run{color:var(--accent-text)}.wsbar small.warn{color:var(--warn)}
+.wsbar .btn{flex:none}
 .btn.sm{min-height:36px;padding:0 var(--s3);font-size:.875rem}
 .btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
 .btn.load::after{content:"";width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .7s linear infinite}

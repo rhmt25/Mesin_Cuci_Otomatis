@@ -13,6 +13,7 @@ static uint32_t lastMotorOffMs = 0;
 static int8_t lastMotorDir = -1;     // 0 kiri, 1 kanan
 static uint32_t motorOnSince = 0;
 static uint32_t perfumeOnSince = 0;
+static uint32_t spinOnSince = 0;
 static uint64_t motorMsTotal = 0;
 static portMUX_TYPE relayMux = portMUX_INITIALIZER_UNLOCKED;
 static bool faulted = false;
@@ -100,6 +101,7 @@ bool relaySet(RelayId id, bool on) {
       writePin(pins[id == R_LEFT ? R_RIGHT : R_LEFT], false);
     }
     if (id == R_PERFUME && on && !state[id]) perfumeOnSince = millis();
+    if (id == R_SPIN && on && !state[id]) spinOnSince = millis();
     state[id] = on;
     writePin(pins[id], on);
     if (on && (id == R_LEFT || id == R_RIGHT)) lastMotorDir = id == R_LEFT ? 0 : 1;
@@ -113,16 +115,19 @@ bool relaySet(RelayId id, bool on) {
   return true;
 }
 
-void relayAllOff() {
+void relayOffMask(uint8_t mask) {
   portENTER_CRITICAL(&relayMux);
   bool motorsBefore = state[R_LEFT] || state[R_RIGHT];
   for (int i = 0; i < R_COUNT; i++) {
+    if (!(mask & (1u << i))) continue;
     state[i] = false;
     writePin(pins[i], false);
   }
-  updateMotorClock(motorsBefore, false);
+  updateMotorClock(motorsBefore, state[R_LEFT] || state[R_RIGHT]);
   portEXIT_CRITICAL(&relayMux);
 }
+
+void relayAllOff() { relayOffMask((1u << R_COUNT) - 1); }
 
 bool relayIsOn(RelayId id) { return id < R_COUNT && state[id]; }
 const char* relayName(RelayId id) { return id < R_COUNT ? names[id] : "?"; }
@@ -169,6 +174,11 @@ uint8_t relayGuard() {
     writePin(pins[R_PERFUME], false);
     result = 3;
     why = "Pompa pewangi menyala terlalu lama, dimatikan paksa";
+  } else if (state[R_SPIN] && millis() - spinOnSince > SPIN_MAX_ON_MS) {
+    state[R_SPIN] = false;
+    writePin(pins[R_SPIN], false);
+    result = 4;
+    why = "Motor spin menyala terlalu lama, dimatikan paksa";
   } else if ((state[R_LEFT] || state[R_RIGHT]) && millis() - motorOnSince > MOTOR_MAX_ON_MS) {
     bool motorsBefore = true;
     state[R_LEFT] = state[R_RIGHT] = false;

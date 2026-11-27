@@ -15,7 +15,7 @@ Command names are Indonesian, as implemented in firmware.
 | `stop` · `jeda` · `lanjutkan` · `lewati` · `batalkan` | Control the running Program (stop / pause / resume / skip / cancel) |
 | `cek_air` | Read the level sensor |
 | `status` · `pengaturan` · `riwayat` · `statistik` · `info` · `bantuan` | Information (status / settings / history / statistics / info / help) |
-| `relay <kiri\|kanan\|isi\|buang\|spin\|pewangi> <on\|off>` · `relay semua off` | Direct relay control (IDLE only) |
+| `relay <kiri\|kanan\|isi\|buang\|spin\|pewangi> <on\|off>` · `relay semua off` | Direct relay control (only while the owning workspace is IDLE; spin = dryer) |
 | `kalibrasi_relay [seconds]` · `relay_test <name>` | Sequential / single relay test |
 | `buang_manual <minutes>` | Pull the drain valve without the sensor |
 | `notif lengkap\|ringkas\|senyap` | Notification mode (full / brief / silent) |
@@ -43,6 +43,7 @@ All require a login session (cookie) except `/api/login`.
 | `GET/POST /api/proses` · `/api/proses/export` · `/api/proses/import` | Program CRUD |
 | `GET /api/tahap/meta` | Stage catalog (kinds, ranges, defaults) |
 | `POST /api/run` · `/api/decide` · `/api/cmd` | Run, decide, command |
+| `ws=cuci\|pengering` | Query parameter (or `ws` key in the JSON body) for `/api/job`, `/api/proses*`, `/api/run`, `/api/decide`; empty = wash. Text commands: `proses pengering 1`, `jeda pengering`, `stop pengering`; bare `stop` stops both |
 | `GET/POST /api/settings` · `/api/wifi` · `/api/password` · `/api/devices` | Settings (some local only) |
 | `GET /api/logs` · `/api/history` · `/api/console` | Log, history, console |
 | `GET /api/backup` · `POST /api/restore[?dry=1]` | Backup / restore |

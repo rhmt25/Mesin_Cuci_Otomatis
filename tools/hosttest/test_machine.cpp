@@ -311,13 +311,12 @@ static void fullTank() { g_level = 100; g_raw = true; for (int i = 0; i < 20; i+
 static std::string stageNow() { return st().stage; }
 
 static void n1_fullProcess() {
-  printf("[N1] Proses lengkap: Isi, Putar, Pewangi 0,5 cup, Buang, Spin\n");
+  printf("[N1] Proses lengkap: Isi, Putar, Pewangi 0,5 cup, Buang\n");
   resetWorld();
   Tahap putar = TH(TH_PUTAR); putar.lama = 1;
   Tahap pw = TH(TH_PEWANGI); pw.cup2 = 1;
   Tahap buang = TH(TH_BUANG); buang.lama = 1;
-  Tahap spin = TH(TH_SPIN); spin.lama = 1;
-  saveP(0, "Cuci Harian", {TH(TH_ISI), putar, pw, buang, spin});
+  saveP(0, "Cuci Harian", {TH(TH_ISI), putar, pw, buang});
   runP(0);
   CHECK(runUntil(idle, 120000), "Proses selesai");
   CHECK(count("Proses Cuci Harian selesai", LOG_DONE) == 1, "notifikasi DONE");
@@ -326,7 +325,7 @@ static void n1_fullProcess() {
   CHECK(ST.histCount == 1 && ST.hist[0].result == RES_DONE && std::string(ST.hist[0].name) == "Cuci Harian", "riwayat memuat nama Proses");
   CHECK(C.nFill >= 1, "kalibrasi isi tersimpan");
   CHECK(count("Mengisi air...") == 1, "isi air sekali");
-  CHECK(count("Tahap 3/5: Pewangi mulai") == 1 && count("Tahap 5/5: Spin mulai") == 1, "tiap Tahap mencatat mulai (notifikasi)");
+  CHECK(count("Tahap 3/4: Pewangi mulai") == 1 && count("Tahap 4/4: Buang air mulai") == 1, "tiap Tahap mencatat mulai (notifikasi)");
   CHECK(count("Pewangi selesai") == 1, "pewangi masuk sekali");
   printf("  (pompa pewangi menyala %u ms sim = %u dtk nyata)\n", g_perfumeOnMs, g_perfumeOnMs * TIME_SCALE / 1000);
   CHECK(g_perfumeOnMs >= 140 && g_perfumeOnMs <= 220, "0,5 cup = 10 dtk nyata");
@@ -454,33 +453,14 @@ static void n5_buangNormal() {
   CHECK(errCount() == 0, "tanpa ERROR");
 }
 
-static void n6_spinCek() {
-  printf("[N6] Spin memeriksa sensor; Cek air; Minta tindakan; Notifikasi\n");
-  resetWorld(); fullTank();
-  Tahap sp = TH(TH_SPIN); sp.lama = 1;
-  saveP(0, "A", {sp});
-  runP(0);
-  CHECK(runUntil(deciding, 5000), "air masih penuh -> keputusan");
-  CHECK(st().decision == DC_SPIN_PENUH && !relayIsOn(R_SPIN), "SPIN_PENUH, motor spin tidak menyala");
-  choose(OP_LANJUT);
-  CHECK(relayIsOn(R_SPIN) && count("Keputusan: Lanjut", LOG_WARN) == 1, "Lanjut: spin berjalan (dengan peringatan)");
-  CHECK(runUntil(idle, 10000) && !anyRelayOn(), "spin selesai");
-
-  resetWorld(); fullTank();
-  saveP(0, "B", {sp});
-  runP(0);
-  runUntil(deciding, 5000);
-  g_level = 0;
-  choose(OP_ULANG);
-  CHECK(runUntil(idle, 20000) && count("Keputusan: Ulang") == 1, "air sudah turun -> Ulang -> spin selesai");
-
+static void n6_cek() {
+  printf("[N6] Cek air; Minta tindakan; Notifikasi\n");
   resetWorld();
   Tahap cek = TH(TH_CEK);
   saveP(0, "C", {cek});
   runP(0);
   CHECK(runUntil(deciding, 5000) && st().decision == DC_CEK_GAGAL, "Cek 'harus penuh' pada tangki kosong -> CEK_GAGAL");
   choose(OP_LANJUT);
-  CHECK(idle(), "Lanjut");
   resetWorld(); fullTank();
   cek.mode = CEK_TIDAK_PENUH;
   saveP(0, "D", {cek});
@@ -798,8 +778,11 @@ static void n14_manual() {
   Tahap pt = TH(TH_PUTAR); pt.lama = 5;
   saveP(0, "A", {pt});
   runP(0); tick();
+  post(MC_RELAY, R_PERFUME, 1); tick();
+  CHECK(!relayIsOn(R_PERFUME), "relay manual cuci ditolak saat tabung cuci bekerja");
   post(MC_RELAY, R_SPIN, 1); tick();
-  CHECK(!relayIsOn(R_SPIN), "relay manual ditolak saat mesin bekerja");
+  CHECK(relayIsOn(R_SPIN), "relay spin manual tetap boleh (pengering siap)");
+  post(MC_RELAY, R_SPIN, 0); tick();
   post(MC_STOP); tick();
   post(MC_RELAY, R_PERFUME, 1); tick();
   CHECK(relayIsOn(R_PERFUME), "pewangi manual ON");
@@ -952,6 +935,84 @@ static void n18_backupRestore() {
   wipeUserData();
 }
 
+static MachineStatus stK() { MachineStatus s; machineGetStatus(s, WS_KERING); return s; }
+static bool idleK() { return stK().state == MS_IDLE; }
+static void runK(int slot) { machineStartProses(slot, 0, -1, WS_KERING); }
+static void postK(uint8_t type, uint8_t arg = 0, uint8_t ws = WS_KERING) {
+  MachineCmd c; memset(&c, 0, sizeof(c)); c.type = type; c.arg = arg; c.ws = ws; c.finishAt = -1; machinePost(c);
+}
+static void saveK(int slot, const char* name, std::initializer_list<Tahap> ts) { saveP(prosesId(WS_KERING, slot), name, ts); }
+static void ticks(int n) { for (int i = 0; i < n; i++) tick(); }
+
+static void w1_parallel() {
+  printf("[W1] Cuci dan pengering berjalan bersamaan, masing-masing berdiri sendiri\n");
+  resetWorld(); fullTank();   // air penuh di tabung cuci tidak menghalangi spin
+  Tahap putar = TH(TH_PUTAR); putar.lama = 5;
+  Tahap sp = TH(TH_SPIN); sp.lama = 2;
+  saveP(0, "Cuci", {putar});
+  saveK(0, "Kering", {sp});
+  runP(0); runK(0);
+  ticks(5);
+  CHECK(st().state == MS_RUNNING && stK().state == MS_RUNNING, "dua workspace berjalan");
+  CHECK(relayIsOn(R_SPIN), "spin menyala tanpa membaca sensor air");
+  CHECK(runUntil([] { return relayIsOn(R_LEFT) && relayIsOn(R_SPIN); }, 5000), "motor cuci dan spin menyala bersamaan");
+  post(MC_PAUSE); ticks(2);
+  CHECK(st().state == MS_PAUSED && !relayIsOn(R_LEFT) && relayIsOn(R_SPIN), "jeda cuci tidak mematikan spin");
+  post(MC_RESUME); ticks(2);
+  postK(MC_PAUSE); ticks(2);
+  CHECK(stK().state == MS_PAUSED && !relayIsOn(R_SPIN) && st().state == MS_RUNNING, "jeda pengering tidak menjeda cuci");
+  postK(MC_RESUME); ticks(2);
+  CHECK(relayIsOn(R_SPIN), "pengering lanjut: spin menyala lagi");
+  post(MC_STOP); ticks(2);
+  CHECK(idle() && stK().state == MS_RUNNING && relayIsOn(R_SPIN) && !relayIsOn(R_LEFT) && !relayIsOn(R_RIGHT), "stop cuci saja");
+  CHECK(runUntil(idleK, 20000) && !anyRelayOn(), "pengering selesai sendiri");
+  CHECK(count("Pengering: Proses Kering selesai", LOG_DONE) == 1, "log pengering diberi awalan");
+
+  runP(0); runK(0); ticks(5);
+  postK(MC_STOP, 0, WS_ALL); ticks(2);
+  CHECK(idle() && idleK() && !anyRelayOn(), "Stop semua menghentikan keduanya");
+}
+
+static void w2_locks() {
+  printf("[W2] Kunci relay per workspace\n");
+  resetWorld();
+  Tahap sp = TH(TH_SPIN); sp.lama = 2;
+  saveK(0, "K", {sp});
+  runK(0); ticks(3);
+  post(MC_RELAY, R_PERFUME, 1); ticks(2);
+  CHECK(relayIsOn(R_PERFUME) && stK().state == MS_RUNNING, "relay manual cuci boleh saat pengering bekerja");
+  post(MC_RELAY, R_SPIN, 0); ticks(2);
+  CHECK(relayIsOn(R_SPIN), "relay spin manual ditolak saat pengering bekerja");
+  post(MC_RUN_RELAYSEQ, 1); ticks(3);
+  CHECK(idle(), "kalibrasi berurutan ditolak saat pengering bekerja");
+  postK(MC_STOP); ticks(2);
+  post(MC_RUN_RELAYSEQ, 1); ticks(3);
+  runK(0); ticks(3);
+  CHECK(st().relaySeq && idleK(), "pengering ditolak selama kalibrasi berurutan");
+  post(MC_STOP); ticks(2);
+  CHECK(!anyRelayOn(), "semua mati");
+}
+
+static void w3_resume() {
+  printf("[W3] Listrik padam: kedua workspace menawarkan pemulihan sendiri\n");
+  resetWorld();
+  Tahap r = TH(TH_RENDAM); r.lama = 5;
+  Tahap sp = TH(TH_SPIN); sp.lama = 5;
+  saveP(0, "Cuci", {r});
+  saveK(0, "Kering", {sp});
+  runP(0); runK(0); ticks(5);
+  relayAllOff();
+  machineHostReboot(); ticks(2);
+  CHECK(st().resumePending && stK().resumePending && idle() && idleK() && !anyRelayOn(), "dua tawaran, tidak lanjut otomatis");
+  CHECK(machineSlotInUse(0) && machineSlotInUse(prosesId(WS_KERING, 0)), "kedua slot terkunci");
+  postK(MC_RESUME); ticks(3);
+  CHECK(stK().state == MS_RUNNING && relayIsOn(R_SPIN) && st().resumePending, "lanjutkan pengering saja");
+  post(MC_CANCEL_RESUME); ticks(2);
+  ResumeInfo ri;
+  CHECK(!st().resumePending && !resumeLoad(ri, WS_CUCI) && resumeLoad(ri, WS_KERING), "batalkan cuci tidak menyentuh data pengering");
+  postK(MC_STOP); ticks(2);
+}
+
 int main(int argc, char** argv) {
   g_verbose = argc > 1;
   n1_fullProcess();
@@ -959,7 +1020,10 @@ int main(int argc, char** argv) {
   n3_praCek();
   n4_buangGagal();
   n5_buangNormal();
-  n6_spinCek();
+  n6_cek();
+  w1_parallel();
+  w2_locks();
+  w3_resume();
   n7_reminder();
   n8_soakRendam();
   n9_tundaDanSelesaiJam();

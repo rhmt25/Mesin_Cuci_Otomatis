@@ -14,7 +14,7 @@ Dipakai lewat Konsol web (lokal), Serial USB 115200, dan (yang diizinkan) jarak 
 | `stop` · `jeda` · `lanjutkan` · `lewati` · `batalkan` | Kontrol Proses berjalan |
 | `cek_air` | Baca sensor level |
 | `status` · `pengaturan` · `riwayat` · `statistik` · `info` · `bantuan` | Informasi |
-| `relay <kiri\|kanan\|isi\|buang\|spin\|pewangi> <on\|off>` · `relay semua off` | Kontrol relay langsung (hanya IDLE) |
+| `relay <kiri\|kanan\|isi\|buang\|spin\|pewangi> <on\|off>` · `relay semua off` | Kontrol relay langsung (hanya saat workspace pemilik relay IDLE; spin = pengering) |
 | `kalibrasi_relay [detik]` · `relay_test <nama>` | Uji berurutan / uji satu relay |
 | `buang_manual <menit>` | Tarik valve buang tanpa sensor |
 | `notif lengkap\|ringkas\|senyap` | Mode notifikasi |
@@ -42,6 +42,7 @@ Semua memerlukan sesi login (cookie) kecuali `/api/login`.
 | `GET/POST /api/proses` · `/api/proses/export` · `/api/proses/import` | CRUD Proses |
 | `GET /api/tahap/meta` | Katalog Tahap (jenis, rentang, bawaan) |
 | `POST /api/run` · `/api/decide` · `/api/cmd` | Jalankan, putuskan, perintah |
+| `ws=cuci\|pengering` | Parameter query (atau kunci `ws` di badan JSON) untuk `/api/job`, `/api/proses*`, `/api/run`, `/api/decide`; kosong = cuci. Perintah teks: `proses pengering 1`, `jeda pengering`, `stop pengering`; `stop` tanpa pilihan menghentikan keduanya |
 | `GET/POST /api/settings` · `/api/wifi` · `/api/password` · `/api/devices` | Pengaturan (sebagian hanya lokal) |
 | `GET /api/logs` · `/api/history` · `/api/console` | Log, riwayat, konsol |
 | `GET /api/backup` · `POST /api/restore[?dry=1]` | Cadangan / pulihkan |

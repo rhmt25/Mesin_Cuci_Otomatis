@@ -14,45 +14,45 @@ static bool encode(const Proses& p, String& out) {
   return out.length() > 0 && out.length() < PROSES_MAX_FILE;
 }
 
-static bool decode(const String& raw, Proses& out) {
+static bool decode(const String& raw, Proses& out, uint8_t ws) {
   if (raw.length() == 0 || raw.length() >= PROSES_MAX_FILE) return false;
   JsonDocument d;
   if (deserializeJson(d, raw.c_str()) != DeserializationError::Ok) return false;
   String err;
-  return prosesFromJson(d.as<JsonVariantConst>(), out, err, true);
+  return prosesFromJson(d.as<JsonVariantConst>(), out, err, true, ws);
 }
 
 #ifdef HOST_TEST
 // ------------------------------------------------------------ penyimpanan di memori (uji PC)
-static String files[PROSES_SLOTS];
-static bool present[PROSES_SLOTS];
+static String files[PROSES_TOTAL];
+static bool present[PROSES_TOTAL];
 static bool failWrites = false;
 
 bool prosesStoreBegin() { return true; }
 bool prosesStoreReady() { return true; }
 static bool readRaw(uint8_t slot, String& raw) {
-  if (slot >= PROSES_SLOTS || !present[slot]) return false;
+  if (slot >= PROSES_TOTAL || !present[slot]) return false;
   raw = files[slot];
   return true;
 }
 static bool writeRaw(uint8_t slot, const String& raw) {
-  if (slot >= PROSES_SLOTS || failWrites) return false;
+  if (slot >= PROSES_TOTAL || failWrites) return false;
   files[slot] = raw;
   present[slot] = true;
   return true;
 }
 static bool removeRaw(uint8_t slot) {
-  if (slot >= PROSES_SLOTS) return false;
+  if (slot >= PROSES_TOTAL) return false;
   present[slot] = false;
   files[slot] = "";
   return true;
 }
 void prosesStoreHostReset() {
-  for (int i = 0; i < PROSES_SLOTS; i++) removeRaw(i);
+  for (int i = 0; i < PROSES_TOTAL; i++) removeRaw(i);
   failWrites = false;
 }
 void prosesStoreHostPut(uint8_t slot, const String& raw) { writeRaw(slot, raw); }
-String prosesStoreHostGet(uint8_t slot) { return slot < PROSES_SLOTS ? files[slot] : String(""); }
+String prosesStoreHostGet(uint8_t slot) { return slot < PROSES_TOTAL ? files[slot] : String(""); }
 void prosesStoreHostFailWrites(bool fail) { failWrites = fail; }
 #else
 // ------------------------------------------------------------ LittleFS (perangkat)
@@ -60,9 +60,11 @@ void prosesStoreHostFailWrites(bool fail) { failWrites = fail; }
 #include <esp_log.h>
 
 static bool mounted = false;
-static uint16_t presentMask = 0;   // bit N = berkas pN.json ada (hindari open() pada berkas tak ada: menulis galat palsu ke serial)
+static uint32_t presentMask = 0;   // bit id = berkas ada: pN.json (cuci), kN.json (pengering) (hindari open() pada berkas tak ada: menulis galat palsu ke serial)
 
-static String pathOf(uint8_t slot, const char* ext) { return String("/p") + String((int)slot) + ext; }
+static String pathOf(uint8_t slot, const char* ext) {
+  return String(slot < PROSES_SLOTS ? "/p" : "/k") + String((int)(slot % PROSES_SLOTS)) + ext;
+}
 
 bool prosesStoreBegin() {
   // formatOnFail=true aman: partisi ini tidak dipakai data lain; hanya terformat bila belum pernah dipasang.
@@ -77,8 +79,8 @@ bool prosesStoreBegin() {
     String name = f.name();
     if (name.startsWith("/")) name.remove(0, 1);
     f.close();
-    if (name.length() >= 6 && name[0] == 'p' && name[1] >= '0' && name[1] <= '9') {
-      uint8_t slot = (uint8_t)(name[1] - '0');
+    if (name.length() >= 6 && (name[0] == 'p' || name[0] == 'k') && name[1] >= '0' && name[1] <= '9') {
+      uint8_t slot = prosesId(name[0] == 'k' ? WS_KERING : WS_CUCI, (uint8_t)(name[1] - '0'));
       if (name.endsWith(".json")) presentMask |= (1u << slot);
       else if (name.endsWith(".tmp")) LittleFS.remove(String("/") + name);   // sisa tulis yang terputus (listrik padam)
     }
@@ -88,7 +90,7 @@ bool prosesStoreBegin() {
 bool prosesStoreReady() { return mounted; }
 
 static bool readRaw(uint8_t slot, String& raw) {
-  if (!mounted || slot >= PROSES_SLOTS) return false;
+  if (!mounted || slot >= PROSES_TOTAL) return false;
   if (!(presentMask & (1u << slot))) return false;
   String path = pathOf(slot, ".json");
   File f = LittleFS.open(path, "r");
@@ -106,7 +108,7 @@ static bool readRaw(uint8_t slot, String& raw) {
   return true;
 }
 static bool writeRaw(uint8_t slot, const String& raw) {
-  if (!mounted || slot >= PROSES_SLOTS) return false;
+  if (!mounted || slot >= PROSES_TOTAL) return false;
   String tmp = pathOf(slot, ".tmp"), dst = pathOf(slot, ".json");
   File f = LittleFS.open(tmp, "w");
   if (!f) return false;
@@ -127,7 +129,7 @@ static bool writeRaw(uint8_t slot, const String& raw) {
   return true;
 }
 static bool removeRaw(uint8_t slot) {
-  if (!mounted || slot >= PROSES_SLOTS) return false;
+  if (!mounted || slot >= PROSES_TOTAL) return false;
   if (!(presentMask & (1u << slot))) return true;
   presentMask &= ~(1u << slot);
   return LittleFS.remove(pathOf(slot, ".json"));
@@ -139,7 +141,7 @@ SlotState prosesSlotState(uint8_t slot) {
   if (!readRaw(slot, raw)) return SLOT_EMPTY;
   Proses* p = new Proses;
   if (!p) return SLOT_BAD;
-  bool ok = decode(raw, *p);
+  bool ok = decode(raw, *p, slot / PROSES_SLOTS);
   delete p;
   return ok ? SLOT_OK : SLOT_BAD;
 }
@@ -147,7 +149,7 @@ SlotState prosesSlotState(uint8_t slot) {
 bool prosesLoad(uint8_t slot, Proses& out) {
   String raw;
   if (!readRaw(slot, raw)) return false;
-  return decode(raw, out);
+  return decode(raw, out, slot / PROSES_SLOTS);
 }
 
 bool prosesSave(uint8_t slot, const Proses& p) {

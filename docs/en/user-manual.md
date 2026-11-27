@@ -27,6 +27,7 @@ firmware see [Installation](installation.md).
 
 | Term | Meaning |
 |---|---|
+| **Workspace** | **Cuci** (wash tub) or **Pengering** (spin tub), chosen with the buttons above Home/Programs/Manual. Both can run at the same time and each has its own 10 Programs. Dry Programs offer Spin, Wait, Ask action and Notify. |
 | **Stage** (*Tahap*) | One machine step: fill, drain, agitate, rinse-soak, spin, fragrance… Each Stage has its own variables (duration, mode, retries). |
 | **Program** (*Proses*) | A sequence of Stages you build and name yourself (max **10 Programs**, each up to **40 Stages**). |
 | **Water level sensor** | A sensor at the top of the drum. It only knows **full** or **not full**. |
@@ -83,7 +84,7 @@ Other actions: **copy** a Program (saved immediately), **delete**, **export** / 
 | **Putar mesin** (Agitate) | 15 min; pattern `normal` (7 s on / 4 pause), `gentle` (5.3 / 7), `hijab` (3 / 9). |
 | **Soak** | Repeat 2×; spin time 1 min; soak time 4 min; pattern. |
 | **Rendam** (Rest) | 4 min, motionless, all relays off. |
-| **Spin** | 10 min. Sensor checked first: water must already have dropped. |
+| **Spin** | 10 min. Dry Programs only; does not read the water sensor. |
 | **Pewangi** (Fragrance) | 1 cup (multiples of 0.5; **0.5 cup = 10 s**; pump failsafe 240 s). |
 | **Tunggu** (Wait) | Pause 00:00:10. |
 | **Cek air** (Water check) | Water must be `penuh` (full) or `tidak penuh` (not full). |
@@ -107,12 +108,12 @@ A Program can only start while the machine is **IDLE**. While running you can **
 
 ## 6. Pending decisions
 
-When a Fill/Drain/Spin/Check Stage fails, or an *Ask action* Stage is reached, the machine **stops and never continues by
+When a Fill/Drain/Check Stage fails, or an *Ask action* Stage is reached, the machine **stops and never continues by
 itself**. The dashboard shows buttons for the case and sends a notification (repeated every 10 minutes).
 
 | Case | Choices |
 |---|---|
-| Fill failed · Drain failed · Spin still full · Check failed | **Retry** · **Continue** (with a warning) · **Cancel** |
+| Fill failed · Drain failed · Check failed | **Retry** · **Continue** (with a warning) · **Cancel** |
 | Already full before filling (pre-check `jeda`) | **Drain then fill** · **Use existing water** · **Cancel** |
 | Ask action | **Continue** · **Cancel** |
 

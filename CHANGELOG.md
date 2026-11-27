@@ -5,12 +5,19 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/); versi mengikut
 ## [Belum dirilis / Unreleased]
 
 ### Ditambahkan / Added
+- Dua workspace yang berjalan bersamaan: **Cuci** dan **Pengering**, masing-masing dengan 10 Proses, jeda/stop/lewati,
+  jadwal, dan pemulihan listrik padam sendiri. / Two workspaces running side by side: wash and spin-dry.
+- Failsafe motor spin (61 menit). / Spin motor failsafe.
+- Deploy memeriksa judul halaman dan alamat MAC (`DEPLOY_ESP_MAC`) sebelum mengirim password atau firmware.
+  / Deploy verifies the target device before sending anything.
 - Persiapan open source: lisensi **GPL-3.0-or-later**, header SPDX di semua berkas sumber, README dwibahasa (EN/ID),
   dokumentasi lengkap di `docs/` termasuk manual pengguna, CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, template issue/PR,
   dan CI GitHub Actions. / Open-source preparation: GPL-3.0-or-later license, SPDX headers, bilingual README and full docs,
   community files, and CI.
 
 ### Diubah / Changed
+- Tahap Spin hanya ada di Proses pengering dan tidak lagi membaca sensor air. Spin di Proses cuci lama otomatis menjadi
+  Notifikasi (di akhir) atau Minta tindakan (di tengah). / The Spin Stage now belongs to dry Programs only.
 - Folder kosong bawaan PlatformIO (`include/`, `lib/`, `test/`) dihapus. / Removed empty PlatformIO placeholder folders.
 
 ## [2.0.0]

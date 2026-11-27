@@ -88,6 +88,36 @@ int tahapFromKey(const String& key) {
   return -1;
 }
 
+// ---- workspace --------------------------------------------------------------
+bool tahapAllowed(uint8_t type, uint8_t ws) {
+  if (type >= TH_COUNT) return false;
+  if (ws == WS_KERING) return type == TH_SPIN || type == TH_TUNGGU || type == TH_TINDAKAN || type == TH_NOTIF;
+  return type != TH_SPIN;
+}
+const char* wsName(uint8_t ws) { return ws == WS_KERING ? "pengering" : "cuci"; }
+int wsFromName(const String& name) {
+  if (name.length() == 0 || name.equalsIgnoreCase("cuci")) return WS_CUCI;
+  if (name.equalsIgnoreCase("pengering")) return WS_KERING;
+  return -1;
+}
+
+// Proses cuci buatan firmware lama boleh berisi Spin. Spin kini milik workspace pengering (baju dipindah dengan tangan):
+// di akhir Proses menjadi Notifikasi, di tengah menjadi Minta tindakan agar Proses menunggu baju kembali.
+// Berkas tersimpan tidak ditulis ulang; konversi terjadi saat dibaca.
+static void convertLegacySpin(Proses& p) {
+  bool atEnd = true;
+  for (int i = (int)p.count - 1; i >= 0; i--) {
+    Tahap& t = p.t[i];
+    if (t.type == TH_NOTIF) continue;
+    if (t.type != TH_SPIN) {
+      atEnd = false;
+      continue;
+    }
+    tahapDefault(atEnd ? TH_NOTIF : TH_TINDAKAN, t);
+    strlcpy(t.pesan, atEnd ? "Pindahkan baju ke tabung spin" : "Spin dulu, lalu kembalikan baju", sizeof(t.pesan));
+  }
+}
+
 // ---- akses generik ---------------------------------------------------------
 static int32_t getNum(const Tahap& t, const Field& f) {
   const uint8_t* p = (const uint8_t*)&t + f.off;
@@ -289,8 +319,9 @@ static bool nameOk(const char* n, String& err) {
   return true;
 }
 
-bool prosesFromJson(JsonVariantConst v, Proses& p, String& err, bool keepRev) {
+bool prosesFromJson(JsonVariantConst v, Proses& p, String& err, bool keepRev, uint8_t ws) {
   memset(&p, 0, sizeof(p));
+  p.ws = ws;
   if (!v.is<JsonObjectConst>()) {
     err = "Format Proses tidak valid";
     return false;
@@ -318,6 +349,7 @@ bool prosesFromJson(JsonVariantConst v, Proses& p, String& err, bool keepRev) {
     n++;
   }
   p.count = n;
+  if (ws == WS_CUCI) convertLegacySpin(p);
   return prosesValidate(p, err);
 }
 
@@ -325,6 +357,7 @@ void prosesToJson(const Proses& p, JsonObject o) {
   o["v"] = 1;
   o["name"] = JsonString((const char*)p.name);
   o["rev"] = p.rev;
+  if (p.ws == WS_KERING) o["jenis"] = wsName(p.ws);
   JsonArray arr = o["tahap"].to<JsonArray>();
   for (uint8_t i = 0; i < p.count; i++) tahapToJson(p.t[i], arr.add<JsonObject>());
 }
@@ -337,6 +370,10 @@ bool prosesValidate(const Proses& p, String& err) {
   }
   for (uint8_t i = 0; i < p.count; i++) {
     String e;
+    if (!tahapAllowed(p.t[i].type, p.ws)) {
+      err = "Tahap " + String((int)i + 1) + ": " + tahapLabel(p.t[i].type) + " tidak tersedia di Proses " + wsName(p.ws);
+      return false;
+    }
     if (!tahapValidate(p.t[i], e, false)) {
       err = "Tahap " + String((int)i + 1) + ": " + e;
       return false;
@@ -347,22 +384,19 @@ bool prosesValidate(const Proses& p, String& err) {
 
 int prosesWarnings(const Proses& p, String* out, int maxOut) {
   int n = 0;
+  if (p.ws == WS_KERING) return 0;   // peringatan hanya soal urutan air
   auto add = [&](const String& s) {
     if (n < maxOut) out[n] = s;
     n++;
   };
-  bool sawIsi = false, drainedSinceIsi = true, anyIsi = false;
+  bool sawIsi = false, anyIsi = false;
   for (uint8_t i = 0; i < p.count; i++) {
     const Tahap& t = p.t[i];
     String at = "Tahap " + String((int)i + 1) + " (" + tahapLabel(t.type) + "): ";
     switch (t.type) {
-      case TH_ISI: sawIsi = anyIsi = true; drainedSinceIsi = false; break;
-      case TH_BUANG: drainedSinceIsi = true; break;
+      case TH_ISI: sawIsi = anyIsi = true; break;
       case TH_PUTAR: case TH_RENDAM: case TH_SOAK: case TH_PEWANGI:
         if (!sawIsi) add(at + "berjalan sebelum ada Isi air.");
-        break;
-      case TH_SPIN:
-        if (sawIsi && !drainedSinceIsi) add(at + "tanpa Buang air sejak Isi air terakhir.");
         break;
     }
   }
@@ -370,8 +404,7 @@ int prosesWarnings(const Proses& p, String* out, int maxOut) {
     int last = -1;
     for (int i = p.count - 1; i >= 0; i--)
       if (p.t[i].type != TH_NOTIF && p.t[i].type != TH_TINDAKAN) { last = i; break; }
-    if (last >= 0 && p.t[last].type != TH_BUANG && p.t[last].type != TH_SPIN)
-      add("Proses tidak diakhiri Buang air atau Spin.");
+    if (last >= 0 && p.t[last].type != TH_BUANG) add("Proses tidak diakhiri Buang air.");
   }
   return n;
 }
@@ -388,7 +421,7 @@ uint32_t tahapEstimateSec(const Tahap& t) {
     }
     case TH_BUANG: return (uint32_t)t.lama * 60 + WATER_STABLE_MS / 1000 + 2;
     case TH_PUTAR: case TH_RENDAM: case TH_BUANG_MANUAL: return (uint32_t)t.lama * 60;
-    case TH_SPIN: return (uint32_t)t.lama * 60 + WATER_STABLE_MS / 1000 + 2;
+    case TH_SPIN: return (uint32_t)t.lama * 60;
     case TH_SOAK: return (uint32_t)t.ulangi * ((uint32_t)t.putar + t.rendam) * 60;
     case TH_PEWANGI: return (uint32_t)t.cup2 * 10;
     case TH_TUNGGU: return t.detik;
@@ -451,6 +484,9 @@ String tahapMetaJson() {
     o["t"] = KEYS[ty];
     o["label"] = LABELS[ty];
     o["manual"] = ty == TH_BUANG_MANUAL;
+    JsonArray wsArr = o["ws"].to<JsonArray>();
+    for (uint8_t w = 0; w < WS_COUNT; w++)
+      if (tahapAllowed(ty, w)) wsArr.add(wsName(w));
     JsonArray fs = o["fields"].to<JsonArray>();
     for (int i = 0; i < NFIELDS; i++) {
       const Field& f = FIELDS[i];

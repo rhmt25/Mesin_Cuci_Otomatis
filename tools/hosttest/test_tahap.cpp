@@ -154,7 +154,7 @@ static void t3_ranges() {
 
 static void t4_proses() {
   printf("T4 validasi Proses & peringatan\n");
-  Proses* p = mk("Cuci Harian", {TH_ISI, TH_PUTAR, TH_BUANG, TH_SPIN});
+  Proses* p = mk("Cuci Harian", {TH_ISI, TH_PUTAR, TH_BUANG});
   String err;
   CHECK(prosesValidate(*p, err), "Proses normal valid");
   String w[8];
@@ -192,10 +192,7 @@ static void t4_proses() {
 
   // peringatan
   p = mk("A", {TH_PUTAR, TH_ISI});
-  CHECK(prosesWarnings(*p, w, 8) >= 2, "Putar sebelum Isi + tidak diakhiri Buang/Spin");
-  delete p;
-  p = mk("B", {TH_ISI, TH_PUTAR, TH_SPIN});
-  CHECK(prosesWarnings(*p, w, 8) == 1, "Spin tanpa Buang sejak Isi");
+  CHECK(prosesWarnings(*p, w, 8) >= 2, "Putar sebelum Isi + tidak diakhiri Buang");
   delete p;
   p = mk("C", {TH_ISI, TH_PUTAR, TH_BUANG});
   CHECK(prosesWarnings(*p, w, 8) == 0, "diakhiri Buang: aman");
@@ -205,12 +202,6 @@ static void t4_proses() {
   delete p;
   p = mk("E", {TH_PEWANGI, TH_TUNGGU});
   CHECK(prosesWarnings(*p, w, 8) == 1, "Pewangi tanpa Isi (tanpa Isi sama sekali -> tidak peringatan ujung)");
-  delete p;
-  p = mk("F", {TH_SPIN});
-  CHECK(prosesWarnings(*p, w, 8) == 0, "Spin saja (air mungkin sudah ada) tidak diperingatkan");
-  delete p;
-  p = mk("G", {TH_ISI, TH_BUANG, TH_ISI, TH_SOAK, TH_BUANG, TH_SPIN});
-  CHECK(prosesWarnings(*p, w, 8) == 0, "Isi-Buang-Isi-Soak-Buang-Spin valid");
   delete p;
 }
 
@@ -246,7 +237,7 @@ static void t6_store() {
   printf("T6 penyimpanan Proses (atomik, rusak, hapus)\n");
   prosesStoreHostReset();
   CHECK(prosesStoreBegin(), "mount");
-  Proses* p = mk("Cuci Harian", {TH_ISI, TH_SOAK, TH_PUTAR, TH_BUANG, TH_SPIN, TH_PEWANGI});
+  Proses* p = mk("Cuci Harian", {TH_ISI, TH_SOAK, TH_PUTAR, TH_BUANG, TH_RENDAM, TH_PEWANGI});
   p->rev = 3;
   CHECK(prosesSlotState(0) == SLOT_EMPTY, "slot kosong di awal");
   CHECK(prosesSave(0, *p), "simpan");
@@ -280,6 +271,30 @@ static void t6_store() {
   delete p; delete q; delete big;
 }
 
+static void t7_workspace() {
+  printf("T7 workspace: Tahap tersedia & konversi Spin lama\n");
+  CHECK(tahapAllowed(TH_SPIN, WS_KERING) && !tahapAllowed(TH_SPIN, WS_CUCI), "Spin hanya di pengering");
+  CHECK(tahapAllowed(TH_TUNGGU, WS_KERING) && tahapAllowed(TH_TINDAKAN, WS_KERING) && tahapAllowed(TH_NOTIF, WS_KERING), "Tunggu/Tindakan/Notifikasi di pengering");
+  CHECK(!tahapAllowed(TH_RENDAM, WS_KERING) && !tahapAllowed(TH_ISI, WS_KERING) && !tahapAllowed(TH_CEK, WS_KERING), "Rendam/Isi/Cek tidak di pengering");
+  Proses* q = new Proses;
+  prosesStoreHostReset();
+  prosesStoreHostPut(0, "{\"v\":1,\"name\":\"Lama\",\"rev\":4,\"tahap\":[{\"t\":\"buang\"},{\"t\":\"spin\",\"lama\":3},{\"t\":\"isi\"},{\"t\":\"buang\"},{\"t\":\"spin\"},{\"t\":\"notif\"}]}");
+  CHECK(prosesSlotState(0) == SLOT_OK && prosesLoad(0, *q) && q->count == 6 && q->rev == 4, "berkas lama berisi Spin tetap terbaca");
+  CHECK(q->t[1].type == TH_TINDAKAN && strcmp(q->t[1].pesan, "Spin dulu, lalu kembalikan baju") == 0, "Spin di tengah -> Minta tindakan");
+  CHECK(q->t[4].type == TH_NOTIF && strcmp(q->t[4].pesan, "Pindahkan baju ke tabung spin") == 0, "Spin di akhir -> Notifikasi");
+  CHECK(std::string(prosesStoreHostGet(0).c_str()).find("spin\"") != std::string::npos, "berkas tersimpan tidak ditulis ulang");
+  uint8_t k = prosesId(WS_KERING, 0);
+  Proses* p = mk("Kering", {TH_SPIN, TH_TUNGGU});
+  p->ws = WS_KERING;
+  String err, w[4];
+  CHECK(prosesValidate(*p, err) && prosesWarnings(*p, w, 4) == 0, "Proses pengering valid tanpa peringatan");
+  CHECK(prosesSave(k, *p) && prosesLoad(k, *q) && q->ws == WS_KERING && q->t[0].type == TH_SPIN, "simpan & muat slot pengering");
+  CHECK(prosesSlotState(0) == SLOT_OK && strcmp(q->name, "Kering") == 0, "slot cuci 1 dan pengering 1 terpisah");
+  prosesStoreHostPut(prosesId(WS_KERING, 1), "{\"v\":1,\"name\":\"X\",\"tahap\":[{\"t\":\"isi\"}]}");
+  CHECK(prosesSlotState(prosesId(WS_KERING, 1)) == SLOT_BAD, "Isi air ditolak di Proses pengering");
+  delete p; delete q;
+}
+
 int main(int argc, char** argv) {
   if (argc > 1 && strcmp(argv[1], "--meta") == 0) {   // keluarkan katalog untuk fixture uji UI
     printf("%s", tahapMetaJson().c_str());
@@ -291,6 +306,7 @@ int main(int argc, char** argv) {
   t4_proses();
   t5_estimate();
   t6_store();
+  t7_workspace();
   printf("\n%d pemeriksaan, %d gagal\n", checks, failures);
   return failures ? 1 : 0;
 }

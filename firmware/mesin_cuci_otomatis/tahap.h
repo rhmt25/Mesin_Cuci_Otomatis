@@ -19,6 +19,10 @@ enum CekSyarat : uint8_t { CEK_PENUH, CEK_TIDAK_PENUH };
 
 #define PESAN_MAX 40
 
+// Dua workspace yang berjalan bersamaan: tabung cuci dan tabung pengering (spin). Masing-masing punya Proses sendiri.
+enum Ws : uint8_t { WS_CUCI, WS_KERING, WS_COUNT };
+#define WS_ALL 0xFF   // perintah Stop untuk kedua workspace
+
 struct Tahap {
   uint8_t type;
   uint8_t mode;     // Isi: IsiMode; Cek: CekSyarat
@@ -40,7 +44,9 @@ struct Tahap {
   char pesan[PESAN_MAX + 1];   // Minta tindakan / Notifikasi
 };
 
-#define PROSES_SLOTS 10
+#define PROSES_SLOTS 10                              // per workspace
+#define PROSES_TOTAL (PROSES_SLOTS * 2)             // id penyimpanan: 0-9 cuci, 10-19 pengering
+inline uint8_t prosesId(uint8_t ws, uint8_t slot) { return ws * PROSES_SLOTS + slot; }
 #define PROSES_MAX_TAHAP 40
 #define PROSES_NAME_MAX 27
 
@@ -48,12 +54,16 @@ struct Proses {
   char name[PROSES_NAME_MAX + 1];
   uint16_t rev;     // naik tiap simpan (untuk membatalkan pemulihan bila Proses berubah)
   uint8_t count;
+  uint8_t ws;       // Ws
   Tahap t[PROSES_MAX_TAHAP];
 };
 
 const char* tahapKey(uint8_t type);                  // "isi", "buang", ...
 const char* tahapLabel(uint8_t type);                // "Isi air", "Buang air", ...
 int tahapFromKey(const String& key);                 // -1 bila tidak dikenal
+bool tahapAllowed(uint8_t type, uint8_t ws);         // Tahap tersedia di workspace ini?
+const char* wsName(uint8_t ws);                      // "cuci" / "pengering"
+int wsFromName(const String& name);                  // "" = cuci; -1 bila tidak dikenal
 void tahapDefault(uint8_t type, Tahap& t);
 
 // JSON <-> struct. fromJson mulai dari nilai bawaan jenisnya, lalu menimpa kunci yang ada, lalu validasi.
@@ -62,7 +72,8 @@ void tahapToJson(const Tahap& t, JsonObject o);
 bool tahapValidate(const Tahap& t, String& err, bool allowManualOnly = false);
 
 // Proses: {"v":1,"name":"..","rev":N,"tahap":[{...}]}
-bool prosesFromJson(JsonVariantConst v, Proses& p, String& err, bool keepRev = false);
+// ws menentukan Tahap yang diterima. Tahap Spin pada Proses cuci lama diubah otomatis (lihat tahap.cpp).
+bool prosesFromJson(JsonVariantConst v, Proses& p, String& err, bool keepRev = false, uint8_t ws = WS_CUCI);
 void prosesToJson(const Proses& p, JsonObject o);
 bool prosesValidate(const Proses& p, String& err);
 int prosesWarnings(const Proses& p, String* out, int maxOut);   // peringatan (boleh disimpan setelah konfirmasi)

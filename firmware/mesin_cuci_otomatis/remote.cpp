@@ -42,7 +42,7 @@ static uint32_t pwSentMs = 0;
 
 static uint32_t lastHb = 0, lastStatus = 0, lastLogSeq = 0, lastAck = 0;
 #define ACK_TIMEOUT_MS 100000   // hb dikirim tiap 30 dtk; tanpa ack selama ini = sambungan dianggap mati
-static bool helloPending = false, bootNotified = false, resumeNotified = false;
+static bool helloPending = false, bootNotified = false, resumeNotified[2] = {false, false};
 static uint8_t backoffLevel = 0;
 static const uint32_t backoffSteps[] = {5000, 15000, 30000, 60000, 120000, 300000};
 
@@ -97,7 +97,7 @@ static void sendJsonDoc(JsonDocument& d) {
 // {"t":"<type>","fw":"..","d":<status>} tanpa parse ulang (status sudah berupa JSON)
 static void sendStatus(const char* type) {
   String out;
-  out.reserve(1400);
+  out.reserve(2000);
   out += "{\"t\":\"";
   out += type;
   out += "\",\"fw\":\"" FW_VERSION "\",\"d\":";
@@ -286,13 +286,15 @@ static void pump() {
   if (notifierNextMessage(msg)) sendNotif(msg);
 
   MachineStatus ms;
-  machineGetStatus(ms);
-  if (ms.resumePending && !resumeNotified) {
-    resumeNotified = true;
-    sendNotif(String("\xE2\x9A\xA1 Listrik sempat padam saat ") + ms.resumeInfo +
-              ".\nMesin tidak lanjut otomatis. Buka dashboard untuk Lanjutkan atau Batalkan.");
+  for (uint8_t ws = 0; ws < WS_COUNT; ws++) {
+    machineGetStatus(ms, ws);
+    if (ms.resumePending && !resumeNotified[ws]) {
+      resumeNotified[ws] = true;
+      sendNotif(String("\xE2\x9A\xA1 Listrik sempat padam saat ") + (ws == WS_KERING ? "pengering: " : "") + ms.resumeInfo +
+                ".\nMesin tidak lanjut otomatis. Buka dashboard untuk Lanjutkan atau Batalkan.");
+    }
+    if (!ms.resumePending) resumeNotified[ws] = false;
   }
-  if (!ms.resumePending) resumeNotified = false;
 }
 
 static void remoteTask(void*) {

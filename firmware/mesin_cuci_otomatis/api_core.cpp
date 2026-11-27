@@ -37,19 +37,16 @@ static String msgJson(bool ok, const String& msg) {
   return toString(d);
 }
 
-String apiStatusJson() {
-  MachineStatus s;
-  machineGetStatus(s);
-  JsonDocument d;
-  d["type"] = "status";
+// Keadaan satu workspace (kunci sama untuk cuci di akar dan pengering di "pengering")
+static void addMachine(JsonObject d, const MachineStatus& s) {
   d["state"] = stateName(s.state);
-  d["proses"] = s.state == MS_IDLE ? "" : s.name;
+  d["proses"] = s.state == MS_IDLE ? JsonString("") : JsonString((const char*)s.name);
   d["slot"] = s.slot == NO_SLOT ? 0 : s.slot + 1;
   d["manual"] = s.manual;
-  d["stage"] = s.stage;
-  d["tahap"] = s.tahap;
-  d["detail"] = s.detail;
-  d["pause"] = s.pauseReason;
+  d["stage"] = JsonString((const char*)s.stage);
+  d["tahap"] = JsonString((const char*)s.tahap);
+  d["detail"] = JsonString((const char*)s.detail);
+  d["pause"] = JsonString((const char*)s.pauseReason);
   d["step"] = s.stepIndex;
   d["steps"] = s.stepCount;
   d["stepLeft"] = s.stepLeftSec;
@@ -58,7 +55,7 @@ String apiStatusJson() {
   if (s.state == MS_DECIDE) {
     JsonObject dc = d["decision"].to<JsonObject>();
     dc["code"] = decisionCodeName(s.decision);
-    dc["msg"] = s.pauseReason;
+    dc["msg"] = JsonString((const char*)s.pauseReason);
     JsonArray opts = dc["opts"].to<JsonArray>();
     JsonArray labels = dc["labels"].to<JsonArray>();
     for (uint8_t b = 1; b <= OP_PAKAI; b <<= 1) {
@@ -67,13 +64,27 @@ String apiStatusJson() {
       labels.add(decisionOptLabel(b));
     }
   }
+  d["resume"]["pending"] = s.resumePending;
+  d["resume"]["info"] = JsonString((const char*)s.resumeInfo);
+  d["resume"]["slot"] = s.resumeSlot == NO_SLOT ? 0 : s.resumeSlot + 1;
+}
+
+String apiStatusJson() {
+  MachineStatus s;
+  machineGetStatus(s, WS_CUCI);
+  JsonDocument d;
+  d["type"] = "status";
+  addMachine(d.as<JsonObject>(), s);
+  d["relaySeq"] = s.relaySeq;
+  {
+    MachineStatus k;
+    machineGetStatus(k, WS_KERING);
+    addMachine(d["pengering"].to<JsonObject>(), k);
+  }
   static const char* water[] = {"kosong", "penuh", "mengukur"};
   d["water"] = water[s.waterState];
   d["waterRaw"] = s.waterRaw;
   d["fault"] = s.relayFault;
-  d["resume"]["pending"] = s.resumePending;
-  d["resume"]["info"] = s.resumeInfo;
-  d["resume"]["slot"] = s.resumeSlot == NO_SLOT ? 0 : s.resumeSlot + 1;
   for (int i = 0; i < R_COUNT; i++) d["relays"][relayName((RelayId)i)] = s.relays[i];
   d["wifi"]["online"] = netOnline();
   d["wifi"]["ssid"] = netSsid();
@@ -197,7 +208,7 @@ static String wifiJson() {
 // ============================================================================
 // Proses
 // ============================================================================
-static String prosesListJson() {
+static String prosesListJson(uint8_t ws) {
   JsonDocument d;
   d["max"] = PROSES_SLOTS;
   d["maxTahap"] = PROSES_MAX_TAHAP;
@@ -206,15 +217,16 @@ static String prosesListJson() {
   Proses* p = new Proses;
   if (!p) return msgJson(false, "memori rendah");
   for (uint8_t i = 0; i < PROSES_SLOTS; i++) {
-    SlotState st = prosesSlotState(i);
+    uint8_t id = prosesId(ws, i);
+    SlotState st = prosesSlotState(id);
     if (st == SLOT_EMPTY) {
       slots.add(nullptr);
       continue;
     }
     JsonObject o = slots.add<JsonObject>();
     o["slot"] = i + 1;
-    o["locked"] = machineSlotInUse(i);
-    if (st == SLOT_BAD || !prosesLoad(i, *p)) {
+    o["locked"] = machineSlotInUse(id);
+    if (st == SLOT_BAD || !prosesLoad(id, *p)) {
       o["bad"] = true;
       continue;
     }
@@ -236,17 +248,17 @@ static void addWarnings(JsonDocument& d, const Proses& p) {
   for (int i = 0; i < n && i < 8; i++) w.add(list[i]);
 }
 
-static ApiResult prosesDetail(int slot) {
+static ApiResult prosesDetail(uint8_t ws, int slot) {
   if (slot < 1 || slot > PROSES_SLOTS) return {400, msgJson(false, "Slot tidak valid")};
   Proses* p = new Proses;
   if (!p) return {503, msgJson(false, "memori rendah, coba lagi")};
   ApiResult res;
-  if (!prosesLoad(slot - 1, *p)) {
+  if (!prosesLoad(prosesId(ws, slot - 1), *p)) {
     res = {404, msgJson(false, "Proses kosong atau rusak")};
   } else {
     JsonDocument d;
     d["slot"] = slot;
-    d["locked"] = machineSlotInUse(slot - 1);
+    d["locked"] = machineSlotInUse(prosesId(ws, slot - 1));
     d["est"] = prosesEstimateSec(*p);
     prosesToJson(*p, d["proses"].to<JsonObject>());
     JsonArray rk = d["ringkas"].to<JsonArray>();
@@ -259,22 +271,22 @@ static ApiResult prosesDetail(int slot) {
 }
 
 // Pekerjaan yang sedang berjalan: semua Tahap (selesai, berjalan, antre) untuk Rel Tahap di dashboard.
-static ApiResult jobJson() {
+static ApiResult jobJson(uint8_t ws) {
   if (apiLowMemory(16384)) return {503, msgJson(false, "memori rendah, coba lagi")};
   Proses* p = new Proses;
   if (!p) return {503, msgJson(false, "memori rendah, coba lagi")};
   uint8_t idx = 0, slot = NO_SLOT;
   bool waiting = false, manual = false, test = false;
   uint32_t waitMs = 0;
-  bool active = machineCopyJob(*p, idx, waiting, waitMs, slot, manual, test);
+  bool active = machineCopyJob(*p, idx, waiting, waitMs, slot, manual, test, ws);
   ApiResult res;
-  if (!active && !machineIsIdle()) {
+  if (!active && !machineIsIdle(ws)) {
     res = {503, msgJson(false, "sibuk, coba lagi")};
   } else if (!active) {
     res = {200, "{\"active\":false}"};
   } else {
     MachineStatus ms;
-    machineGetStatus(ms);
+    machineGetStatus(ms, ws);
     JsonDocument d;
     d["active"] = true;
     d["name"] = JsonString(p->name);
@@ -310,40 +322,40 @@ static ApiResult jobJson() {
   return res;
 }
 
-static int firstEmptySlot() {
+static int firstEmptySlot(uint8_t ws) {
   for (uint8_t i = 0; i < PROSES_SLOTS; i++)
-    if (prosesSlotState(i) == SLOT_EMPTY) return i + 1;
+    if (prosesSlotState(prosesId(ws, i)) == SLOT_EMPTY) return i + 1;
   return 0;
 }
 
 // Simpan (atau uji coba bila dry) satu Proses dari JSON. slot 0 = slot kosong pertama.
-static ApiResult prosesSave(JsonVariantConst json, int slot, bool dry) {
+static ApiResult prosesSave(JsonVariantConst json, uint8_t ws, int slot, bool dry) {
   if (apiLowMemory(20480)) return {503, msgJson(false, "memori rendah, coba lagi")};
   Proses* p = new Proses;
   if (!p) return {503, msgJson(false, "memori rendah, coba lagi")};
   ApiResult res;
   String err;
-  if (!prosesFromJson(json, *p, err)) {
+  if (!prosesFromJson(json, *p, err, false, ws)) {
     res = {400, msgJson(false, err)};
   } else if (!dry && !prosesStoreReady()) {
     res = {503, msgJson(false, "Penyimpanan Proses tidak tersedia")};
   } else {
     if (slot < 0 || slot > PROSES_SLOTS) slot = 0;
     if (!slot && !dry) {
-      slot = firstEmptySlot();
+      slot = firstEmptySlot(ws);
       if (!slot) {
         delete p;
         return {400, msgJson(false, String("Penyimpanan penuh (") + PROSES_SLOTS + " Proses). Hapus satu dulu.")};
       }
     }
-    if (slot && machineSlotInUse(slot - 1)) {
+    if (slot && machineSlotInUse(prosesId(ws, slot - 1))) {
       delete p;
       return {409, msgJson(false, "Proses sedang dipakai. Stop dulu sebelum mengubah.")};
     }
     if (slot) {   // naikkan revisi dari berkas lama
       Proses* old = new Proses;
       p->rev = 1;
-      if (old && prosesLoad(slot - 1, *old)) p->rev = old->rev + 1;
+      if (old && prosesLoad(prosesId(ws, slot - 1), *old)) p->rev = old->rev + 1;
       delete old;
     }
     JsonDocument d;
@@ -352,13 +364,13 @@ static ApiResult prosesSave(JsonVariantConst json, int slot, bool dry) {
     d["est"] = prosesEstimateSec(*p);
     addWarnings(d, *p);
     if (!dry) {
-      if (!prosesSave(slot - 1, *p)) {
+      if (!prosesSave(prosesId(ws, slot - 1), *p)) {
         delete p;
         return {500, msgJson(false, "Gagal menyimpan Proses")};
       }
       d["slot"] = slot;
       d["msg"] = String("Tersimpan di slot ") + slot;
-      logf(LOG_INFO, "Proses disimpan: slot %d \"%s\" (%u Tahap)", slot, p->name, (unsigned)p->count);
+      logf(LOG_INFO, "Proses %s disimpan: slot %d \"%s\" (%u Tahap)", wsName(ws), slot, p->name, (unsigned)p->count);
     }
     res = {200, toString(d)};
   }
@@ -366,12 +378,12 @@ static ApiResult prosesSave(JsonVariantConst json, int slot, bool dry) {
   return res;
 }
 
-static ApiResult runApi(JsonDocument& doc) {
+static ApiResult runApi(JsonDocument& doc, uint8_t ws) {
   if (!doc["manual"].isNull()) {
     Tahap t;
     String err;
     if (!tahapFromJson(doc["manual"].as<JsonObjectConst>(), t, err)) return {400, msgJson(false, err)};
-    CmdResult r = commandRunManual(t);
+    CmdResult r = commandRunManual(t, ws);
     return {r.ok ? 200 : 409, msgJson(r.ok, r.msg)};
   }
   int slot = doc["slot"] | 0;
@@ -400,7 +412,7 @@ static ApiResult runApi(JsonDocument& doc) {
     finishAt = h * 60 + m;
     wait = 0;
   }
-  CmdResult r = commandRunProses(slot, wait, finishAt);
+  CmdResult r = commandRunProses(slot, wait, finishAt, ws);
   return {r.ok ? 200 : 409, msgJson(r.ok, r.msg)};
 }
 
@@ -433,6 +445,13 @@ ApiResult apiHandle(ApiSource src, const char* method, const String& path, const
     if (!remoteApiAllowed(method, path.c_str(), cmdName.c_str())) return {403, msgJson(false, "Tidak diizinkan dari jarak jauh")};
   }
 
+  // Workspace sasaran (?ws= atau "ws" di badan); kosong = cuci
+  String wsText = query("ws");
+  if (!wsText.length() && isPost) wsText = (const char*)(doc["ws"] | "");
+  int wsParsed = wsFromName(wsText);
+  if (wsParsed < 0) return {400, msgJson(false, "ws harus cuci atau pengering")};
+  uint8_t ws = (uint8_t)wsParsed;
+
   if (isGet) {
     if (path == "/api/status") return {200, apiStatusJson()};
     if (path == "/api/info") return {200, String("{\"remote\":false,\"online\":true,\"fw\":\"") + FW_VERSION + "\"}"};
@@ -440,7 +459,7 @@ ApiResult apiHandle(ApiSource src, const char* method, const String& path, const
       if (apiLowMemory(8192)) return {503, msgJson(false, "memori rendah, coba lagi")};
       uint32_t since = (uint32_t)query("since").toInt();
       String out;
-      out.reserve(2800);
+      out.reserve(3600);
       out += "{\"status\":";
       out += apiStatusJson();
       out += ",\"log\":";
@@ -456,7 +475,7 @@ ApiResult apiHandle(ApiSource src, const char* method, const String& path, const
       return {200, apiLogsJson((uint32_t)query("since").toInt(), lim > 0 ? (size_t)lim : 1)};
     }
     if (path == "/api/history") return {200, historyJson()};
-    if (path == "/api/job") return jobJson();
+    if (path == "/api/job") return jobJson(ws);
     if (path == "/api/tahap/meta") {
       if (apiLowMemory(16384)) return {503, msgJson(false, "memori rendah, coba lagi")};
       return {200, tahapMetaJson()};
@@ -464,8 +483,8 @@ ApiResult apiHandle(ApiSource src, const char* method, const String& path, const
     if (path == "/api/proses") {
       if (apiLowMemory(12288)) return {503, msgJson(false, "memori rendah, coba lagi")};
       String sl = query("slot");
-      if (sl.length()) return prosesDetail(sl.toInt());
-      return {200, prosesListJson()};
+      if (sl.length()) return prosesDetail(ws, sl.toInt());
+      return {200, prosesListJson(ws)};
     }
     if (path == "/api/proses/export") {
       int slot = query("slot").toInt();
@@ -474,7 +493,7 @@ ApiResult apiHandle(ApiSource src, const char* method, const String& path, const
       Proses* p = new Proses;
       if (!p) return {503, msgJson(false, "memori rendah, coba lagi")};
       ApiResult res;
-      if (!prosesLoad(slot - 1, *p)) {
+      if (!prosesLoad(prosesId(ws, slot - 1), *p)) {
         res = {404, msgJson(false, "Proses kosong atau rusak")};
       } else {
         JsonDocument d;
@@ -522,13 +541,13 @@ ApiResult apiHandle(ApiSource src, const char* method, const String& path, const
       }
       return {400, msgJson(false, "which harus local atau remote")};
     }
-    if (path == "/api/run") return runApi(doc);
+    if (path == "/api/run") return runApi(doc, ws);
     if (path == "/api/decide") {
-      CmdResult r = commandDecide(String((const char*)(doc["pilih"] | "")));
+      CmdResult r = commandDecide(String((const char*)(doc["pilih"] | "")), ws);
       return {r.ok ? 200 : 409, msgJson(r.ok, r.msg)};
     }
-    if (path == "/api/proses") return prosesSave(doc.as<JsonVariantConst>(), doc["slot"] | 0, doc["dry"] | false);
-    if (path == "/api/proses/import") return prosesSave(doc.as<JsonVariantConst>(), query("slot").toInt(), false);
+    if (path == "/api/proses") return prosesSave(doc.as<JsonVariantConst>(), ws, doc["slot"] | 0, doc["dry"] | false);
+    if (path == "/api/proses/import") return prosesSave(doc.as<JsonVariantConst>(), ws, query("slot").toInt(), false);
     if (path == "/api/settings") {
       JsonDocument res;
       JsonArray msgs = res["results"].to<JsonArray>();
@@ -589,8 +608,8 @@ ApiResult apiHandle(ApiSource src, const char* method, const String& path, const
     if (path == "/api/proses") {
       int slot = query("slot").toInt();
       if (slot < 1 || slot > PROSES_SLOTS) return {400, msgJson(false, "Slot tidak valid")};
-      if (machineSlotInUse(slot - 1)) return {409, msgJson(false, "Proses sedang dipakai. Stop dulu sebelum menghapus.")};
-      if (!prosesDelete(slot - 1)) return {500, msgJson(false, "Gagal menghapus")};
+      if (machineSlotInUse(prosesId(ws, slot - 1))) return {409, msgJson(false, "Proses sedang dipakai. Stop dulu sebelum menghapus.")};
+      if (!prosesDelete(prosesId(ws, slot - 1))) return {500, msgJson(false, "Gagal menghapus")};
       return {200, msgJson(true, "Proses dihapus")};
     }
     if (path == "/api/wifi") {

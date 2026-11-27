@@ -48,7 +48,7 @@ Dashboard → **Sistem → Pemeliharaan → Firmware** → pilih `.bin` → *Fla
 
 Memperbarui ESP32 lewat WiFi (OTA) **dan** Worker sekaligus.
 
-1. Salin `.env.example` menjadi `.env.local` (git-ignored); isi `DEPLOY_ESP_PASSWORD` (password dashboard lokal) dan bila perlu `DEPLOY_ESP_HOST`.
+1. Salin `.env.example` menjadi `.env.local` (git-ignored); isi `DEPLOY_ESP_PASSWORD` (password dashboard lokal), `DEPLOY_ESP_MAC` (alamat MAC ESP32 mesin cuci; deploy dibatalkan bila tidak cocok), dan bila perlu `DEPLOY_ESP_HOST`.
 2. Klik ganda `tools\deploy.cmd` (atau `powershell -File tools\deploy.ps1`).
 3. Skrip membangun web dan firmware, mengunggah `.bin` ke `mesincuci.local` (hanya bila mesin IDLE), menunggu ESP32 hidup lagi,
    lalu menguji dan men-deploy Worker.

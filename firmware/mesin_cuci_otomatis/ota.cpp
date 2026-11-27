@@ -20,7 +20,9 @@ uint8_t otaProgress() { return progress; }
 
 static void stopMachineForFlash() {
   machineHold(true);
-  MachineCmd c = {MC_STOP, 0, 0};
+  MachineCmd c = {};
+  c.type = MC_STOP;
+  c.ws = WS_ALL;
   machinePost(c);
   relayAllOff();
 }

@@ -4,6 +4,14 @@
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 let last = null, settings = null, REMOTE = false;
+// Dua workspace: "cuci" dan "pengering". `last` = status workspace yang sedang ditampilkan, `raw` = status utuh dari mesin.
+let raw = null, WS = 'cuci';
+try { if (localStorage.getItem('ws') === 'pengering') WS = 'pengering'; } catch { }
+const WS_LABEL = { cuci: 'Cuci', pengering: 'Pengering' };
+const IDLE_LANE = { state: 'idle', proses: '', slot: 0, manual: false, stage: '', detail: '', step: 0, steps: 0, stepLeft: 0, totalLeft: 0, progress: 0, resume: { pending: false, info: '', slot: 0 } };
+const laneOf = (s, ws) => ws === 'cuci' ? s : s.pengering || IDLE_LANE;
+const viewOf = (s, ws) => ws === 'cuci' ? s : { ...s, decision: undefined, ...laneOf(s, ws) };
+const wsq = (sep = '?') => sep + 'ws=' + WS;
 let conPaused = false, conLines = [], logLines = [], lastSeq = 0, pollFails = 0;
 
 // ================================================================ util ====
@@ -66,11 +74,13 @@ setTheme(themeMode());
 
 // ======================================================== navigasi ====
 const VIEWS = ['beranda', 'proses', 'manual', 'aktivitas', 'sistem'];
+const WS_VIEWS = ['beranda', 'proses', 'manual'];   // halaman yang isinya berbeda per workspace
 let curView = 'beranda', curSeg = 'log';
 function show(v, seg) {
   if (!VIEWS.includes(v)) v = 'beranda';
   const changed = v !== curView;
   curView = v;
+  $('#wsBar').hidden = !WS_VIEWS.includes(v);
   $$('.view').forEach(x => x.classList.toggle('on', x.id === 'view-' + v));
   $$('.nav [data-view]').forEach(b => { if (b.dataset.view === v) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
   if (changed) { try { window.scrollTo({ top: 0 }); } catch { } }
@@ -108,12 +118,55 @@ $('#loginForm').onsubmit = async e => {
 $('#btnLogout').onclick = async () => { await api('/api/logout', 'POST'); showLogin(); };
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-cmd]'); if (!b) return;
-  cmd(b.dataset.cmd, b.dataset.args || '');
+  const perWs = ['jeda', 'lanjutkan', 'lewati', 'batalkan'].includes(b.dataset.cmd);
+  cmd(b.dataset.cmd, perWs ? WS : b.dataset.args || '');
 });
 $('#btnStop').onclick = () => {
-  if (last && last.state !== 'idle' && !confirm('Hentikan Proses dan matikan semua relay?')) return;
-  cmd('stop');
+  const ws = WS;
+  if (last && last.state !== 'idle' && !confirm(`Hentikan Proses ${WS_LABEL[ws].toLowerCase()} dan matikan relaynya?`)) return;
+  cmd('stop', ws);
 };
+$('#btnStopAll').onclick = () => confirm('Hentikan cuci DAN pengering, matikan semua relay?') && cmd('stop');
+
+// ====================================================== workspace ====
+function renderWsBar(s) {
+  for (const ws of ['cuci', 'pengering']) {
+    const l = laneOf(s, ws), el = $('#wsSt-' + ws);
+    const pending = l.resume && l.resume.pending;
+    el.className = l.state === 'running' ? 'run' : l.state !== 'idle' || pending ? 'warn' : '';
+    el.textContent = l.state === 'running' ? (l.step === 0 ? 'Menunggu mulai' : l.totalLeft ? fmtApprox(l.totalLeft) + ' lagi' : 'Berjalan')
+      : l.state === 'idle' ? (pending ? 'Listrik sempat padam' : 'Siap') : STATE_TXT[l.state];
+    const b = $(`#wsSeg [data-ws="${ws}"]`);
+    b.classList.toggle('on', ws === WS); b.setAttribute('aria-pressed', String(ws === WS));
+  }
+  $('#btnStopAll').hidden = !(s.state !== 'idle' && laneOf(s, 'pengering').state !== 'idle');
+}
+function setWs(ws) {
+  if (ws === WS) return;
+  if ($('#view-proses').dataset.mode === 'edit' && ed.items.length && !confirm('Pindah workspace? Perubahan di editor yang belum disimpan akan hilang.')) return;
+  WS = ws;
+  try { localStorage.setItem('ws', ws); } catch { }
+  JOB = null; prosesList = null; man.item = null; lastUsedName = ''; loadProses.hist = false;
+  renderStatus.key = renderStatus.jk = renderDecision.key = null;
+  $('#manType').value = ws === 'pengering' ? 'spin' : 'isi';
+  $('#lastUsed').hidden = true;
+  $('#pcList').innerHTML = ''; $('#prosesGrid').innerHTML = '<div class="skel"></div><div class="skel"></div>';
+  $('#homeEmpty').hidden = true;
+  delete $('#pcPalette').dataset.ready;
+  edClear(); setEdMode('list');
+  renderWsText();
+  if (raw) renderStatus(raw);
+  loadMeta().then(() => { renderPalette(); return loadProses(); });
+  if (curView === 'manual') loadMeta().then(renderManual);
+}
+function renderWsText() {
+  const cuci = WS === 'cuci';
+  $('#pcHeading').textContent = 'Proses ' + WS;
+  $('#homeEmptyTxt').textContent = cuci ? 'Belum ada Proses cuci. Proses disusun dari Tahap: isi air, putar, buang, dan lainnya.'
+    : 'Belum ada Proses pengering. Proses disusun dari Tahap: spin, tunggu, minta tindakan, dan notifikasi.';
+  $('#pcName').placeholder = cuci ? 'mis. Cuci harian' : 'mis. Keringkan 5 menit';
+}
+$('#wsSeg').addEventListener('click', e => { const b = e.target.closest('[data-ws]'); if (b) setWs(b.dataset.ws); });
 
 // ======================================================= status UI ====
 const STATE_TXT = { idle: 'Siap', running: 'Berjalan', paused: 'Dijeda', decide: 'Menunggu keputusan' };
@@ -129,8 +182,11 @@ function renderChips(s) {
   else if (s.wifi.online) { w.className = 'chip'; w.innerHTML = ic('wifi') + '<span class="ell">' + esc(s.wifi.ssid) + '</span>'; }
   else { w.className = 'chip err'; w.innerHTML = ic('wifi-off') + 'offline'; }
 }
-function renderStatus(s) {
+function renderStatus(full) {
+  raw = full;
+  const s = viewOf(full, WS);
   last = s;
+  renderWsBar(full);
   $('#app').hidden = false; $('#login').hidden = true;
   const idle = s.state === 'idle', waitStart = s.state === 'running' && s.step === 0;
   renderChips(s);
@@ -138,8 +194,8 @@ function renderStatus(s) {
   const hero = $('#hero');
   hero.classList.toggle('idle', idle); hero.classList.toggle('live', !idle);
   $('#stage').textContent = waitStart ? 'Menunggu mulai' : STATE_TXT[s.state] || s.state;
-  $('#heroName').textContent = idle ? 'Mesin siap' : (s.proses || 'Proses');
-  $('#detail').textContent = idle ? 'Pilih Proses di bawah untuk mulai mencuci.' : s.detail || '';
+  $('#heroName').textContent = idle ? (WS === 'cuci' ? 'Tabung cuci siap' : 'Pengering siap') : (s.proses || 'Proses');
+  $('#detail').textContent = idle ? `Pilih Proses di bawah untuk mulai ${WS === 'cuci' ? 'mencuci' : 'mengeringkan'}.` : s.detail || '';
   $('#totalLeft').textContent = idle ? '-' : fmtApprox(s.totalLeft);
   $('#etaAt').textContent = !idle && s.totalLeft > 0 ? 'selesai sekitar ' + new Date(Date.now() + s.totalLeft * 1000).toTimeString().slice(0, 5) : '';
   $('#stepLine').textContent = idle ? 'Tidak ada Proses berjalan' : s.stage || '';
@@ -159,8 +215,9 @@ function renderStatus(s) {
   $('#resumeInfo').textContent = s.resume.info;
   $('#bannerFault').hidden = !s.fault;
   renderDecision(s);
-  const nb = $('#navBadge'); nb.hidden = s.state !== 'decide';
-  $('#navBadgeTxt').textContent = s.state === 'decide' ? 'Menunggu keputusan' : '';
+  const waiting = full.state === 'decide' || laneOf(full, 'pengering').state === 'decide';
+  const nb = $('#navBadge'); nb.hidden = !waiting;
+  $('#navBadgeTxt').textContent = waiting ? 'Menunggu keputusan' : '';
   // ---- kartu status ----
   const wl = { penuh: 'Penuh', kosong: 'Tidak penuh', mengukur: 'Mengukur…' }[s.water] || s.water;
   $('#water').textContent = wl;
@@ -171,14 +228,15 @@ function renderStatus(s) {
   const rm = s.remote || {};
   $('#connSrv').textContent = !rm.configured ? 'Tidak diatur' : !rm.enabled ? 'Nonaktif' : rm.connected ? 'Terhubung' : 'Menyambung…';
   $('#connTime').textContent = s.wifi.time || '-';
-  updateRelays(s);
-  $$('.prog, .cpRun').forEach(b => { b.disabled = !idle; });
+  updateRelays(full);
+  const free = idle && !(WS === 'pengering' && full.relaySeq);
+  $$('.prog, .cpRun').forEach(b => { b.disabled = !free; });
   const pl = $('#progLock'); pl.hidden = idle;
-  pl.textContent = idle ? '' : `Proses baru hanya bisa dimulai saat mesin siap. Sekarang: ${s.proses} (${s.stage}).`;
+  pl.textContent = idle ? '' : `Proses ${WS} baru hanya bisa dimulai saat workspace ini siap. Sekarang: ${s.proses} (${s.stage}).`;
   if (curView === 'sistem') renderSys();
-  if (curView === 'manual') $('#manRun').disabled = !idle || s.fault;
+  if (curView === 'manual') $('#manRun').disabled = !free || s.fault;
   if (s.otaBusy) $('#fwBar').style.width = s.otaProgress + '%';
-  const key = s.state + '|' + (s.slot || 0);
+  const key = WS + '|' + s.state + '|' + (s.slot || 0);
   if (renderStatus.key !== key) { renderStatus.key = key; if (prosesList) renderHomeProses(); }
   const jk = key + '|' + s.step + '|' + (s.manual ? 1 : 0);
   if (renderStatus.jk !== jk) {
@@ -190,8 +248,7 @@ function renderStatus(s) {
 // Peringatan sebelum "Lanjut" (pemilik mungkin sedang di lokasi dan mengisi/membuang air sendiri)
 const LANJUT_WARN = {
   isi_gagal: 'Air mungkin belum cukup. Motor bisa berputar dengan air sedikit. Lanjut hanya bila Anda sudah mengisi air secara manual.',
-  buang_gagal: 'Air masih ada di tabung. Tahap berikutnya (mis. Spin) dengan air berat bisa merusak mesin. Lanjut hanya bila Anda sudah membuang air secara manual.',
-  spin_penuh: 'Air masih ada di tabung. Spin dengan air berat bisa merusak mesin. Lanjut hanya bila Anda yakin tabung sudah aman.',
+  buang_gagal: 'Air masih ada di tabung. Tahap berikutnya berjalan dengan air berat dan bisa merusak mesin. Lanjut hanya bila Anda sudah membuang air secara manual.',
   cek_gagal: 'Syarat air belum terpenuhi. Lanjut hanya bila Anda yakin kondisi air sudah aman.',
 };
 function renderDecision(s) {
@@ -203,13 +260,14 @@ function renderDecision(s) {
   $('#decMsg').textContent = d.msg;
   if (renderDecision.key === key) return;
   renderDecision.key = key;
+  const ws = WS;
   $('#decTitle').textContent = `Menunggu keputusan · ${s.proses}`;
   $('#decBtns').innerHTML = d.opts.map((o, i) => `<button class="btn ${o === 'batal' ? 'dout' : o === 'lanjut' || o === 'ulang' || o === 'buang' ? 'primary' : ''}" data-dec="${o}">${esc(d.labels[i])}</button>`).join('');
   $$('#decBtns [data-dec]').forEach(b => b.onclick = async () => {
     const o = b.dataset.dec;
     if (o === 'lanjut' && LANJUT_WARN[d.code] && !confirm('Peringatan: ' + LANJUT_WARN[d.code] + '\n\nTetap lanjutkan?')) return;
     if (o === 'batal' && !confirm('Batalkan Proses ini dan matikan semua relay?')) return;
-    try { toastR(await api('/api/decide', 'POST', { pilih: o })); pollOnce(); } catch (e) { guard(e); }
+    try { toastR(await api('/api/decide', 'POST', { pilih: o, ws })); pollOnce(); } catch (e) { guard(e); }
   });
 }
 
@@ -222,9 +280,11 @@ const tLabel = t => t === 'uji' ? 'Uji relay' : (typeMeta(t) || {}).label || t;
 async function loadJob() {
   if (jobBusy) return;
   jobBusy = true;
+  const ws = WS;
   try {
-    const r = await api('/api/job');
-    if (r && r.ok === false) { clearTimeout(jobRetry); jobRetry = setTimeout(loadJob, 1500); } else JOB = r;   // 503: sibuk, coba lagi
+    const r = await api('/api/job' + wsq());
+    if (ws !== WS) setTimeout(loadJob, 0);   // workspace berganti saat memuat: ulangi
+    else if (r && r.ok === false) { clearTimeout(jobRetry); jobRetry = setTimeout(loadJob, 1500); } else JOB = r;   // 503: sibuk, coba lagi
   } catch { } finally { jobBusy = false; }
   renderRail(); if (sheetOpen) renderJobSheet();
 }
@@ -350,12 +410,16 @@ function renderRelays() {
     <span class="lockhint" id="hint-${k}"></span></div>`).join('');
   $$('[data-rl]', host).forEach(b => b.onclick = () => cmd('relay', `${b.dataset.rl} ${b.dataset.on === '1' ? 'on' : 'off'}`));
 }
-function updateRelays(s) {
+function updateRelays(s) {   // s = status utuh; relay spin milik pengering, sisanya milik cuci
   renderRelays();
-  const on = s.relays || {}, busy = s.state !== 'idle', seq = busy && s.proses === 'Kalibrasi relay';
+  const on = s.relays || {}, dry = laneOf(s, 'pengering');
+  const seq = s.state !== 'idle' && (!!s.relaySeq || s.proses === 'Kalibrasi relay');
+  const busyWash = s.state !== 'idle', busyDry = dry.state !== 'idle' || seq;
   const lock = $('#relayLock');
+  const why = (nama, l) => `${nama}: ada Proses ${l.state === 'running' ? 'berjalan' : 'yang menunggu/dijeda'} (${l.proses}, ${l.stage}).`;
+  const reasons = [busyWash && !seq ? why('Relay cuci dikunci', s) : '', dry.state !== 'idle' ? why('Relay spin dikunci', dry) : ''].filter(Boolean);
   if (s.fault) { lock.hidden = false; setCallout(lock, 'lock', 'Relay terkunci karena pelanggaran interlock. Restart mesin untuk membuka kunci.'); }
-  else if (busy && !seq) { lock.hidden = false; setCallout(lock, 'lock', esc(`Kontrol manual dan uji dikunci: ada Proses ${s.state === 'running' ? 'berjalan' : 'yang menunggu/dijeda'} (${s.proses}, ${s.stage}). Hentikan dulu di Beranda.`)); }
+  else if (reasons.length) { lock.hidden = false; setCallout(lock, 'lock', esc(reasons.join(' ') + ' Hentikan dulu di Beranda.')); }
   else lock.hidden = true;
   const conflict = {
     kiri: on.kanan ? 'Motor kanan sedang aktif, matikan dulu' : on.buang ? 'Valve buang sedang aktif, matikan dulu' : '',
@@ -366,20 +430,23 @@ function updateRelays(s) {
   RELAYS.forEach(([k]) => {
     const l = $('#led-' + k); if (l) l.classList.toggle('on', !!on[k]);
     const onBtn = $(`[data-rl="${k}"][data-on="1"]`), offBtn = $(`[data-rl="${k}"][data-on="0"]`);
-    const c = conflict[k] || '', blocked = busy || s.fault;
+    const c = conflict[k] || '', blocked = (k === 'spin' ? busyDry : busyWash) || s.fault;
     if (onBtn) { onBtn.disabled = blocked || !!c || !!on[k]; onBtn.title = c; onBtn.classList.toggle('on', !!on[k]); }
     if (offBtn) { offBtn.disabled = blocked || !on[k]; offBtn.classList.toggle('on', !on[k]); }
     const h = $('#hint-' + k);
     if (h) h.textContent = !blocked && c && !on[k] ? 'Terkunci: ' + c : '';
   });
-  $('#btnSeq').disabled = busy || s.fault;
+  $('#btnSeq').disabled = busyWash || busyDry || s.fault;
   const bp = $('#relayProgress');
   bp.hidden = !seq;
   if (seq) $('div', bp).textContent = `Uji berurutan: ${s.detail} (langkah ${s.step}/${s.steps})`;
 }
 $('#btnSeq').onclick = () => cmd('kalibrasi_relay', $('#seqSecs').value || 3);
-$('#btnSeqStop').onclick = () => cmd('stop');
-$('#btnAllOff').onclick = () => cmd('relay', 'semua off');
+$('#btnSeqStop').onclick = () => cmd('stop', 'cuci');   // kalibrasi berurutan berjalan di workspace cuci
+$('#btnAllOff').onclick = () => {
+  const busy = raw && (raw.state !== 'idle' || laneOf(raw, 'pengering').state !== 'idle');
+  if (!busy || confirm('Ini juga menghentikan semua Proses (cuci dan pengering). Lanjut?')) cmd('relay', 'semua off');
+};
 
 // ======================================================= WiFi ====
 async function loadWifi() {
@@ -474,7 +541,7 @@ async function loadFw() {
 $('#btnFlash').onclick = () => {
   const f = $('#fwFile').files[0];
   if (!f) return toast('Pilih file .bin dulu', 'warn');
-  if (last && last.state !== 'idle') return toast('Mesin sedang bekerja. Hentikan Proses dulu.', 'warn');
+  if (raw && (raw.state !== 'idle' || laneOf(raw, 'pengering').state !== 'idle')) return toast('Mesin sedang bekerja. Hentikan Proses dulu.', 'warn');
   if (!confirm(`Flash ${f.name} (${(f.size / 1024).toFixed(0)} KB)? Mesin akan restart.`)) return;
   const fd = new FormData(); fd.append('firmware', f, f.name);
   const x = new XMLHttpRequest(); x.open('POST', '/api/update');
@@ -561,6 +628,7 @@ async function loadMeta() {
   try { const r = await api('/api/tahap/meta'); META = r.types || []; } catch { /* diulang saat menu dibuka lagi */ }
 }
 const typeMeta = t => META.find(x => x.t === t);
+const inWs = m => !m.ws || m.ws.includes(WS);   // Tahap yang tersedia di workspace aktif (ditentukan firmware)
 let uidSeq = 1;
 function newItem(t, vals) {
   const m = typeMeta(t), v = {};
@@ -642,11 +710,11 @@ const man = { item: null };
 function renderManual() {
   if (!META.length) { $('#manForm').innerHTML = '<p class="muted">Memuat daftar Tahap…</p>'; return; }
   const grid = $('#manGrid'), cur = $('#manType').value;
-  grid.innerHTML = META.map(m => `<button type="button" data-mt="${m.t}" aria-pressed="${m.t === cur}">${tIcon(m.t)}<span>${esc(m.label)}</span>${m.manual ? '<span class="dar">hanya Manual</span>' : ''}</button>`).join('');
+  grid.innerHTML = META.filter(inWs).map(m => `<button type="button" data-mt="${m.t}" aria-pressed="${m.t === cur}">${tIcon(m.t)}<span>${esc(m.label)}</span>${m.manual ? '<span class="dar">hanya Manual</span>' : ''}</button>`).join('');
   if (!man.item || man.item.t !== cur) man.item = newItem(cur);
   $('#manForm').innerHTML = `<div class="fields">${fieldsHtml(man.item)}</div>`;
   $('#manHint').hidden = cur !== 'buang_manual';
-  $('#manRun').disabled = !(last && last.state === 'idle') || !!(last && last.fault);
+  $('#manRun').disabled = !(last && last.state === 'idle') || !!(last && (last.fault || (WS === 'pengering' && last.relaySeq)));
 }
 $('#manGrid').addEventListener('click', e => { const b = e.target.closest('[data-mt]'); if (b) { $('#manType').value = b.dataset.mt; man.item = null; renderManual(); } });
 $('#manType').onchange = () => { man.item = null; renderManual(); };
@@ -657,7 +725,7 @@ $('#manRun').onclick = async () => {
   const err = validateItem(man.item);
   if (err) return toast(err, 'warn');
   if (man.item.t === 'buang_manual' && !confirm('Buang manual menarik valve selama waktu yang diatur TANPA membaca sensor. Pastikan Anda memantau. Lanjut?')) return;
-  try { toastR(await api('/api/run', 'POST', { manual: itemToApi(man.item) })); pollOnce(); } catch (e) { guard(e); }
+  try { toastR(await api('/api/run', 'POST', { manual: itemToApi(man.item), ws: WS })); pollOnce(); } catch (e) { guard(e); }
 };
 
 // ======================================================= Proses ====
@@ -668,7 +736,7 @@ function renderPalette() {
   const host = $('#pcPalette');
   if (!META.length || host.dataset.ready) return;
   host.dataset.ready = '1';
-  host.innerHTML = META.filter(m => !m.manual).map(m => `<button class="btn sm" type="button" data-add="${m.t}">${tIcon(m.t)}${esc(m.label)}</button>`).join('');
+  host.innerHTML = META.filter(m => !m.manual && inWs(m)).map(m => `<button class="btn sm" type="button" data-add="${m.t}">${tIcon(m.t)}${esc(m.label)}</button>`).join('');
   $$('[data-add]', host).forEach(b => b.onclick = () => {
     if (ed.locked) return;
     if (ed.items.length >= (prosesList ? prosesList.maxTahap : 40)) return toast('Maksimal 40 Tahap per Proses', 'warn');
@@ -713,7 +781,7 @@ function scheduleDry() {
   clearTimeout(dryTimer);
   dryTimer = setTimeout(async () => {
     if (localError() || ed.locked) { ed.warnings = []; ed.est = 0; renderEditorState(); return; }
-    try { const r = await api('/api/proses', 'POST', { ...bodyOf(), slot: ed.slot, dry: true }); if (r.ok) { ed.warnings = r.warnings || []; ed.est = r.est || 0; renderEditorState(); } } catch { /* tidak penting */ }
+    try { const r = await api('/api/proses', 'POST', { ...bodyOf(), slot: ed.slot, ws: WS, dry: true }); if (r.ok) { ed.warnings = r.warnings || []; ed.est = r.est || 0; renderEditorState(); } } catch { /* tidak penting */ }
   }, 500);
 }
 $('#pcStack').addEventListener('input', e => { if (handleField(e, ed.items)) scheduleDry(); });
@@ -798,10 +866,12 @@ async function pcSave(asNew) {
   if (le) { const mm = /^Tahap (\d+):/.exec(le); return fail(le, mm ? +mm[1] - 1 : -1); }
   const slot = asNew ? 0 : ed.slot;
   let dry;
-  try { dry = await api('/api/proses', 'POST', { ...bodyOf(), slot, dry: true }); } catch (e) { return guard(e); }
+  const ws = WS;
+  try { dry = await api('/api/proses', 'POST', { ...bodyOf(), slot, ws, dry: true }); } catch (e) { return guard(e); }
   if (!dry.ok) return fail(dry.msg, -1);
   if (dry.warnings && dry.warnings.length && !confirm('Peringatan:\n- ' + dry.warnings.join('\n- ') + '\n\nTetap simpan?')) return;
-  let r; try { r = await api('/api/proses', 'POST', { ...bodyOf(), slot }); } catch (e) { return guard(e); }
+  if (ws !== WS) return;
+  let r; try { r = await api('/api/proses', 'POST', { ...bodyOf(), slot, ws }); } catch (e) { return guard(e); }
   if (!r.ok) return fail(r.msg, -1);
   ed.slot = r.slot; toast(r.msg, 'ok');
   $('#pcTitle').textContent = `Mengedit: ${$('#pcName').value.trim()} (slot ${r.slot})`;
@@ -810,7 +880,7 @@ async function pcSave(asNew) {
 $('#pcSave').onclick = () => pcSave(false);
 
 async function pcLoad(slot, asCopy) {
-  let r; try { r = await api('/api/proses?slot=' + slot); } catch { return; }
+  let r; try { r = await api('/api/proses?slot=' + slot + wsq('&')); } catch { return; }
   if (!r.proses) return toast(r.msg || 'Proses tidak bisa dimuat', 'warn');
   await loadMeta();
   ed.slot = asCopy ? 0 : slot;
@@ -823,15 +893,16 @@ async function pcLoad(slot, asCopy) {
   renderStack(); setEdMode('edit');
 }
 async function pcDuplicate(slot) {
-  let r; try { r = await api('/api/proses?slot=' + slot); } catch { return; }
+  const ws = WS;
+  let r; try { r = await api('/api/proses?slot=' + slot + wsq('&')); } catch { return; }
   if (!r.proses) return toast(r.msg || 'Proses tidak bisa dimuat', 'warn');
   const name = (r.proses.name + ' (salinan)').slice(0, 27);
-  let d; try { d = await api('/api/proses', 'POST', { name, tahap: r.proses.tahap, slot: 0 }); } catch (e) { return guard(e); }
+  let d; try { d = await api('/api/proses', 'POST', { name, tahap: r.proses.tahap, slot: 0, ws }); } catch (e) { return guard(e); }
   toast(d.msg || (d.ok ? 'Proses digandakan' : 'Gagal menggandakan'), d.ok ? 'ok' : 'warn');
   loadProses();
 }
 async function pcExport(slot) {
-  let r; try { r = await api('/api/proses/export?slot=' + slot); } catch { return; }
+  let r; try { r = await api('/api/proses/export?slot=' + slot + wsq('&')); } catch { return; }
   if (!r.tahap) return toast(r.msg || 'Gagal mengekspor', 'warn');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([JSON.stringify(r, null, 1)], { type: 'application/json' }));
@@ -844,13 +915,13 @@ $('#pcImportFile').onchange = async e => {
   let data; try { data = JSON.parse(await readFileText(f)); } catch { return toast('Berkas bukan JSON yang valid', 'warn'); }
   const empty = prosesList ? prosesList.slots.findIndex(s => !s) + 1 : 0;
   if (!empty) return toast('Penyimpanan penuh. Hapus satu Proses dulu.', 'warn');
-  const r = await api('/api/proses/import?slot=' + empty, 'POST', data).catch(() => null);
+  const r = await api('/api/proses/import?slot=' + empty + wsq('&'), 'POST', data).catch(() => null);
   if (r && r.ok) toast('Diimpor ke slot ' + r.slot, 'ok'); else toast(r ? r.msg : 'Gagal mengimpor', 'warn');
   loadProses();
 };
 async function pcDelete(slot, name) {
   if (!confirm(`Hapus Proses "${name}"?`)) return;
-  const d = await api('/api/proses?slot=' + slot, 'DELETE').catch(() => null);
+  const d = await api('/api/proses?slot=' + slot + wsq('&'), 'DELETE').catch(() => null);
   if (!d) return;
   toast(d.msg, d.ok ? 'ok' : 'warn');
   if (d.ok && ed.slot === slot) { edClear(); setEdMode('list'); }
@@ -858,8 +929,9 @@ async function pcDelete(slot, name) {
 }
 const trailHtml = (tr, n) => `<div class="trail" aria-hidden="true">${(tr || []).map(t => `<span>${tIcon(t)}</span>`).join('')}${n > (tr || []).length ? `<em>+${n - tr.length}</em>` : ''}</div>`;
 async function loadProses() {
-  let r; try { r = await api('/api/proses'); } catch { return; }
-  if (!r.slots) return;
+  const ws = WS;
+  let r; try { r = await api('/api/proses' + wsq()); } catch { return; }
+  if (!r.slots || ws !== WS) return;
   prosesList = r;
   const slots = r.slots.map((s, i) => s ? { ...s, slot: i + 1 } : null).filter(Boolean);
   $('#pcList').innerHTML = slots.map(s => s.bad
@@ -888,7 +960,7 @@ function setStartMode(m) {
 $('#startSeg').addEventListener('click', e => { const b = e.target.closest('[data-sm]'); if (b && !b.disabled) setStartMode(b.dataset.sm); });
 $('#startMode').onchange = () => setStartMode($('#startMode').value);
 function startBody(slot) {
-  const mode = $('#startMode').value, body = { slot };
+  const mode = $('#startMode').value, body = { slot, ws: WS };
   if (mode === 'tunda') {
     const v = $('#startTunda').value || '00:30:00';
     body.tunda = v.length === 5 ? v + ':00' : v;
@@ -911,7 +983,7 @@ async function lastUsedLoad() {
 }
 function renderHomeProses() {
   if (!prosesList) return;
-  const idle = !last || last.state === 'idle';
+  const idle = !last || (last.state === 'idle' && !(WS === 'pengering' && last.relaySeq));
   const slots = prosesList.slots.map((s, i) => s ? { ...s, slot: i + 1 } : null).filter(Boolean);
   $('#homeEmpty').hidden = slots.length > 0;
   $('#startOpts').hidden = slots.length === 0;
@@ -1007,6 +1079,8 @@ function updateRemoteBanner(rm) {
   }
 }
 async function start() {
+  renderWsText();
+  if (WS === 'pengering') $('#manType').value = 'spin';
   let r;
   try { r = await api('/api/poll?since=0'); } catch { return; }
   $('#app').hidden = false; $('#login').hidden = true;

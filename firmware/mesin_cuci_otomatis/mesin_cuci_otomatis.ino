@@ -51,7 +51,7 @@ void setup() {
   wifiStoreInit();
   if (prosesStoreBegin()) {
     int ok = 0, bad = 0;
-    for (uint8_t i = 0; i < PROSES_SLOTS; i++) {
+    for (uint8_t i = 0; i < PROSES_TOTAL; i++) {
       SlotState st = prosesSlotState(i);
       if (st == SLOT_OK) ok++;
       else if (st == SLOT_BAD) bad++;

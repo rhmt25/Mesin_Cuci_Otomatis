@@ -121,7 +121,7 @@ function route(url, opt) {
   ok($('#view-proses').dataset.mode === 'edit', 'kartu "Proses baru" membuka editor');
 
   console.log('[U2] Editor Proses: palet dari katalog firmware, field per mode');
-  ok($$('#pcPalette [data-add]').length === META.types.filter(t => !t.manual).length && !$('[data-add="buang_manual"]'), 'palet = jenis Tahap dari firmware (tanpa Buang manual)');
+  ok($$('#pcPalette [data-add]').length === META.types.filter(t => !t.manual && t.ws.includes('cuci')).length && !$('[data-add="buang_manual"]') && !$('[data-add="spin"]'), 'palet cuci = Tahap cuci dari firmware (tanpa Buang manual & Spin)');
   addStep('isi');
   ok($$('#pcStack .crow').length === 1 && $('#pcEmpty').hidden, 'Tahap Isi air ditambahkan');
   ok(fieldOf(0, 'batas') && !fieldOf(0, 'batas').hidden && fieldOf(0, 'lama').hidden && fieldOf(0, 'persen').hidden, 'mode sensor: batas waktu tampil; lama & persen tersembunyi');
@@ -132,7 +132,7 @@ function route(url, opt) {
   ok(!fieldOf(0, 'persen').hidden && !fieldOf(0, 'batas').hidden && fieldOf(0, 'lama').hidden, 'mode persen: level & batas tampil');
   pick($('select[data-k="mode"]', rowOf(0)), 'sensor');
   ok($$('select[data-k="pra"] option', rowOf(0)).length === 3, 'pra-cek: 3 pilihan (buang / jeda / pakai)');
-  addStep('putar'); addStep('soak'); addStep('buang'); addStep('pewangi'); addStep('spin');
+  addStep('putar'); addStep('soak'); addStep('buang'); addStep('pewangi'); addStep('rendam');
   ok(rowOf(3).textContent.includes('Verifikasi Pengurangan Jumlah Air') && rowOf(3).textContent.includes('Tarik Ulang Valve'), 'Buang air memakai label Verifikasi Pengurangan Jumlah Air & Tarik Ulang Valve');
   ok(!/Mode pembuangan|tambahan/i.test(rowOf(3).textContent), 'Buang air tanpa pilihan mode/tambahan');
   ok($('input[data-k="ulangi"]', rowOf(2)).value === '2' && $('input[data-k="putar"]', rowOf(2)).value === '1' && $('input[data-k="rendam"]', rowOf(2)).value === '4', 'Soak: ulangi 2, putar 1, rendam 4 (bawaan firmware)');
@@ -171,7 +171,7 @@ function route(url, opt) {
   confirmAnswer = true;
   click($('#pcSave')); await sleep(150);
   const post = S.posts[S.posts.length - 1];
-  ok(post && post.name === 'Cuci harian' && post.tahap.map(t => t.t).join(',') === 'isi,putar,soak,buang,pewangi,spin', 'payload: nama & urutan Tahap benar');
+  ok(post && post.name === 'Cuci harian' && post.tahap.map(t => t.t).join(',') === 'isi,putar,soak,buang,pewangi,rendam', 'payload: nama & urutan Tahap benar');
   ok(post.tahap[0].mode === 'sensor' && post.tahap[0].batas === 1800 && post.tahap[0].coba === 3 && post.tahap[0].pra === 'buang' && post.tahap[0].lama === undefined, 'Isi: hanya variabel yang berlaku untuk mode (batas 1800, tanpa lama)');
   ok(post.tahap[2].ulangi === 2 && post.tahap[2].putar === 1 && post.tahap[2].rendam === 4 && post.tahap[4].cup === 0.5, 'Soak & Pewangi (0,5 cup) benar di payload');
   ok($$('#pcList .cpcard').length === 1 && !!$('#pcNew') && $('#pcList').textContent.includes('Cuci harian') && $('#pcCount').textContent === '1/10', 'daftar tersimpan menampilkan Proses (1/10)');
@@ -230,7 +230,7 @@ function route(url, opt) {
 
   console.log('[U8] Manual: satu Tahap dengan variabelnya');
   await nav('manual');
-  ok($$('#manGrid [data-mt]').length === META.types.length && /Buang manual/.test($('#manGrid').textContent) && /hanya Manual/.test($('#manGrid').textContent), 'kisi jenis Tahap dari firmware + Buang manual (hanya Manual)');
+  ok($$('#manGrid [data-mt]').length === META.types.filter(t => t.ws.includes('cuci')).length && !$('#manGrid [data-mt="spin"]') && /Buang manual/.test($('#manGrid').textContent) && /hanya Manual/.test($('#manGrid').textContent), 'kisi jenis Tahap dari firmware + Buang manual (hanya Manual)');
   ok(!!$('#manForm [data-k="mode"]') && $('#manRun').disabled === false, 'form Isi air tampil, tombol aktif saat siap');
   click($('#manGrid [data-mt="buang_manual"]')); await sleep(40);
   ok($('#manGrid [data-mt="buang_manual"]').getAttribute('aria-pressed') === 'true', 'kartu jenis Tahap terpilih (aria-pressed)');
@@ -280,7 +280,8 @@ function route(url, opt) {
   S.status = { ...S.status, relays: { ...S.status.relays, kiri: true } }; await w.pollOnce();
   ok(onBtn('kanan').disabled && /Motor kiri sedang aktif/.test($('#hint-kanan').textContent), 'kiri ON -> tombol ON kanan terkunci + petunjuk');
   S.status = { ...S.status, state: 'running', proses: 'Cuci harian', stage: 'Tahap 2/6: Putar mesin', relays: { ...S.status.relays, kiri: false } }; await w.pollOnce();
-  ok($$('[data-rl]').every(b => b.disabled) && $('#btnSeq').disabled, 'Proses berjalan: semua ON/OFF & uji berurutan terkunci');
+  ok($$('[data-rl]').filter(b => b.dataset.rl !== 'spin').every(b => b.disabled) && $('#btnSeq').disabled, 'Proses cuci berjalan: relay cuci & uji berurutan terkunci');
+  ok(!onBtn('spin').disabled, 'relay spin tetap bebas (milik pengering)');
   ok(!$('#relayLock').hidden && $('#relayLock').textContent.includes('Cuci harian'), 'banner kunci menyebut Proses yang berjalan');
   ok($$('.prog').every(b => b.disabled) && !$('#progLock').hidden, 'kartu Proses di Beranda juga terkunci');
   S.status = { ...S.status, state: 'idle', proses: '' }; await w.pollOnce();
@@ -477,7 +478,7 @@ function route(url, opt) {
   ok(!sw().checked && tInp().disabled, 'mengetik 0 mematikan saklar otomatis');
   type(tInp(), '0'); S.posts.length = 0; type($('#pcName'), 'Uji Jeda'); click($('#pcSave')); await sleep(150);
   ok(S.posts.length && S.posts[S.posts.length - 1].tahap[0].tunggu === 0, 'jeda 0 dikirim ke firmware (opsional)');
-  ['putar', 'soak', 'buang', 'spin'].forEach(addStep);
+  ['putar', 'soak', 'buang', 'rendam'].forEach(addStep);
   const labels = () => $$('#pcStack .crow b').map(b => b.textContent).join(',');
   const rws = $$('#pcStack .crow');
   rws.forEach((r, i) => { r.getBoundingClientRect = () => ({ top: i * 100, left: 0, width: 300, height: 90, bottom: i * 100 + 90 }); });
@@ -517,6 +518,31 @@ function route(url, opt) {
   click(eye0);
   ok($('#lpw1').type === 'text' && eye0.getAttribute('aria-label') === 'Sembunyikan password' && eye0.getAttribute('aria-pressed') === 'true' && $('use', eye0).getAttribute('href') === '#i-eye-off', 'klik: terlihat, ikon mata dicoret');
   click(eye0); ok($('#lpw1').type === 'password' && $('use', eye0).getAttribute('href') === '#i-eye', 'klik lagi: tersembunyi lagi');
+
+  console.log('[U21] Dua workspace: Cuci & Pengering');
+  const pane = ws => click($(`#wsSeg [data-ws="${ws}"]`));
+  const lane = { state: 'running', proses: 'Keringkan', slot: 1, manual: false, stage: 'Tahap 1/1: Spin', detail: 'Spin', step: 1, steps: 1, stepLeft: 120, totalLeft: 120, progress: 10, resume: { pending: false, info: '', slot: 0 } };
+  S.status = { ...JSON.parse(JSON.stringify(BASE_STATUS)), state: 'running', proses: 'Cuci harian', stage: 'Tahap 1/2: Putar mesin', step: 1, steps: 2, totalLeft: 600, pengering: lane };
+  await nav('beranda'); await w.pollOnce();
+  ok($('#heroName').textContent === 'Cuci harian' && /lagi/.test($('#wsSt-pengering').textContent) && !$('#btnStopAll').hidden, 'tampilan cuci; status pengering tetap terlihat + tombol Stop semua');
+  pane('pengering'); await sleep(200);
+  ok($('#heroName').textContent === 'Keringkan' && $('#stepLine').textContent === 'Tahap 1/1: Spin', 'pindah ke pengering: Proses pengering tampil');
+  confirmAnswer = true; S.cmds.length = 0;
+  click($('#btnPause')); await sleep(60); click($('#btnStop')); await sleep(60);
+  ok(S.cmds.map(c => c.cmd + ' ' + c.args).join('|') === 'jeda pengering|stop pengering', 'Jeda & Stop hanya menyasar pengering');
+  S.status = { ...S.status, pengering: { ...lane, state: 'idle', proses: '', stage: '', step: 0 } }; await w.pollOnce();
+  await nav('proses'); click($('#pcBack')); await sleep(60);
+  const adds = $$('#pcPalette [data-add]').map(b => b.dataset.add).join(',');
+  ok(adds === 'spin,tunggu,tindakan,notif', 'palet pengering: Spin, Tunggu, Minta tindakan, Notifikasi (' + adds + ')');
+  S.posts.length = 0;
+  click($('#pcNew')); await sleep(40); type($('#pcName'), 'Kering'); addStep('spin'); click($('#pcSave')); await sleep(200);
+  ok(S.posts.length === 1 && S.posts[0].ws === 'pengering', 'Proses pengering disimpan dengan ws=pengering');
+  await nav('manual'); await sleep(60);
+  ok($$('#manGrid [data-mt]').map(b => b.dataset.mt).join(',') === 'spin,tunggu,tindakan,notif', 'Manual pengering hanya Tahap pengering');
+  S.runs.length = 0; click($('#manRun')); await sleep(80);
+  ok(S.runs.length === 1 && S.runs[0].ws === 'pengering' && S.runs[0].manual.t === 'spin', 'Manual spin dikirim ke pengering');
+  pane('cuci'); await sleep(150);
+  ok(!$('#manGrid [data-mt="spin"]') && !!$('#manGrid [data-mt="isi"]'), 'kembali ke cuci: Tahap cuci, tanpa Spin');
 
   console.log(`\n${pass + fail} pemeriksaan UI, ${fail} gagal`);
   process.exit(fail ? 1 : 0);

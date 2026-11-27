@@ -207,9 +207,11 @@ void calibReset() {
 }
 
 // ---------------------------------------------------------------- Resume ----
-void resumeSave(uint8_t slot, uint8_t stepIndex, uint16_t rev) {
+static const char* resumeNs(uint8_t ws) { return ws ? "resume2" : "resume"; }
+
+void resumeSave(uint8_t slot, uint8_t stepIndex, uint16_t rev, uint8_t ws) {
   Preferences p;
-  p.begin("resume", false);
+  p.begin(resumeNs(ws), false);
   p.putUChar("slot", slot);
   p.putUChar("step", stepIndex);
   p.putUShort("rev", rev);
@@ -219,9 +221,9 @@ void resumeSave(uint8_t slot, uint8_t stepIndex, uint16_t rev) {
   p.end();
 }
 
-bool resumeLoad(ResumeInfo& out) {
+bool resumeLoad(ResumeInfo& out, uint8_t ws) {
   Preferences p;
-  p.begin("resume", true);
+  p.begin(resumeNs(ws), true);
   out.valid = p.getBool("valid", false);
   out.slot = p.getUChar("slot", 0);
   out.stepIndex = p.getUChar("step", 0);
@@ -231,9 +233,9 @@ bool resumeLoad(ResumeInfo& out) {
   return out.valid;
 }
 
-void resumeClear() {
+void resumeClear(uint8_t ws) {
   Preferences p;
-  p.begin("resume", false);
+  p.begin(resumeNs(ws), false);
   p.clear();
   p.end();
 }

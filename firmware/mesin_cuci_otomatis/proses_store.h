@@ -7,6 +7,7 @@
 
 enum SlotState : uint8_t { SLOT_EMPTY, SLOT_OK, SLOT_BAD };
 
+// slot di sini = id penyimpanan 0..PROSES_TOTAL-1, yaitu prosesId(ws, nomor)
 bool prosesStoreBegin();                   // pasang LittleFS (format hanya bila belum pernah diformat)
 bool prosesStoreReady();
 SlotState prosesSlotState(uint8_t slot);   // SLOT_BAD = berkas ada tetapi rusak/tidak valid

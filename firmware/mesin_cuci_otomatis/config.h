@@ -43,6 +43,7 @@ inline uint32_t secToMs(uint32_t seconds) { return scaledMs(seconds * 1000UL); }
 #define MOTOR_REVERSE_GAP_MS    500        // jeda minimal ganti arah (nyata)
 #define MOTOR_MAX_ON_MS         65000      // failsafe: motor cuci tidak boleh menyala terus lebih dari ini (nyata)
 #define PERFUME_MAX_ON_MS       240000     // failsafe: pompa pewangi tidak boleh menyala terus lebih dari ini (nyata)
+#define SPIN_MAX_ON_MS          3660000    // failsafe: motor spin (Tahap Spin maks 60 mnt + 1 mnt cadangan, nyata)
 #define MANUAL_MAX_ON_MS        60000      // kontrol relay manual otomatis mati setelah ini (nyata)
 #define WATER_STABLE_MS         10000      // sensor harus stabil 10 dtk
 #define FILL_SETTLE_MS          2000

@@ -26,6 +26,7 @@ untuk memasang firmware lihat [Pemasangan](pemasangan.md).
 
 | Istilah | Arti |
 |---|---|
+| **Workspace** | **Cuci** (tabung cuci) atau **Pengering** (tabung spin). Pilih lewat tombol di atas Beranda/Proses/Manual. Keduanya bisa berjalan bersamaan, masing-masing punya 10 Proses sendiri. Proses pengering berisi Spin, Tunggu, Minta tindakan, dan Notifikasi. |
 | **Tahap** | Satu langkah kerja mesin: isi air, buang air, putar, rendam, spin, pewangi, dst. Tiap Tahap punya variabelnya sendiri (lama, mode, jumlah ulang). |
 | **Proses** | Rangkaian Tahap yang kamu susun sendiri dan beri nama (maks. **10 Proses**, tiap Proses maks. **40 Tahap**). |
 | **Sensor level air** | Sensor di bagian atas tabung. Hanya tahu **penuh** atau **tidak penuh**. |
@@ -81,7 +82,7 @@ Operasi lain di tab Proses: **salin** Proses (langsung tersimpan), **hapus**, **
 | **Putar mesin** | Lama 15 mnt; pola `normal` (7 dtk nyala / 4 jeda), `gentle` (5,3 / 7), `hijab` (3 / 9). |
 | **Soak** | Ulangi 2×; waktu putar 1 mnt; waktu rendam 4 mnt; pola. |
 | **Rendam** | Lama 4 mnt (diam, semua relay mati). |
-| **Spin** | Lama 10 mnt. Sensor diperiksa dulu: air harus sudah turun. |
+| **Spin** | Lama 10 mnt. Hanya di Proses pengering; tidak membaca sensor air. |
 | **Pewangi** | 1 cup (kelipatan 0,5; **0,5 cup = 10 dtk**; pengaman pompa 240 dtk). |
 | **Tunggu** | Jeda 00:00:10. |
 | **Cek air** | Air harus `penuh` atau `tidak penuh`. |
@@ -106,12 +107,12 @@ Mesin hanya bisa dimulai saat kondisi **IDLE**. Selama berjalan kamu bisa **Jeda
 
 ## 6. Keputusan yang menunggu
 
-Bila Tahap Isi/Buang/Spin/Cek gagal atau ada Tahap *Minta tindakan*, mesin **berhenti dan tidak pernah lanjut sendiri**.
+Bila Tahap Isi/Buang/Cek gagal atau ada Tahap *Minta tindakan*, mesin **berhenti dan tidak pernah lanjut sendiri**.
 Dashboard menampilkan tombol sesuai kasus dan mengirim notifikasi (diulang tiap 10 menit).
 
 | Kasus | Pilihan |
 |---|---|
-| Isi gagal · Buang gagal · Spin masih penuh · Cek gagal | **Ulang** · **Lanjut** (dengan peringatan) · **Batal** |
+| Isi gagal · Buang gagal · Cek gagal | **Ulang** · **Lanjut** (dengan peringatan) · **Batal** |
 | Air sudah penuh sebelum mengisi (pra-cek `jeda`) | **Buang lalu isi** · **Pakai air yang ada** · **Batal** |
 | Minta tindakan | **Lanjut** · **Batal** |
 
