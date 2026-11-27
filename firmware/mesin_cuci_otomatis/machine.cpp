@@ -25,6 +25,9 @@ struct JobLock {
 };
 static MachineStatus snaps[WS_COUNT];
 static volatile bool holdFlag = false;
+// Tombol "Cek air": pengamatan yang sedang menunggu hasil
+static bool waterCheckOn = false;
+static uint32_t waterCheckMs = 0;
 
 // ---- keputusan menunggu ----------------------------------------------------------
 struct Decision {
@@ -287,6 +290,25 @@ static SR agitateTick(uint32_t dt) {
       break;
   }
   return SR_CONTINUE;
+}
+
+// ============================================================================
+// Cek air: hasil baru diberikan setelah sensor diamati selama waktu konfirmasi sejak diminta
+// ============================================================================
+static bool waterSettled() { return sensorStable(true, stableMs()) || sensorStable(false, stableMs()); }
+static void reportWater() {
+  const char* r = sensorStable(true, stableMs())    ? "PENUH"
+                  : sensorStable(false, stableMs()) ? "TIDAK penuh"
+                                                    : "belum stabil (sensor berubah-ubah)";
+  logf(LOG_NOTIF, "Hasil cek air: %s", r);
+}
+static void waterCheckTick(uint32_t dt) {
+  if (!waterCheckOn) return;
+  waterCheckMs += dt;
+  if ((waterCheckMs >= stableMs() && waterSettled()) || waterCheckMs >= checkWindowMs()) {
+    waterCheckOn = false;
+    reportWater();
+  }
 }
 
 // ============================================================================
@@ -915,7 +937,19 @@ static SR tickStep(uint32_t dt) {
       return SR_CONTINUE;
     case TH_CEK: {
       bool want = t.mode == CEK_PENUH;
-      if (sensorStable(want, stableMs())) return SR_DONE;
+      bool observed = checkWindowMs() - L->R.left >= stableMs();   // diamati sejak Tahap dimulai
+      if (L->jobManual) {   // menu Manual: cukup laporkan keadaan air, apa pun syaratnya
+        if ((observed && waterSettled()) || L->R.left <= dt) {
+          reportWater();
+          return SR_DONE;
+        }
+        L->R.left -= dt;
+        return SR_CONTINUE;
+      }
+      if (observed && sensorStable(want, stableMs())) {
+        lanef(LOG_INFO, "Cek air lulus: %s", want ? "penuh" : "tidak penuh");
+        return SR_DONE;
+      }
       if (checkGaveUp(!want, L->R.left, dt)) {
         return decide(DC_CEK_GAGAL, OP_ULANG | OP_LANJUT | OP_BATAL,
                       want ? "Air belum mencukupi (belum penuh)" : "Air masih penuh");
@@ -1081,6 +1115,12 @@ static void processCmd(const MachineCmd& c) {
         applyDecision(c.arg);
       }
       break;
+    case MC_CHECK_WATER:
+      if (!waterCheckOn) {
+        waterCheckOn = true;
+        waterCheckMs = 0;
+      }
+      break;
     case MC_RELAY:
       if (c.arg >= R_COUNT) break;
       if (L->mstate != MS_IDLE || holdFlag || seqRunning()) {
@@ -1110,8 +1150,12 @@ static uint32_t currentStepLeftMs() {
   if (L->waitingStart) return L->waitLeft;
   const Tahap& t = L->job.t[L->idx];
   switch (t.type) {
-    case TH_RENDAM: case TH_TUNGGU: case TH_PUTAR: case TH_CEK: case TH_SPIN:
+    case TH_RENDAM: case TH_TUNGGU: case TH_PUTAR: case TH_SPIN:
       return L->R.left;
+    case TH_CEK: {   // tampilkan hitung mundur waktu konfirmasi, bukan batas terlama
+      uint32_t waited = checkWindowMs() - L->R.left;
+      return waited < stableMs() ? stableMs() - waited : L->R.left;
+    }
     case TH_UJI_RELAY:
       return L->R.left + (L->R.phase == 0 ? secToMs(t.detik ? t.detik : 2) : 0);
     case TH_PEWANGI: case TH_BUANG_MANUAL:
@@ -1228,6 +1272,8 @@ static void machineLoopOnce(uint32_t& lastTick) {
                                          : "motor menyala terlalu lama");
   }
 
+  waterCheckTick(dt);
+
   // Relay manual otomatis mati setelah MANUAL_MAX_ON_MS (hanya saat workspace pemiliknya IDLE)
   for (int i = 0; i < R_COUNT; i++) {
     useLane(seqRunning() ? (uint8_t)WS_CUCI : machineRelayWs(i));
@@ -1276,6 +1322,7 @@ static void loadResume() {
 static uint32_t hostLastTick = 0;
 void machineHostTick() { machineLoopOnce(hostLastTick); }
 void machineHostReset() {
+  waterCheckOn = false;
   for (uint8_t w = 0; w < WS_COUNT; w++) {
     lanes[w] = Lane();
     useLane(w);

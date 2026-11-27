@@ -128,6 +128,7 @@ bila masih penuh, sesi diulang. Bila semua sesi gagal, mesin meminta keputusanmu
   (kiri → kanan → isi → buang → spin → pewangi). Berguna setelah merakit kabel.
 - **Kalibrasi air** (di Sistem → Mesin) mengukur waktu isi untuk mode `persen`.
 - **Konfirmasi sensor air** (di Sistem → Mesin, kartu *Pengaturan air*): lama konfirmasi 1–60 detik (bawaan 10). Sensor baru dipercaya setelah terus kena air, atau terus tidak kena air, selama itu, sehingga cipratan diabaikan. Saat mengisi, valve tetap terbuka selama waktu ini sejak air menyentuh sensor, jadi jangan terlalu besar. Hanya bisa diubah saat tabung cuci tidak bekerja.
+- **Cek air:** tombol *Cek air* dan Tahap *Cek* di Manual mengamati sensor selama waktu konfirmasi, lalu menampilkan hasil (penuh / tidak penuh / belum stabil) sebagai notifikasi, termasuk ke Telegram.
 
 ## 8. Aktivitas: Log, Riwayat, Konsol
 

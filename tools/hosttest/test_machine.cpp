@@ -1079,6 +1079,47 @@ static void s1_cipratan() {
   CHECK(count("Tarikan valve berhasil") == 0, "sensor lepas sesaat tidak dianggap tarikan berhasil");
 }
 
+static void waitSec(uint32_t detik) {
+  for (uint32_t t = 0; t < secToMs(detik); t += TICK_MS) tick();
+}
+
+static void s2_hasilCek() {
+  printf("[S2] Cek air: hasil dilaporkan setelah waktu konfirmasi sejak diminta\n");
+  resetWorld();
+  waitSec(30);   // sensor sudah lama stabil
+  post(MC_CHECK_WATER);
+  waitSec(5);
+  CHECK(count("Hasil cek air") == 0, "tombol: 5 dtk belum ada hasil walau sensor sudah lama stabil");
+  waitSec(7);
+  CHECK(count("Hasil cek air: TIDAK penuh", LOG_NOTIF) == 1, "tombol: hasil muncul setelah 10 dtk");
+
+  resetWorld(); fullTank(); waitSec(30);
+  post(MC_CHECK_WATER);
+  waitSec(5);
+  splash(false, 2);
+  waitSec(6);
+  CHECK(count("Hasil cek air") == 0, "sensor berubah di tengah: hitungan diulang");
+  waitSec(8);
+  CHECK(count("Hasil cek air: PENUH", LOG_NOTIF) == 1, "lalu hasil PENUH");
+
+  for (int mode : {CEK_PENUH, CEK_TIDAK_PENUH}) {
+    resetWorld(); fullTank(); waitSec(30);
+    Tahap cek = TH(TH_CEK);
+    cek.mode = mode;
+    machineRunManual(cek);
+    waitSec(5);
+    CHECK(st().state == MS_RUNNING && count("Hasil cek air") == 0, "Manual: masih mengamati di detik ke-5");
+    CHECK(runUntil(idle, secToMs(10)) && count("Hasil cek air: PENUH", LOG_NOTIF) == 1, "Manual: selesai dengan hasil, apa pun syaratnya");
+  }
+
+  resetWorld(); fullTank(); waitSec(30);
+  saveP(0, "Cek", {TH(TH_CEK)});
+  runP(0);
+  waitSec(5);
+  CHECK(st().state == MS_RUNNING, "Proses: Tahap Cek tidak lulus seketika");
+  CHECK(runUntil(idle, secToMs(10)) && count("Cek air lulus") == 1, "Proses: lulus setelah waktu konfirmasi");
+}
+
 int main(int argc, char** argv) {
   g_verbose = argc > 1;
   n1_fullProcess();
@@ -1111,6 +1152,7 @@ int main(int argc, char** argv) {
   t26_remotePolicy();
   n18_backupRestore();
   s1_cipratan();
+  s2_hasilCek();
   checks++;
   if (g_violations != 0) { failures++; printf("  GAGAL: %ld tick melanggar invarian keselamatan\n", g_violations); }
   else printf("  ok: 0 pelanggaran invarian (kiri+kanan, isi+buang, buang+motor) di seluruh skenario\n");

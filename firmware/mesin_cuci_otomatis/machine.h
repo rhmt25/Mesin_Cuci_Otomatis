@@ -33,6 +33,7 @@ enum MachineCmdType : uint8_t {
   MC_CANCEL_RESUME,  // batalkan tawaran pemulihan listrik padam
   MC_RELAY,          // kontrol relay manual (hanya saat siap): arg = RelayId, arg2 = 1 nyala / 0 mati
   MC_DECIDE,         // arg = DecOpt
+  MC_CHECK_WATER,    // amati sensor selama waktu konfirmasi lalu laporkan (boleh saat bekerja)
 };
 
 struct MachineCmd {

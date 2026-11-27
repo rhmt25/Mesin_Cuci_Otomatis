@@ -8,6 +8,8 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/); versi mengikut
 - Dua workspace yang berjalan bersamaan: **Cuci** dan **Pengering**, masing-masing dengan 10 Proses, jeda/stop/lewati,
   jadwal, dan pemulihan listrik padam sendiri. / Two workspaces running side by side: wash and spin-dry.
 - Failsafe motor spin (61 menit). / Spin motor failsafe.
+- Cek air (tombol maupun Tahap) kini mengamati sensor selama waktu konfirmasi sejak dimulai dan menampilkan hasilnya.
+  / Water checks observe for the confirmation time and report the result.
 - Kartu **Pengaturan air** (gabungan dengan kalibrasi isi): lama konfirmasi 1-60 detik (bawaan 10) agar cipratan diabaikan; berlaku juga di pra-cek isi
   dan verifikasi buang. / Configurable water sensor confirmation time to ignore splashes.
 - Deploy memeriksa judul halaman dan alamat MAC (`DEPLOY_ESP_MAC`) sebelum mengirim password atau firmware.

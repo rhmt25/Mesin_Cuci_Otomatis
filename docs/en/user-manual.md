@@ -130,6 +130,7 @@ asks you.
   (left → right → fill → drain → spin → fragrance). Useful after wiring.
 - **Water calibration** (Sistem → Mesin) measures fill time for `persen` mode.
 - **Water sensor confirmation** (Sistem → Mesin, card *Pengaturan air*): confirmation time 1-60 s (default 10). The sensor is only trusted after it has stayed wet, or stayed dry, for that long, so splashes are ignored. While filling, the valve stays open for this long after water reaches the sensor, so do not set it too high. It can only be changed while the wash tub is idle.
+- **Water check:** the *Cek air* button and a manual *Cek* Stage watch the sensor for the confirmation time, then report the result (full / not full / unstable) as a notification, including Telegram.
 
 ## 8. Activity: Log, History, Console
 

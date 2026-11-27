@@ -450,11 +450,9 @@ CmdResult executeCommand(const String& command, const String& argsIn, CmdSource 
   }
 
   if (name == "cek_air") {
-    MachineStatus s;
-    machineGetStatus(s);
-    static const char* t[] = {"Air belum mencukupi (kosong stabil).", "Air sudah mencukupi (penuh stabil).",
-                              "Level air belum stabil (sedang mengukur)."};
-    return ok(t[s.waterState]);
+    CmdResult r = postSimple(MC_CHECK_WATER, "");
+    if (!r.ok) return r;
+    return ok("Memeriksa air selama " + String(S.airDetik) + " detik, hasilnya menyusul.");
   }
 
   // ---- laporan ----
