@@ -20,6 +20,7 @@ Dipakai lewat Konsol web (lokal), Serial USB 115200, dan (yang diizinkan) jarak 
 | `notif lengkap\|ringkas\|senyap` | Mode notifikasi |
 | `remote [on\|off]` | Kontrol jarak jauh |
 | `kalibrasi_air` | Kalibrasi waktu isi untuk mode persen |
+| `sensor_air <detik>` | Lama konfirmasi sensor air, 1–60 (tabung cuci harus siap) |
 | `reset_semua` · `restart` | Reset pengaturan / mulai ulang |
 | `wifi_list` · `wifi_tambah` · `wifi_hapus` · `wifi_urutan` | WiFi (hanya lokal) |
 | `heap` · `tasks` · `log` · `serial debug on\|off` | Diagnostik (konsol saja) |
@@ -27,7 +28,7 @@ Dipakai lewat Konsol web (lokal), Serial USB 115200, dan (yang diizinkan) jarak 
 Variabel air/putar/pewangi tidak berupa perintah: diatur per Tahap di dashboard.
 
 **Diizinkan dari jarak jauh:** `proses pilih stop jeda lanjutkan lewati batalkan relay relay_test kalibrasi_relay buang_manual
-cek_air status menu pengaturan riwayat statistik info bantuan notif kalibrasi_air reset_semua restart remote`.
+cek_air status menu pengaturan riwayat statistik info bantuan notif kalibrasi_air reset_semua restart remote sensor_air`.
 Daftar sebenarnya ada di `cloud/src/allow.js` dan `remote_policy.cpp`.
 
 ## Endpoint API (ESP32)
@@ -65,7 +66,7 @@ Data kalibrasi dan jadwal sekali pakai tidak disertakan. Pemulihan atomik; nilai
 | `MOTOR_MAX_ON_MS` | 65000 | Failsafe motor cuci |
 | `PERFUME_MAX_ON_MS` | 240000 | Failsafe pompa pewangi |
 | `MANUAL_MAX_ON_MS` | 60000 | Batas kontrol relay manual |
-| `WATER_STABLE_MS` | 10000 | Sensor harus stabil sebelum dianggap berubah |
+| `WATER_CONFIRM_DEF_SEC` | 10 | Bawaan lama konfirmasi sensor air (diubah lewat `sensor_air <1-60>`) |
 | `MAX_WIFI_NETWORKS` | 5 | Jumlah WiFi tersimpan |
 | `NTP_TZ` | `WIB-7` | Zona waktu |
 

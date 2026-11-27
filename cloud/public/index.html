@@ -722,6 +722,10 @@ body.dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
             <p class="field-help">Dikirim ke Telegram lewat server. Log di web selalu lengkap. Pesan dari Tahap Notifikasi dan Minta tindakan selalu terkirim, termasuk mode Senyap.</p></div>
           <div class="card"><h3>Kalibrasi isi air</h3><p class="muted" id="calibNote"></p>
             <div class="row"><button class="btn" data-cmd="cek_air"><svg class="ic sm"><use href="#i-search"/></svg>Cek air</button><button class="btn dout" id="btnCalib">Reset kalibrasi</button></div></div>
+          <div class="card"><h3>Sensor air</h3>
+            <label>Lama konfirmasi (detik)<input id="airDetik" type="number" min="1" max="60" step="1" inputmode="numeric"></label>
+            <p class="field-help">Sensor baru dipercaya setelah terus kena air, atau terus tidak kena air, selama waktu ini, sehingga cipratan diabaikan. Saat mengisi, valve tetap terbuka selama waktu ini sejak air menyentuh sensor.</p>
+            <div class="row"><button class="btn" id="btnAirDetik">Simpan</button></div></div>
           <div class="card"><h3>Tampilan</h3>
             <div class="seg" id="themeSeg" role="group" aria-label="Tema"><button type="button" data-theme-set="auto">Otomatis</button><button type="button" data-theme-set="light">Terang</button><button type="button" data-theme-set="dark">Gelap</button></div></div>
         </div>
@@ -1125,6 +1129,7 @@ const s = settings, nm = ['lengkap', 'ringkas', 'senyap'][s.notif];
 $('#sNotif').value = nm;
 $$('#notifSeg [data-notif]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.notif === nm)));
 $('#calibNote').textContent = s.calib.nFill ? `Rata-rata isi penuh ${fmt(s.calib.fillSec)} (${s.calib.nFill} sampel). Mode isi "persen" memakai data ini.` : 'Belum ada data kalibrasi: mode isi "persen" memakai sensor sampai ada 1 pengisian penuh dengan mode sensor.';
+if (s.airDetik && document.activeElement !== $('#airDetik')) $('#airDetik').value = s.airDetik;
 const sel = $('[data-sm=selesai]');
 sel.disabled = !s.timeSynced;
 if (!s.timeSynced && $('#startMode').value === 'selesai') setStartMode('now');
@@ -1133,6 +1138,11 @@ $('#startNote').textContent = s.timeSynced ? '' : 'Jam belum sinkron (butuh inte
 $('#notifSeg').addEventListener('click', e => { const b = e.target.closest('[data-notif]'); if (b) { $('#sNotif').value = b.dataset.notif; cmd('notif', b.dataset.notif); } });
 $('#btnResetAll').onclick = () => confirm('Reset pengaturan ke default?') && cmd('reset_semua');
 $('#btnCalib').onclick = () => confirm('Reset data kalibrasi waktu isi?') && cmd('kalibrasi_air');
+$('#btnAirDetik').onclick = () => {
+const v = Number($('#airDetik').value);
+if (!Number.isInteger(v) || v < 1 || v > 60) return toast('Isi 1 sampai 60 detik', 'err');
+cmd('sensor_air', v);
+};
 const RELAYS = [['kiri', 'Motor putar kiri', 'GPIO25'], ['kanan', 'Motor putar kanan', 'GPIO18'], ['isi', 'Valve isi air', 'GPIO17'],
 ['buang', 'Motor valve buang', 'GPIO16'], ['spin', 'Motor spin', 'GPIO4'], ['pewangi', 'Pompa pewangi', 'GPIO13']];
 function renderRelays() {

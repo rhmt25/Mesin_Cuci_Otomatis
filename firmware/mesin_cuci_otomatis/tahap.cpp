@@ -417,15 +417,15 @@ uint32_t tahapEstimateSec(const Tahap& t) {
       if (t.mode == ISI_WAKTU) base = (uint32_t)t.lama * 60;
       else if (C.nFill > 0) base = (uint32_t)(C.avgFillMs / 1000.0f * (t.mode == ISI_PERSEN ? t.persen / 100.0f : 1.0f));
       else base = 600;
-      return base + FILL_SETTLE_MS / 1000 + WATER_STABLE_MS / 1000 + 2;
+      return base + FILL_SETTLE_MS / 1000 + S.airDetik + 2;
     }
-    case TH_BUANG: return (uint32_t)t.lama * 60 + WATER_STABLE_MS / 1000 + 2;
+    case TH_BUANG: return (uint32_t)t.lama * 60 + S.airDetik + 2;
     case TH_PUTAR: case TH_RENDAM: case TH_BUANG_MANUAL: return (uint32_t)t.lama * 60;
     case TH_SPIN: return (uint32_t)t.lama * 60;
     case TH_SOAK: return (uint32_t)t.ulangi * ((uint32_t)t.putar + t.rendam) * 60;
     case TH_PEWANGI: return (uint32_t)t.cup2 * 10;
     case TH_TUNGGU: return t.detik;
-    case TH_CEK: return WATER_STABLE_MS / 1000 + 2;
+    case TH_CEK: return S.airDetik + 2;
     default: return 0;
   }
 }

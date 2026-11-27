@@ -18,7 +18,7 @@ const S = {
   status: { type: 'status', state: 'idle', proses: '', slot: 0, manual: false, stage: '', tahap: '', detail: '', pause: '', step: 0, steps: 0, stepLeft: 0, totalLeft: 0, progress: 0,
     water: 'kosong', waterRaw: false, fault: false, resume: { pending: false, info: '', slot: 0 }, relays: { kiri: false, kanan: false, isi: false, buang: false, spin: false, pewangi: false },
     wifi: { online: true, ssid: 'x', rssi: -50, ip: '1.2.3.4', ap: 'MesinCuci-1', apClients: 0, time: '10:00' }, notif: 'Lengkap', uptime: 100, heap: 100000, fw: '3.0.0', reset: 'x', fs: true },
-  settings: { notif: 0, remoteOn: 1, calib: { fillSec: 600, nFill: 2 }, timeSynced: true },
+  settings: { notif: 0, remoteOn: 1, airDetik: 10, calib: { fillSec: 600, nFill: 2 }, timeSynced: true },
   store: Array(10).fill(null),       // isi slot Proses
   locked: new Set(),
   devices: [{ id: 0, name: 'Chrome - Android', created: 1760000000, lastSeen: 1760000500, current: false }, { id: 1, name: 'Edge - Windows', created: 1760100000, lastSeen: 1760100500, current: true }],
@@ -307,6 +307,12 @@ function route(url, opt) {
   ok(/Rata-rata isi penuh/.test($('#calibNote').textContent), 'catatan kalibrasi tampil');
   click($('#notifSeg [data-notif="senyap"]')); await sleep(40);
   ok(S.cmds.some(c => c.cmd === 'notif' && c.args === 'senyap'), 'notifikasi dikirim sebagai perintah notif');
+
+  ok($('#airDetik').value === '10', 'lama konfirmasi sensor tampil dari pengaturan');
+  S.cmds.length = 0; type($('#airDetik'), '0'); click($('#btnAirDetik')); await sleep(40);
+  ok(!S.cmds.length, 'nilai di luar 1-60 tidak dikirim');
+  type($('#airDetik'), '15'); click($('#btnAirDetik')); await sleep(40);
+  ok(S.cmds.some(c => c.cmd === 'sensor_air' && c.args === '15'), 'lama konfirmasi disimpan lewat perintah sensor_air');
 
   console.log('[U13] Perangkat diingat');
   await nav('sistem');

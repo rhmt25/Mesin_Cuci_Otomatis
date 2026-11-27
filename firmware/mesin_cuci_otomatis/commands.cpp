@@ -80,6 +80,7 @@ String settingsText() {
   t += String("Kontrol jarak jauh: ") + (!remoteConfigured() ? "belum dikonfigurasi" : S.remoteOn ? "aktif" : "nonaktif") + "\n";
   if (C.nFill > 0) t += "Rata-rata isi penuh: " + fmtDuration((uint32_t)(C.avgFillMs / 1000)) + " (" + C.nFill + " sampel)\n";
   else t += "Kalibrasi isi: belum ada (mode persen memakai sensor)\n";
+  t += "Konfirmasi sensor air: " + String(S.airDetik) + " dtk\n";
   t += "Variabel air, putar, dan pewangi diatur per Tahap di tab Proses.";
   return t;
 }
@@ -196,7 +197,7 @@ String helpText() {
          "stop [cuci|pengering]  (tanpa pilihan: hentikan keduanya)\n"
          "jeda, lanjutkan, lewati, batalkan [pengering]; status, cek_air\n"
          "pengaturan, riwayat, statistik, wifi_list, wifi_tambah, wifi_hapus, wifi_urutan\n"
-         "notif <lengkap|ringkas|senyap>, remote [on|off], kalibrasi_air, reset_semua, restart, info\n"
+         "notif <lengkap|ringkas|senyap>, sensor_air <detik>, remote [on|off], kalibrasi_air, reset_semua, restart, info\n"
          "relay <kiri|kanan|isi|buang|spin|pewangi> <on|off>, relay semua off, kalibrasi_relay [detik]\n"
          "buang_manual <menit>  (buang air hanya dengan waktu, tanpa sensor)\n"
          "Tahap dan variabelnya diatur di dashboard web (tab Proses dan Manual).\n"
@@ -483,6 +484,15 @@ CmdResult executeCommand(const String& command, const String& argsIn, CmdSource 
     else return fail("Pilihan: lengkap, ringkas, senyap.");
     settingsSave();
     return ok(String("Mode notifikasi: ") + notifModeName(S.notif) + ". (Log web tetap lengkap; pesan Tahap Notifikasi selalu terkirim.)");
+  }
+  if (name == "sensor_air") {
+    int detik;
+    if (!parseInt(token(args, 0), WATER_CONFIRM_MIN_SEC, WATER_CONFIRM_MAX_SEC, detik))
+      return fail("Isi 1 sampai 60 detik. Contoh: sensor_air 10");
+    if (!machineIsIdle(WS_CUCI)) return fail("Tabung cuci sedang bekerja. Hentikan Proses dulu.");
+    S.airDetik = (uint8_t)detik;
+    settingsSave();
+    return ok("Konfirmasi sensor air: " + String(detik) + " detik.");
   }
   if (name == "reset_semua") {
     settingsReset();

@@ -389,6 +389,7 @@ async function loadSettings() {
   $('#sNotif').value = nm;
   $$('#notifSeg [data-notif]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.notif === nm)));
   $('#calibNote').textContent = s.calib.nFill ? `Rata-rata isi penuh ${fmt(s.calib.fillSec)} (${s.calib.nFill} sampel). Mode isi "persen" memakai data ini.` : 'Belum ada data kalibrasi: mode isi "persen" memakai sensor sampai ada 1 pengisian penuh dengan mode sensor.';
+  if (s.airDetik && document.activeElement !== $('#airDetik')) $('#airDetik').value = s.airDetik;
   const sel = $('[data-sm=selesai]');
   sel.disabled = !s.timeSynced;
   if (!s.timeSynced && $('#startMode').value === 'selesai') setStartMode('now');
@@ -397,6 +398,11 @@ async function loadSettings() {
 $('#notifSeg').addEventListener('click', e => { const b = e.target.closest('[data-notif]'); if (b) { $('#sNotif').value = b.dataset.notif; cmd('notif', b.dataset.notif); } });
 $('#btnResetAll').onclick = () => confirm('Reset pengaturan ke default?') && cmd('reset_semua');
 $('#btnCalib').onclick = () => confirm('Reset data kalibrasi waktu isi?') && cmd('kalibrasi_air');
+$('#btnAirDetik').onclick = () => {
+  const v = Number($('#airDetik').value);
+  if (!Number.isInteger(v) || v < 1 || v > 60) return toast('Isi 1 sampai 60 detik', 'err');
+  cmd('sensor_air', v);
+};
 
 // ======================================================= Relay ====
 const RELAYS = [['kiri', 'Motor putar kiri', 'GPIO25'], ['kanan', 'Motor putar kanan', 'GPIO18'], ['isi', 'Valve isi air', 'GPIO17'],

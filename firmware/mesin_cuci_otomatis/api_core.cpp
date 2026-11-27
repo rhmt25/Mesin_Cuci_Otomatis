@@ -119,6 +119,7 @@ static String settingsJson() {
   JsonDocument d;
   d["notif"] = S.notif;
   d["remoteOn"] = S.remoteOn;
+  d["airDetik"] = S.airDetik;
   d["calib"]["fillSec"] = (uint32_t)(C.avgFillMs / 1000);
   d["calib"]["nFill"] = C.nFill;
   d["timeSynced"] = netTimeSynced();
@@ -422,6 +423,7 @@ struct KeyMap {
 };
 static const KeyMap settingKeys[] = {
     {"notif", "notif"},
+    {"airDetik", "sensor_air"},
 };
 
 // ============================================================================

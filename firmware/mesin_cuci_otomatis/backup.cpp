@@ -21,11 +21,12 @@ struct Field {
 static const Field fields[] = {
     FIELD("notif", F_U8, notif),
     FIELD("remoteOn", F_U8, remoteOn),
+    FIELD("airDetik", F_U8, airDetik),
 };
 static const size_t nFields = sizeof(fields) / sizeof(fields[0]);
 
 static double getField(const Settings& s, const Field& f) { return *(reinterpret_cast<const uint8_t*>(&s) + f.offset); }
-static void setField(Settings& s, const Field& f, double v) { *(reinterpret_cast<uint8_t*>(&s) + f.offset) = (uint8_t)v; }
+static void setField(Settings& s, const Field& f, double v) { *(reinterpret_cast<uint8_t*>(&s) + f.offset) = (uint8_t)(v < 0 ? 0 : v > 255 ? 255 : v); }
 
 // ---------------------------------------------------------------- ekspor ----
 std::string backupBuild(bool includeWifi) {

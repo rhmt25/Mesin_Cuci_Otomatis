@@ -27,6 +27,7 @@ void machineHostReboot();
 // ------------------------------------------------------------------ stub ----
 static uint32_t g_ms = 100000;
 static bool g_raw = false;
+static int g_force = -1;   // >= 0: paksa pembacaan sensor (cipratan)
 unsigned long millis() { return g_ms; }
 void pinMode(uint8_t, uint8_t) {}
 void digitalWrite(uint8_t, uint8_t) {}
@@ -86,7 +87,7 @@ static void model(uint32_t dt) {
   if (drainOn) g_drainOnMs += dt;
   if (drainOn && g_pullEffective && !g_drainBroken) g_level -= 100.0 * dt / EMPTY_MS;
   g_level = std::max(0.0, std::min(100.0, g_level));
-  g_raw = g_level >= 95.0;   // sensor hanya di paling atas: hanya tahu penuh / tidak penuh
+  g_raw = g_force >= 0 ? g_force != 0 : g_level >= 95.0;   // sensor hanya di paling atas: hanya tahu penuh / tidak penuh
 }
 
 static uint32_t g_perfumeOnMs = 0;   // total relay pewangi menyala (ms skala)
@@ -125,7 +126,7 @@ static void resetWorld() {
   prosesStoreBegin();
   g_perfumeOnMs = 0;
   g_log.clear();
-  g_level = 0; g_noWater = false; g_drainBroken = false; g_raw = false; g_fillOnMs = 0;
+  g_level = 0; g_noWater = false; g_drainBroken = false; g_raw = false; g_force = -1; g_fillOnMs = 0;
   g_pullFail = 0; g_drainPrev = false; g_pullEffective = true; g_drainOnMs = 0;
   relayAllOff();
   machineHostReset();
@@ -1013,6 +1014,71 @@ static void w3_resume() {
   postK(MC_STOP); ticks(2);
 }
 
+// Paksa sensor terbaca `level` selama `detik` (nyata), lalu kembali ke model tangki
+static void splash(bool level, uint32_t detik) {
+  g_force = level;
+  for (uint32_t t = 0; t < secToMs(detik); t += TICK_MS) tick();
+  g_force = -1;
+}
+
+static void s1_cipratan() {
+  printf("[S1] Konfirmasi sensor air: cipratan diabaikan, lamanya bisa diatur\n");
+  resetWorld();
+  CHECK(S.airDetik == 10, "bawaan 10 detik");
+  S.airDetik = 25; settingsSave(); S.airDetik = 0; settingsLoad();
+  CHECK(S.airDetik == 25, "lama konfirmasi tersimpan");
+  S.airDetik = 200; settingsSave(); settingsLoad();
+  CHECK(S.airDetik == 10, "nilai di luar 1-60 kembali ke bawaan");
+
+  resetWorld();
+  saveP(0, "Isi", {TH(TH_ISI)});
+  runP(0);
+  CHECK(runUntil([] { return relayIsOn(R_FILL); }, 5000), "mengisi");
+  splash(true, 6); ticks(3);
+  CHECK(relayIsOn(R_FILL), "cipratan 6 dtk saat mengisi: valve tetap terbuka");
+  splash(true, 14);
+  CHECK(!relayIsOn(R_FILL), "terdeteksi terus lebih dari 10 dtk: pengisian selesai");
+
+  resetWorld();
+  S.airDetik = 3;
+  saveP(0, "Isi", {TH(TH_ISI)});
+  runP(0);
+  runUntil([] { return relayIsOn(R_FILL); }, 5000);
+  splash(true, 6);
+  CHECK(!relayIsOn(R_FILL), "diatur 3 dtk: 6 dtk sudah dianggap penuh");
+
+  resetWorld();
+  saveP(0, "Isi", {TH(TH_ISI)});
+  runP(0);
+  ticks(8);
+  splash(true, 6);
+  CHECK(runUntil([] { return relayIsOn(R_FILL); }, 5000) && count("membuang dulu") == 0, "cipratan saat pra-cek tidak memicu buang");
+
+  resetWorld();
+  Tahap cek = TH(TH_CEK);
+  saveP(0, "Cek", {cek});
+  runP(0);
+  splash(true, 6); ticks(3);
+  CHECK(st().state == MS_RUNNING, "Cek 'penuh': cipratan tidak meloloskan");
+  CHECK(runUntil(deciding, 5000), "tetap kosong -> keputusan");
+
+  resetWorld(); fullTank();
+  cek.mode = CEK_TIDAK_PENUH;
+  saveP(0, "Cek", {cek});
+  runP(0);
+  splash(false, 6); ticks(3);
+  CHECK(st().state == MS_RUNNING, "Cek 'tidak penuh': sensor lepas sesaat tidak meloloskan");
+
+  resetWorld(); fullTank();
+  g_pullFail = 1;
+  Tahap b = TH(TH_BUANG); b.lama = 1;
+  saveP(0, "Buang", {b});
+  runP(0);
+  ticks(10);
+  splash(false, 6); ticks(3);
+  CHECK(count("Tarikan valve berhasil") == 0, "sensor lepas sesaat tidak dianggap tarikan berhasil");
+}
+
 int main(int argc, char** argv) {
   g_verbose = argc > 1;
   n1_fullProcess();
@@ -1044,6 +1110,7 @@ int main(int argc, char** argv) {
   t25_apPolicy();
   t26_remotePolicy();
   n18_backupRestore();
+  s1_cipratan();
   checks++;
   if (g_violations != 0) { failures++; printf("  GAGAL: %ld tick melanggar invarian keselamatan\n", g_violations); }
   else printf("  ok: 0 pelanggaran invarian (kiri+kanan, isi+buang, buang+motor) di seluruh skenario\n");

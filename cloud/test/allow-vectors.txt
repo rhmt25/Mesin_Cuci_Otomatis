@@ -23,6 +23,7 @@ cmd allow info
 cmd allow bantuan
 cmd allow notif
 cmd allow kalibrasi_air
+cmd allow sensor_air
 cmd allow reset_semua
 cmd allow restart
 cmd allow remote

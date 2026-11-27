@@ -127,6 +127,7 @@ bila masih penuh, sesi diulang. Bila semua sesi gagal, mesin meminta keputusanmu
 - **Panel Relay**: tombol ON/OFF per relay (hanya saat mesin IDLE, otomatis mati setelah 60 detik) dan **Uji berurutan**
   (kiri → kanan → isi → buang → spin → pewangi). Berguna setelah merakit kabel.
 - **Kalibrasi air** (di Sistem → Mesin) mengukur waktu isi untuk mode `persen`.
+- **Sensor air** (di Sistem → Mesin): lama konfirmasi 1–60 detik (bawaan 10). Sensor baru dipercaya setelah terus kena air, atau terus tidak kena air, selama itu, sehingga cipratan diabaikan. Saat mengisi, valve tetap terbuka selama waktu ini sejak air menyentuh sensor, jadi jangan terlalu besar. Hanya bisa diubah saat tabung cuci tidak bekerja.
 
 ## 8. Aktivitas: Log, Riwayat, Konsol
 
@@ -140,7 +141,7 @@ bila masih penuh, sesi diulang. Bila semua sesi gagal, mesin meminta keputusanmu
 |---|---|
 | **Koneksi** | Daftar WiFi (maks. 5, urutan prioritas), kontrol jarak jauh on/off. |
 | **Keamanan** | **Password web lokal** dan **Password jarak jauh** (masing-masing ≥ 12 karakter, diketik dua kali); daftar perangkat yang diingat. Mengganti password web mengeluarkan semua perangkat. |
-| **Mesin** | Mode notifikasi (`lengkap` / `ringkas` / `senyap`), kalibrasi air, tema tampilan. |
+| **Mesin** | Mode notifikasi (`lengkap` / `ringkas` / `senyap`), kalibrasi air, sensor air, tema tampilan. |
 | **Pemeliharaan** | Info perangkat, **flash firmware** lewat web, **cadangan & pulihkan**, restart, reset semua. |
 
 ### Cadangkan & pulihkan

@@ -15,6 +15,7 @@ static int wifiN = 0;
 void settingsDefaults(Settings& s) {
   s.notif = NOTIF_LENGKAP;
   s.remoteOn = 1;
+  s.airDetik = WATER_CONFIRM_DEF_SEC;
 }
 
 static void sanitize(Settings& s) {
@@ -22,6 +23,7 @@ static void sanitize(Settings& s) {
   settingsDefaults(d);
   if (s.notif > NOTIF_SENYAP) s.notif = d.notif;
   if (s.remoteOn > 1) s.remoteOn = d.remoteOn;
+  if (s.airDetik < WATER_CONFIRM_MIN_SEC || s.airDetik > WATER_CONFIRM_MAX_SEC) s.airDetik = d.airDetik;
 }
 
 void settingsSanitize(Settings& s) { sanitize(s); }
@@ -64,6 +66,7 @@ void settingsLoad() {
   settingsDefaults(S);
   S.notif = p.getUChar("notif", S.notif);
   S.remoteOn = p.getUChar("remoteOn", S.remoteOn);
+  S.airDetik = p.getUChar("airDetik", S.airDetik);
   p.end();
   sanitize(S);
 }
@@ -74,6 +77,7 @@ void settingsSave() {
   p.begin("settings", false);
   p.putUChar("notif", S.notif);
   p.putUChar("remoteOn", S.remoteOn);
+  p.putUChar("airDetik", S.airDetik);
   p.putBool("v3", true);
   p.end();
 }

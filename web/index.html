@@ -316,6 +316,10 @@
             <p class="field-help">Dikirim ke Telegram lewat server. Log di web selalu lengkap. Pesan dari Tahap Notifikasi dan Minta tindakan selalu terkirim, termasuk mode Senyap.</p></div>
           <div class="card"><h3>Kalibrasi isi air</h3><p class="muted" id="calibNote"></p>
             <div class="row"><button class="btn" data-cmd="cek_air"><svg class="ic sm"><use href="#i-search"/></svg>Cek air</button><button class="btn dout" id="btnCalib">Reset kalibrasi</button></div></div>
+          <div class="card"><h3>Sensor air</h3>
+            <label>Lama konfirmasi (detik)<input id="airDetik" type="number" min="1" max="60" step="1" inputmode="numeric"></label>
+            <p class="field-help">Sensor baru dipercaya setelah terus kena air, atau terus tidak kena air, selama waktu ini, sehingga cipratan diabaikan. Saat mengisi, valve tetap terbuka selama waktu ini sejak air menyentuh sensor.</p>
+            <div class="row"><button class="btn" id="btnAirDetik">Simpan</button></div></div>
           <div class="card"><h3>Tampilan</h3>
             <div class="seg" id="themeSeg" role="group" aria-label="Tema"><button type="button" data-theme-set="auto">Otomatis</button><button type="button" data-theme-set="light">Terang</button><button type="button" data-theme-set="dark">Gelap</button></div></div>
         </div>

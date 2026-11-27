@@ -7,7 +7,7 @@ const CMD_NAMES = new Set([
   "proses", "pilih", "stop", "jeda", "lanjutkan", "lewati", "batalkan",
   "relay", "relay_test", "kalibrasi_relay", "buang_manual",
   "cek_air", "status", "menu", "pengaturan", "riwayat", "statistik", "info", "bantuan",
-  "notif", "kalibrasi_air", "reset_semua", "restart", "remote",
+  "notif", "kalibrasi_air", "reset_semua", "restart", "remote", "sensor_air",
 ]);
 // Selalu ditolak, apa pun yang lain
 const CMD_DENY = new Set(["web_password", "set_ssid", "set_password", "hapus_ssid", "hapus_password", "serial", "heap", "tasks", "log", "reboot"]);

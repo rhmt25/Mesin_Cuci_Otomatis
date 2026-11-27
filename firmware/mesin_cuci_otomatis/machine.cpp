@@ -108,7 +108,14 @@ static void lanef(LogLevel level, const char* fmt, ...) {
   else logStr(level, String(buf));
 }
 
-static inline uint32_t stableMs() { return scaledMs(WATER_STABLE_MS); }
+// Sensor baru dipercaya setelah nilainya tidak berubah selama waktu konfirmasi (cipratan sesaat diabaikan).
+static inline uint32_t stableMs() { return secToMs(S.airDetik); }
+// Batas menunggu pemeriksaan: cukup longgar agar satu-dua cipratan tidak langsung dianggap gagal.
+static inline uint32_t checkWindowMs() { return 3 * stableMs() + secToMs(2); }
+// Berhenti menunggu: batas habis, atau sudah jelas kebalikannya selama waktu konfirmasi.
+static inline bool checkGaveUp(bool opposite, uint32_t left, uint32_t dt) {
+  return left <= dt || (left <= 2 * stableMs() && sensorStable(opposite, stableMs()));
+}
 
 static void setDetail(const char* fmt, ...) __attribute__((format(printf, 1, 2)));
 static void setDetail(const char* fmt, ...) {
@@ -309,7 +316,7 @@ static bool drainPullStart() {
   L->D.phase = D_PULL;
   L->D.pullElapsed = 0;
   // Bila air sudah tidak penuh sejak awal (mis. isi sebagian), keberhasilan tarikan tidak bisa dibuktikan.
-  L->D.probeDone = !sensorRaw();
+  L->D.probeDone = sensorStable(false, stableMs());
   lanef(LOG_INFO, "Membuang air... sesi %d/%d", L->D.session, (int)L->dp.sesi);
   setDetail("Membuang air (sesi %d/%d)", L->D.session, (int)L->dp.sesi);
   return true;
@@ -329,7 +336,7 @@ static SR drainFail() {
 static void drainRelease() {
   relaySet(R_DRAIN, false);
   L->D.phase = D_CHECK;
-  L->D.left = stableMs() + secToMs(2);
+  L->D.left = checkWindowMs();
   setDetail("Memeriksa air sudah turun");
   lanef(LOG_INFO, "Mengecek apakah air sudah turun dari posisi penuh...");
 }
@@ -357,7 +364,9 @@ static SR drainTick(uint32_t dt) {
         if (sensorStable(false, stableMs())) {
           L->D.probeDone = true;
           lanef(LOG_INFO, "Tarikan valve berhasil: air mulai turun");
-        } else if (L->D.pullElapsed >= secToMs(L->dp.probe)) {
+        } else if (L->D.pullElapsed >= secToMs(L->dp.probe) &&
+                   (sensorRaw() || L->D.pullElapsed >= secToMs(L->dp.probe) + stableMs())) {
+          // air yang baru turun tepat di batas diberi waktu konfirmasi
           relaySet(R_DRAIN, false);
           lanef(LOG_WARN, "Valve buang belum menarik (air masih penuh setelah %d dtk)", (int)L->dp.probe);
           if (L->D.unjam < L->dp.tarik) {
@@ -382,7 +391,7 @@ static SR drainTick(uint32_t dt) {
       if (!relaySet(R_DRAIN, true)) return failStep("Valve buang ditolak interlock");
       L->D.phase = D_PULL;
       L->D.pullElapsed = 0;
-      L->D.probeDone = !sensorRaw();
+      L->D.probeDone = sensorStable(false, stableMs());
       return SR_CONTINUE;
 
     case D_CHECK:
@@ -390,7 +399,7 @@ static SR drainTick(uint32_t dt) {
         lanef(LOG_INFO, "Air sudah turun, pembuangan selesai");
         return SR_DONE;
       }
-      if (L->D.left > dt) {
+      if (!checkGaveUp(true, L->D.left, dt)) {
         L->D.left -= dt;
         return SR_CONTINUE;
       }
@@ -461,7 +470,7 @@ static SR fillTick(const Tahap& t, uint32_t dt) {
         L->R.left -= dt;
       } else {
         L->R.phase = F_PRECHECK;
-        L->R.left = stableMs() + secToMs(2);
+        L->R.left = checkWindowMs();
         setDetail("Memeriksa air belum penuh");
       }
       return SR_CONTINUE;
@@ -469,7 +478,7 @@ static SR fillTick(const Tahap& t, uint32_t dt) {
     case F_PRECHECK:
       if (sensorStable(false, stableMs())) return fillStartValve();
       // Sudah jelas penuh (atau tidak stabil terlalu lama): terapkan pilihan pada Tahap
-      if ((sensorRaw() && sensorSteadyMs() >= secToMs(2)) || L->R.left <= dt) {
+      if (sensorStable(true, stableMs()) || L->R.left <= dt) {
         switch (t.pra) {
           case PRA_JEDA:
             return decide(DC_PRA_PENUH, OP_BUANG | OP_PAKAI | OP_BATAL, "Air sudah penuh sebelum mengisi");
@@ -511,7 +520,9 @@ static SR fillTick(const Tahap& t, uint32_t dt) {
         fillFinished(t);
         return SR_DONE;
       }
-      bool timedOut = (lv != ISI_WAKTU) && L->R.elapsed >= secToMs(t.batas);
+      // sensor yang baru kena air tepat di batas diberi waktu konfirmasi
+      bool timedOut = (lv != ISI_WAKTU) && L->R.elapsed >= secToMs(t.batas) &&
+                      (!sensorRaw() || L->R.elapsed >= secToMs(t.batas) + stableMs());
       if (!timedOut) return SR_CONTINUE;
 
       relaySet(R_FILL, false);
@@ -581,7 +592,7 @@ static void stepInit() {
       setDetail("Menunggu");
       break;
     case TH_CEK:
-      L->R.left = stableMs() + secToMs(2);
+      L->R.left = checkWindowMs();
       setDetail("Memeriksa air");
       break;
     case TH_TINDAKAN:
@@ -905,7 +916,7 @@ static SR tickStep(uint32_t dt) {
     case TH_CEK: {
       bool want = t.mode == CEK_PENUH;
       if (sensorStable(want, stableMs())) return SR_DONE;
-      if (L->R.left <= dt) {
+      if (checkGaveUp(!want, L->R.left, dt)) {
         return decide(DC_CEK_GAGAL, OP_ULANG | OP_LANJUT | OP_BATAL,
                       want ? "Air belum mencukupi (belum penuh)" : "Air masih penuh");
       }
@@ -920,7 +931,7 @@ static SR tickStep(uint32_t dt) {
       if (L->R.phase == 9) return failStep("Valve buang ditolak interlock");
       if (L->R.left <= dt) {
         relaySet(R_DRAIN, false);
-        if (sensorRaw()) lanef(LOG_WARN, "Air masih penuh setelah pembuangan manual");
+        if (sensorStable(true, stableMs())) lanef(LOG_WARN, "Air masih penuh setelah pembuangan manual");
         return SR_DONE;
       }
       L->R.left -= dt;

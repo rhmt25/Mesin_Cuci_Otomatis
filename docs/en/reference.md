@@ -21,6 +21,7 @@ Command names are Indonesian, as implemented in firmware.
 | `notif lengkap\|ringkas\|senyap` | Notification mode (full / brief / silent) |
 | `remote [on\|off]` | Remote control |
 | `kalibrasi_air` | Calibrate fill time for percent mode |
+| `sensor_air <seconds>` | Water sensor confirmation time, 1–60 (wash tub must be idle) |
 | `reset_semua` · `restart` | Reset settings / reboot |
 | `wifi_list` · `wifi_tambah` · `wifi_hapus` · `wifi_urutan` | WiFi (local only) |
 | `heap` · `tasks` · `log` · `serial debug on\|off` | Diagnostics (console only) |
@@ -28,7 +29,7 @@ Command names are Indonesian, as implemented in firmware.
 Water/agitate/fragrance variables are not commands: they are set per Stage in the dashboard.
 
 **Allowed remotely:** `proses pilih stop jeda lanjutkan lewati batalkan relay relay_test kalibrasi_relay buang_manual cek_air
-status menu pengaturan riwayat statistik info bantuan notif kalibrasi_air reset_semua restart remote`. The authoritative list
+status menu pengaturan riwayat statistik info bantuan notif kalibrasi_air reset_semua restart remote sensor_air`. The authoritative list
 is in `cloud/src/allow.js` and `remote_policy.cpp`.
 
 ## API endpoints (ESP32)
@@ -66,7 +67,7 @@ Calibration data and one-shot schedules are not included. Restore is atomic; out
 | `MOTOR_MAX_ON_MS` | 65000 | Wash-motor failsafe |
 | `PERFUME_MAX_ON_MS` | 240000 | Fragrance-pump failsafe |
 | `MANUAL_MAX_ON_MS` | 60000 | Manual relay control limit |
-| `WATER_STABLE_MS` | 10000 | Sensor must be stable this long before a change counts |
+| `WATER_CONFIRM_DEF_SEC` | 10 | Default water sensor confirmation time (change with `sensor_air <1-60>`) |
 | `MAX_WIFI_NETWORKS` | 5 | Saved WiFi networks |
 | `NTP_TZ` | `WIB-7` | Time zone |
 

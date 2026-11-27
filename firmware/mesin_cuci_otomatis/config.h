@@ -45,7 +45,10 @@ inline uint32_t secToMs(uint32_t seconds) { return scaledMs(seconds * 1000UL); }
 #define PERFUME_MAX_ON_MS       240000     // failsafe: pompa pewangi tidak boleh menyala terus lebih dari ini (nyata)
 #define SPIN_MAX_ON_MS          3660000    // failsafe: motor spin (Tahap Spin maks 60 mnt + 1 mnt cadangan, nyata)
 #define MANUAL_MAX_ON_MS        60000      // kontrol relay manual otomatis mati setelah ini (nyata)
-#define WATER_STABLE_MS         10000      // sensor harus stabil 10 dtk
+// Lama sensor air harus terus kena air / terus tidak kena sebelum dipercaya (diatur di Sistem > Mesin)
+#define WATER_CONFIRM_DEF_SEC   10
+#define WATER_CONFIRM_MIN_SEC   1
+#define WATER_CONFIRM_MAX_SEC   60
 #define FILL_SETTLE_MS          2000
 #define UNJAM_RELEASE_MS        3000
 #define UNJAM_PULL_MS           30000

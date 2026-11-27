@@ -12,6 +12,7 @@ enum NotifMode : uint8_t { NOTIF_LENGKAP, NOTIF_RINGKAS, NOTIF_SENYAP };
 struct Settings {
   uint8_t notif;
   uint8_t remoteOn;        // kontrol jarak jauh aktif (bila REMOTE_URL terisi)
+  uint8_t airDetik;        // lama konfirmasi sensor air (detik), penangkal cipratan
 };
 
 extern Settings S;
